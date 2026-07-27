@@ -1545,10 +1545,12 @@ async fn get_grok_builtin_prompt_status() -> Result<Vec<BuiltinPromptStatus>> {
 fn save_grok_prompt_command_inner(prompt: SavedPrompt) -> Result<SavedPrompt> {
     let filename = normalize_prompt_filename(&prompt.filename, GROK_BUILTIN_FILENAME);
     save_prompt_inner(
-        &prompt.id,
-        &prompt.title,
-        &filename,
-        &prompt.content,
+        SavedPrompt {
+            id: prompt.id,
+            title: prompt.title,
+            filename,
+            content: prompt.content,
+        },
         ENGINE_GROK,
     )
 }
