@@ -2,7 +2,7 @@ use super::*;
 
 fn temp_codex_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
-        "codex-x-{name}-{}-{}",
+        "everything-patch-{name}-{}-{}",
         std::process::id(),
         Local::now().timestamp_nanos_opt().unwrap_or_default()
     ));
@@ -125,7 +125,8 @@ fn provider_test_connection() -> Connection {
     let conn = Connection::open_in_memory().expect("open provider test database");
     conn.execute_batch(
         "CREATE TABLE providers (
-                id TEXT PRIMARY KEY,
+                app_type TEXT NOT NULL DEFAULT 'codex',
+                id TEXT NOT NULL,
                 provider_name TEXT NOT NULL,
                 base_url TEXT NOT NULL,
                 model TEXT NOT NULL,
@@ -134,7 +135,8 @@ fn provider_test_connection() -> Connection {
                 wire_api TEXT NOT NULL DEFAULT 'responses',
                 requires_openai_auth INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (app_type, id)
             );",
     )
     .expect("create providers table");
@@ -150,7 +152,12 @@ fn provider_fixture(
     toml_config: Option<&str>,
 ) -> SavedProvider {
     SavedProvider {
+        app_type: "codex".to_string(),
         id: id.to_string(),
+        native: false,
+        available: true,
+        status_message: None,
+        models: Vec::new(),
         provider_name: name.to_string(),
         base_url: base_url.to_string(),
         model: model.to_string(),
@@ -164,10 +171,11 @@ fn provider_fixture(
 fn seed_provider(conn: &Connection, provider: &SavedProvider, created_at: &str, updated_at: &str) {
     conn.execute(
         "INSERT INTO providers
-                (id, provider_name, base_url, model, api_key, toml_config, wire_api,
-                 requires_openai_auth, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                (app_type, id, provider_name, base_url, model, api_key, toml_config,
+                 wire_api, requires_openai_auth, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
+            provider.app_type,
             provider.id,
             provider.provider_name,
             provider.base_url,
@@ -660,6 +668,29 @@ fn managed_agents_block_preserves_user_content_and_replaces_only_managed_block()
 }
 
 #[test]
+fn managed_agents_block_migrates_legacy_markers_when_replaced() {
+    let codex_dir = temp_codex_dir("managed-agents-legacy");
+    let legacy = format!(
+        "# user\n\n{LEGACY_AGENTS_MANAGED_BEGIN}\n{LEGACY_AGENTS_TEMPLATE_PREFIX} builtin:old -->\nold content\n{LEGACY_AGENTS_MANAGED_END}\n"
+    );
+    write_text(&agents_path(&codex_dir), &legacy).expect("write legacy agents");
+
+    install_managed_agents_block(&codex_dir, "builtin:new", "new content")
+        .expect("replace legacy block");
+
+    let installed = fs::read_to_string(agents_path(&codex_dir)).expect("read migrated agents");
+    assert!(installed.contains("# user"));
+    assert!(installed.contains(AGENTS_MANAGED_BEGIN));
+    assert!(!installed.contains(LEGACY_AGENTS_MANAGED_BEGIN));
+    assert_eq!(
+        managed_agents_template_key_from_content(&installed).as_deref(),
+        Some("builtin:new")
+    );
+
+    let _ = fs::remove_dir_all(codex_dir);
+}
+
+#[test]
 fn managed_agents_block_rejects_incomplete_markers_without_writing() {
     let codex_dir = temp_codex_dir("managed-agents-incomplete");
     let broken = format!("# user\n\n{AGENTS_MANAGED_BEGIN}\nunfinished\n");
@@ -681,7 +712,7 @@ fn github_catalog_discovers_new_markdown_without_a_hardcoded_id() {
                 name: "brand-new-prompt.md".to_string(),
                 kind: "file".to_string(),
                 download_url: Some(
-                    "https://raw.githubusercontent.com/yynxxxxx/Codex-X/main/examples/brand-new-prompt.md"
+                    "https://raw.githubusercontent.com/Xdjjw/everything-patch/main/examples/brand-new-prompt.md"
                         .to_string(),
                 ),
             },
@@ -694,7 +725,7 @@ fn github_catalog_discovers_new_markdown_without_a_hardcoded_id() {
                 name: "BRAND-NEW-PROMPT.MD".to_string(),
                 kind: "file".to_string(),
                 download_url: Some(
-                    "https://raw.githubusercontent.com/yynxxxxx/Codex-X/main/examples/BRAND-NEW-PROMPT.MD"
+                    "https://raw.githubusercontent.com/Xdjjw/everything-patch/main/examples/BRAND-NEW-PROMPT.MD"
                         .to_string(),
                 ),
             },
@@ -726,6 +757,9 @@ fn jsdelivr_catalog_keeps_only_direct_markdown_files() {
         "/examples/new prompt.md".to_string(),
         "/examples/NEW PROMPT.MD".to_string(),
         "/examples/海鸥模板.md".to_string(),
+        "/examples/claude-project-rules.md".to_string(),
+        "/examples/grok-unrestricted.md".to_string(),
+        "/examples/zcode-system-role.md".to_string(),
         "/examples/nested/ignored.md".to_string(),
         "/examples/notes.txt".to_string(),
         "/docs/ignored.md".to_string(),
@@ -759,11 +793,11 @@ fn prompt_download_sources_are_cdn_first_and_encode_the_filename() {
     assert_eq!(sources.len(), 2);
     assert_eq!(
         sources[0],
-        format!("https://cdn.jsdelivr.net/gh/yynxxxxx/Codex-X@main/examples/{encoded}")
+        format!("https://cdn.jsdelivr.net/gh/Xdjjw/everything-patch@main/examples/{encoded}")
     );
     assert_eq!(
         sources[1],
-        format!("https://raw.githubusercontent.com/yynxxxxx/Codex-X/main/examples/{encoded}")
+        format!("https://raw.githubusercontent.com/Xdjjw/everything-patch/main/examples/{encoded}")
     );
 }
 
@@ -907,7 +941,12 @@ base_url = "https://example.com/v1"
 wire_api = "responses"
 "#;
     let provider = |id: &str, toml: &str| SavedProvider {
+        app_type: "codex".to_string(),
         id: id.to_string(),
+        native: false,
+        available: true,
+        status_message: None,
+        models: Vec::new(),
         provider_name: "Same API".to_string(),
         base_url: "https://example.com/v1".to_string(),
         model: "gpt-5.5".to_string(),
@@ -1668,7 +1707,7 @@ fn provider_sync_rewrites_every_session_meta_and_preserves_item_ids() {
 
     let metadata = fs::read_to_string(PathBuf::from(&result.backup_dir).join("metadata.json"))
         .expect("read backup metadata");
-    assert!(metadata.contains("\"managedBy\": \"Codex-X provider sync v2\""));
+    assert!(metadata.contains("\"managedBy\": \"Everything Patch provider sync v2\""));
 
     let second = sync_sessions_provider_inner(
         Some(codex_dir.display().to_string()),
@@ -1891,7 +1930,7 @@ fn provider_sync_restores_jsonl_when_sqlite_update_fails() {
 }
 
 #[test]
-fn backup_pruning_only_removes_v2_provider_sync_backups() {
+fn backup_pruning_handles_current_and_legacy_provider_sync_backups() {
     let codex_dir = temp_codex_dir("provider-backup-pruning");
     let root = provider_sync_backup_root(&codex_dir);
     for index in 0..7 {
@@ -1911,14 +1950,18 @@ fn backup_pruning_only_removes_v2_provider_sync_backups() {
         write_json(
             &v2.join("metadata.json"),
             &json!({
-                "managedBy": "Codex-X provider sync v2",
+                "managedBy": if index % 2 == 0 {
+                    "Everything Patch provider sync v2"
+                } else {
+                    "Codex-X provider sync v2"
+                },
                 "targetProvider": "custom"
             }),
         )
         .expect("write v2 metadata");
     }
 
-    prune_provider_sync_backups(&codex_dir).expect("prune v2 backups");
+    prune_provider_sync_backups(&codex_dir).expect("prune managed backups");
     let dirs = fs::read_dir(&root)
         .expect("read backup root")
         .flatten()

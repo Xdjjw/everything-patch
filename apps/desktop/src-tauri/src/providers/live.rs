@@ -11,6 +11,7 @@ use crate::file_io::{
 };
 use crate::state::{build_state, ActionResult};
 use crate::toml_utils::ensure_table;
+use crate::tools::{is_sensitive_key, REDACTED_VALUE};
 use crate::{auth_path, config_path, resolve_codex_dir, string_value};
 use serde::Deserialize;
 use serde_json::Value;
@@ -61,6 +62,53 @@ fn live_auth_api_key(codex_dir: &Path) -> Result<Option<String>> {
         .map(str::trim)
         .filter(|key| !key.is_empty())
         .map(ToString::to_string))
+}
+
+fn preserve_secret_placeholder(value: &Value) -> bool {
+    match value {
+        Value::Null => true,
+        Value::String(value) => {
+            let value = value.trim();
+            value.is_empty() || value == REDACTED_VALUE
+        }
+        Value::Array(values) => values.is_empty(),
+        _ => false,
+    }
+}
+
+fn merge_auth_value(existing: Option<&Value>, incoming: &Value) -> Value {
+    let Value::Object(incoming_object) = incoming else {
+        return incoming.clone();
+    };
+    let existing_object = existing.and_then(Value::as_object);
+    let mut merged = serde_json::Map::new();
+    for (key, incoming_value) in incoming_object {
+        let existing_value = existing_object.and_then(|object| object.get(key));
+        if is_sensitive_key(key) && preserve_secret_placeholder(incoming_value) {
+            if let Some(existing_value) = existing_value {
+                merged.insert(key.clone(), existing_value.clone());
+            }
+            continue;
+        }
+        let value = if incoming_value.is_object() {
+            merge_auth_value(existing_value, incoming_value)
+        } else {
+            incoming_value.clone()
+        };
+        merged.insert(key.clone(), value);
+    }
+    Value::Object(merged)
+}
+
+fn write_merged_auth(path: &Path, incoming: Value) -> Result<()> {
+    let existing_text = read_to_string_if_exists(path)?;
+    let existing = if existing_text.trim().is_empty() {
+        None
+    } else {
+        Some(serde_json::from_str::<Value>(&existing_text).map_err(|error| json_err(path, error))?)
+    };
+    let merged = merge_auth_value(existing.as_ref(), &incoming);
+    write_json(path, &merged)
 }
 
 fn strip_provider_bearer_tokens(doc: &mut DocumentMut) {
@@ -118,7 +166,12 @@ pub(crate) fn detected_live_custom_provider(codex_dir: &Path) -> Result<Option<S
     let toml_config = doc.to_string().trim_end().to_string();
 
     Ok(Some(SavedProvider {
+        app_type: "codex".to_string(),
         id: custom_provider_id(&provider_id),
+        native: false,
+        available: true,
+        status_message: None,
+        models: Vec::new(),
         provider_name,
         base_url: section.base_url,
         model,
@@ -216,7 +269,7 @@ fn apply_official_config(
                 "auth.json 必须是 JSON object".to_string(),
             ));
         }
-        write_json(&auth, &parsed)?;
+        write_merged_auth(&auth, parsed)?;
     }
 
     let state = build_state(codex_dir)?;
@@ -239,7 +292,7 @@ where
     pre_persist(&codex_dir)?;
     // Switching to official must not overwrite auth.json with a stale cc-switch
     // ChatGPT token. Codex desktop/CLI owns the live official login flow; after
-    // the user logs in, Codex-X should simply refresh and display ~/.codex/auth.json.
+    // the user logs in, Everything Patch should simply refresh and display ~/.codex/auth.json.
     apply_official_config(
         config_dir,
         None,
@@ -284,7 +337,7 @@ pub(crate) fn save_official_config_inner(
                 "auth.json 必须是 JSON object".to_string(),
             ));
         }
-        write_json(&auth, &parsed)?;
+        write_merged_auth(&auth, parsed)?;
     }
 
     let state = build_state(codex_dir)?;
@@ -352,7 +405,7 @@ where
     let backup_id = create_backup(&codex_dir, "switch-provider")?;
 
     let provider_name = input.provider_name.trim();
-    // Keep the saved provider id only for Codex-X/cc-switch bookkeeping.
+    // Keep the saved provider id only for Everything Patch/cc-switch bookkeeping.
     // cc-switch writes third-party Codex providers to the live config as
     // `model_provider = "custom"` + `[model_providers.custom]`; mirroring
     // that behavior avoids Codex CLI/App versions that ignore arbitrary live
@@ -408,4 +461,52 @@ where
 
 pub(crate) fn switch_provider_inner(input: ProviderInput) -> Result<ActionResult> {
     switch_provider_with_pre_persist(input, persist_detected_live_custom_provider)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn redacted_and_empty_auth_values_keep_existing_secrets() {
+        let existing = json!({
+            "auth_mode": "chatgpt",
+            "OPENAI_API_KEY": "live-key",
+            "tokens": {
+                "access_token": "access",
+                "refresh_token": "refresh",
+                "id_token": "id"
+            },
+            "account_id": "old"
+        });
+        let incoming = json!({
+            "auth_mode": "apikey",
+            "OPENAI_API_KEY": "[REDACTED]",
+            "tokens": {
+                "access_token": "",
+                "refresh_token": null,
+                "id_token": "[REDACTED]"
+            },
+            "account_id": "new"
+        });
+        let merged = merge_auth_value(Some(&existing), &incoming);
+        assert_eq!(merged["auth_mode"], "apikey");
+        assert_eq!(merged["OPENAI_API_KEY"], "live-key");
+        assert_eq!(merged["tokens"]["access_token"], "access");
+        assert_eq!(merged["tokens"]["refresh_token"], "refresh");
+        assert_eq!(merged["tokens"]["id_token"], "id");
+        assert_eq!(merged["account_id"], "new");
+    }
+
+    #[test]
+    fn placeholder_without_existing_secret_is_not_written() {
+        let incoming = json!({
+            "auth_mode": "chatgpt",
+            "OPENAI_API_KEY": "[REDACTED]"
+        });
+        let merged = merge_auth_value(None, &incoming);
+        assert_eq!(merged["auth_mode"], "chatgpt");
+        assert!(merged.get("OPENAI_API_KEY").is_none());
+    }
 }

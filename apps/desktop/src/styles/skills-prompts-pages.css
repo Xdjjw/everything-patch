@@ -30,6 +30,10 @@
   overflow: hidden;
 }
 
+.cx-skills-tool-tabs {
+  flex: 0 0 auto;
+}
+
 .cx-prompts-page--list {
   min-height: 100%;
   flex: 0 0 auto;
@@ -142,6 +146,25 @@
 }
 
 /* Skills / MCP */
+
+.cx-skills-tool-meta {
+  display: flex;
+  gap: 8px 18px;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+  margin-top: -6px;
+  color: var(--cx-tool-muted);
+}
+
+.cx-skills-tool-meta code {
+  overflow: hidden;
+  max-width: min(100%, 560px);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .cx-skills-tabs,
 .cx-prompt-category-tabs {
@@ -614,12 +637,45 @@
   border-radius: 16px 0 0 16px;
 }
 
-.cx-prompts-active-summary > p {
-  margin: 0 0 8px;
+.cx-prompts-summary-label {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.cx-prompts-summary-label > p {
+  margin: 0;
   color: #8a8295;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0;
+}
+
+.cx-prompts-summary-label > button {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0;
+  border: 0;
+  color: #716879;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.cx-prompts-summary-label > button:hover:not(:disabled) {
+  color: #4f3f59;
+}
+
+.cx-prompts-summary-label > button:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 .cx-prompts-active-summary > span {
@@ -779,6 +835,102 @@
   color: #0e673e;
   background: #e7f7ef;
   border-color: #a7dac0;
+}
+
+.ui-modal.cx-prompt-backups-dialog {
+  width: min(680px, calc(100vw - 40px));
+}
+
+.cx-prompt-backups-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cx-prompt-backups-body {
+  display: grid;
+  gap: 12px;
+}
+
+.cx-prompt-backups-confirm {
+  display: grid;
+  gap: 4px;
+  padding: 11px 13px;
+  border: 1px solid #d8c9a2;
+  border-radius: 7px;
+  color: #5f4c24;
+  background: #fffaf0;
+}
+
+.cx-prompt-backups-confirm strong {
+  font-size: 13px;
+}
+
+.cx-prompt-backups-confirm span {
+  color: #77643d;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.cx-prompt-backups-list {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.cx-prompt-backup-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 64px;
+  padding: 11px 12px;
+  border: 1px solid #e1e3e7;
+  border-radius: 7px;
+  background: #ffffff;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.cx-prompt-backup-row--selected {
+  border-color: #b6d8c5;
+  background: #f3faf6;
+}
+
+.cx-prompt-backup-copy {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.cx-prompt-backup-copy > div {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cx-prompt-backup-copy strong {
+  color: #343139;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.cx-prompt-backup-copy > span {
+  color: #807986;
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.cx-prompt-backups-empty {
+  min-height: 128px;
+  display: grid;
+  place-items: center;
+  color: #817a86;
+  font-size: 12px;
+  text-align: center;
 }
 
 .cx-prompt-category-toolbar {

@@ -19,17 +19,20 @@ pub(crate) const INSTRUCTION_SEAGULL_CONTENT: &str =
     include_str!("../../../../examples/海鸥3.0破甲.md");
 
 pub(crate) const AGENTS_FILENAME: &str = "AGENTS.md";
-pub(crate) const AGENTS_MANAGED_BEGIN: &str = "<!-- CODEX-X:INSTRUCTIONS:BEGIN -->";
-pub(crate) const AGENTS_MANAGED_END: &str = "<!-- CODEX-X:INSTRUCTIONS:END -->";
-pub(crate) const AGENTS_TEMPLATE_PREFIX: &str = "<!-- CODEX-X:TEMPLATE:";
+pub(crate) const AGENTS_MANAGED_BEGIN: &str = "<!-- EVERYTHING-PATCH:INSTRUCTIONS:BEGIN -->";
+pub(crate) const AGENTS_MANAGED_END: &str = "<!-- EVERYTHING-PATCH:INSTRUCTIONS:END -->";
+pub(crate) const AGENTS_TEMPLATE_PREFIX: &str = "<!-- EVERYTHING-PATCH:TEMPLATE:";
+pub(crate) const LEGACY_AGENTS_MANAGED_BEGIN: &str = "<!-- CODEX-X:INSTRUCTIONS:BEGIN -->";
+pub(crate) const LEGACY_AGENTS_MANAGED_END: &str = "<!-- CODEX-X:INSTRUCTIONS:END -->";
+pub(crate) const LEGACY_AGENTS_TEMPLATE_PREFIX: &str = "<!-- CODEX-X:TEMPLATE:";
 pub(crate) const JSDELIVR_EXAMPLES_API: &str =
-    "https://data.jsdelivr.com/v1/packages/gh/yynxxxxx/Codex-X@main?structure=flat";
+    "https://data.jsdelivr.com/v1/packages/gh/Xdjjw/everything-patch@main?structure=flat";
 pub(crate) const JSDELIVR_EXAMPLES_BASE: &str =
-    "https://cdn.jsdelivr.net/gh/yynxxxxx/Codex-X@main/examples/";
+    "https://cdn.jsdelivr.net/gh/Xdjjw/everything-patch@main/examples/";
 pub(crate) const GITHUB_EXAMPLES_API: &str =
-    "https://api.github.com/repos/yynxxxxx/Codex-X/contents/examples?ref=main";
+    "https://api.github.com/repos/Xdjjw/everything-patch/contents/examples?ref=main";
 pub(crate) const GITHUB_EXAMPLES_BASE: &str =
-    "https://raw.githubusercontent.com/yynxxxxx/Codex-X/main/examples/";
+    "https://raw.githubusercontent.com/Xdjjw/everything-patch/main/examples/";
 
 pub(crate) const MAX_SKILL_ZIP_BYTES: u64 = 20 * 1024 * 1024;
 
@@ -40,9 +43,13 @@ pub(crate) const CLAUDE_MEMORY_FILENAME: &str = "CLAUDE.md";
 pub(crate) const CLAUDE_KEYSMITH_DIRNAME: &str = "keysmith";
 
 // CLAUDE.md 受管 import-block 标记，与 AGENTS.md 的 BEGIN/END 模式对齐。
-pub(crate) const CLAUDE_MANAGED_BEGIN: &str = "<!-- CODEX-X:CLAUDE:BEGIN -->";
-pub(crate) const CLAUDE_MANAGED_END: &str = "<!-- CODEX-X:CLAUDE:END -->";
-pub(crate) const CLAUDE_TEMPLATE_PREFIX: &str = "<!-- CODEX-X:CLAUDE:TEMPLATE:";
+pub(crate) const CLAUDE_MANAGED_BEGIN: &str = "<!-- EVERYTHING-PATCH:CLAUDE:BEGIN -->";
+pub(crate) const CLAUDE_MANAGED_END: &str = "<!-- EVERYTHING-PATCH:CLAUDE:END -->";
+pub(crate) const CLAUDE_TEMPLATE_PREFIX: &str = "<!-- EVERYTHING-PATCH:CLAUDE:TEMPLATE:";
+pub(crate) const CLAUDE_MODE_PREFIX: &str = "<!-- EVERYTHING-PATCH:CLAUDE:MODE:";
+pub(crate) const LEGACY_CLAUDE_MANAGED_BEGIN: &str = "<!-- CODEX-X:CLAUDE:BEGIN -->";
+pub(crate) const LEGACY_CLAUDE_MANAGED_END: &str = "<!-- CODEX-X:CLAUDE:END -->";
+pub(crate) const LEGACY_CLAUDE_TEMPLATE_PREFIX: &str = "<!-- CODEX-X:CLAUDE:TEMPLATE:";
 
 // keysmith 默认模板，编译进二进制。
 pub(crate) const CLAUDE_BUILTIN_ID: &str = "claude-project-rules";
@@ -70,8 +77,7 @@ pub(crate) const ZCODE_LAUNCHER_LOG_NAME: &str = "launcher-start.jsonl";
 pub(crate) const ZCODE_RUNTIME_RELPATH: &str = "resources/glm/zcode.cjs";
 pub(crate) const ZCODE_APP_ASAR_RELPATH: &str = "resources/app.asar";
 pub(crate) const ZCODE_AGENT_OVERRIDE_NEEDLE: &str = "ZCODE_AGENT_SERVER_COMMAND";
-pub(crate) const ZCODE_PATCH_NEEDLE: &str =
-    "customSystemPrompt:this.config.systemPrompt,language:";
+pub(crate) const ZCODE_PATCH_NEEDLE: &str = "customSystemPrompt:this.config.systemPrompt,language:";
 pub(crate) const ZCODE_AGENT_ARGS_JSON: &str = "[\"app-server\",\"--stdio\"]";
 
 // keysmith 默认模板，编译进二进制。
@@ -92,6 +98,10 @@ pub(crate) const GROK_HOOKS_DIRNAME: &str = "hooks";
 pub(crate) const GROK_MANIFEST_FILENAME: &str = ".grok-keysmith-manifest.json";
 pub(crate) const GROK_COMPAT_BEGIN_MARKER: &str = "# === grok-keysmith compat isolation begin ===";
 pub(crate) const GROK_COMPAT_END_MARKER: &str = "# === grok-keysmith compat isolation end ===";
+pub(crate) const GROK_PROMPT_BEGIN: &str = "<!-- EVERYTHING-PATCH:GROK:BEGIN -->";
+pub(crate) const GROK_PROMPT_END: &str = "<!-- EVERYTHING-PATCH:GROK:END -->";
+pub(crate) const GROK_PROMPT_TEMPLATE_PREFIX: &str = "<!-- EVERYTHING-PATCH:GROK:TEMPLATE:";
+pub(crate) const GROK_PROMPT_MODE_PREFIX: &str = "<!-- EVERYTHING-PATCH:GROK:MODE:";
 
 // compat 隔离块内容（关闭 Claude/Cursor/Codex 兼容层）。
 pub(crate) const GROK_COMPAT_BLOCK: &str = "[compat.claude]\nskills = false\nrules = false\nagents = false\nmcps = false\nhooks = false\nsessions = false\n\n[compat.cursor]\nskills = false\nrules = false\nagents = false\nmcps = false\nhooks = false\nsessions = false\n\n[compat.codex]\nsessions = false";

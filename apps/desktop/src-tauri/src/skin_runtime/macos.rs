@@ -455,7 +455,7 @@ fn launch_codex_with_cdp(runtime: &CodexRuntime, port: u16) -> Result<()> {
         .spawn()
         .map_err(|source| io_err(&runtime.executable, source))?;
     thread::Builder::new()
-        .name("codex-x-codex-launch-reaper".to_string())
+        .name("everything-patch-codex-launch-reaper".to_string())
         .spawn(move || {
             let _ = child.wait();
         })
@@ -684,7 +684,7 @@ pub(super) fn restore_official(restart_existing: bool) -> Result<SkinRuntimeActi
     remove_runtime_state()?;
     cleanup_snapshot(&state.theme_dir, Path::new(""));
     Ok(SkinRuntimeAction::Restored(
-        "已恢复 Codex 官方外观并关闭 Codex-X 管理的换肤运行时".to_string(),
+        "已恢复 Codex 官方外观并关闭 Everything Patch 管理的换肤运行时".to_string(),
     ))
 }
 

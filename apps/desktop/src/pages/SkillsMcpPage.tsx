@@ -14,8 +14,17 @@ import {
 } from "lucide-react";
 
 import { PageTransition } from "../components/PageTransition";
+import { ToolTabs, toolLabel } from "../components/ToolTabs";
 import { Button, ModalShell, StatusBadge, Toggle, cx } from "../components/ui";
-import type { Lang, ManagedMcpServer, ManagedSkill, SkillsMcpImportPreview, SkillsMcpState } from "../types";
+import type {
+  Lang,
+  ManagedMcpServer,
+  ManagedSkill,
+  SkillsMcpImportPreview,
+  SkillsMcpState,
+  ToolId,
+  ToolStatus,
+} from "../types";
 import "../styles/skills-prompts-pages.css";
 
 export type SkillsMcpTab = "mcp" | "skills";
@@ -24,6 +33,9 @@ type MaybeAsyncAction = () => void | Promise<void>;
 
 export type SkillsMcpPageProps = {
   lang: Lang;
+  activeTool: ToolId;
+  toolStatuses: readonly ToolStatus[];
+  onToolChange: (tool: ToolId) => void;
   state: SkillsMcpState | null;
   activeTab: SkillsMcpTab;
   actionBusy: string;
@@ -44,19 +56,19 @@ export type SkillsMcpPageProps = {
 
 type SkillsMcpCopy = ReturnType<typeof getCopy>;
 
-function getCopy(lang: Lang) {
+function getCopy(lang: Lang, toolName: string) {
   return lang === "zh"
     ? {
         eyebrow: "SKILLS / MCP",
         title: "技能和MCP",
-        description: "管理 Codex 当前可用的 Skills 与 MCP，导入已有内容、安装技能包并控制启用状态。",
+        description: `管理 ${toolName} 当前可用的 Skills 与 MCP，导入已有内容、安装技能包并控制启用状态。`,
         refresh: "刷新",
         importExisting: "导入已有",
         installZip: "从 ZIP 安装",
         checkUpdates: "检查更新",
         loading: "正在读取本地 Skills / MCP...",
-        mcpHelp: (count: number) => `当前共有 ${count} 个 MCP，启用后会写入 Codex config.toml。`,
-        skillsHelp: (count: number) => `当前共有 ${count} 个 Skills，启用后会放入 Codex skills 目录。`,
+        mcpHelp: (count: number) => `当前共有 ${count} 个 MCP，启用后会写入 ${toolName} 的原生配置。`,
+        skillsHelp: (count: number) => `当前共有 ${count} 个 Skills，启用后会放入 ${toolName} 的 skills 目录。`,
         total: (count: number) => `共 ${count} 个`,
         noMcp: "还没有发现 MCP，请先导入已有内容。",
         noSkills: "还没有发现 Skills，请导入已有内容或安装 ZIP 技能包。",
@@ -78,14 +90,14 @@ function getCopy(lang: Lang) {
     : {
         eyebrow: "SKILLS / MCP",
         title: "Skills & MCP",
-        description: "Manage the Skills and MCP servers available to Codex, import existing items, install packages, and control their state.",
+        description: `Manage Skills and MCP servers for ${toolName}, import existing items, install packages, and control their state.`,
         refresh: "Refresh",
         importExisting: "Import existing",
         installZip: "Install ZIP",
         checkUpdates: "Check updates",
         loading: "Loading local Skills / MCP...",
-        mcpHelp: (count: number) => `${count} MCP server(s). Enabling one writes it to Codex config.toml.`,
-        skillsHelp: (count: number) => `${count} Skill(s). Enabling one places it in the Codex skills directory.`,
+        mcpHelp: (count: number) => `${count} MCP server(s). Enabling one writes it to the native ${toolName} configuration.`,
+        skillsHelp: (count: number) => `${count} Skill(s). Enabling one places it in the ${toolName} skills directory.`,
         total: (count: number) => `${count} total`,
         noMcp: "No MCP server found. Import existing items first.",
         noSkills: "No Skills found. Import existing items or install a ZIP package.",
@@ -252,6 +264,9 @@ function ImportPreviewContent({ preview, copy }: { preview: SkillsMcpImportPrevi
 
 export function SkillsMcpPage({
   lang,
+  activeTool,
+  toolStatuses,
+  onToolChange,
   state,
   activeTab,
   actionBusy,
@@ -269,7 +284,7 @@ export function SkillsMcpPage({
   onToggleSkill,
   onToggleMcp,
 }: SkillsMcpPageProps) {
-  const copy = getCopy(lang);
+  const copy = getCopy(lang, toolLabel(activeTool));
   const tabId = useId();
   const anyBusy = Boolean(actionBusy);
   const importBusy = actionBusy === "importExistingSkillsMcp";
@@ -280,6 +295,13 @@ export function SkillsMcpPage({
 
   return (
     <section className={cx("cx-skills-page", className)} aria-label={copy.title}>
+      <ToolTabs
+        active={activeTool}
+        onChange={onToolChange}
+        statuses={toolStatuses}
+        ariaLabel={lang === "zh" ? "技能和 MCP 工具" : "Skills and MCP tools"}
+        className="cx-skills-tool-tabs"
+      />
       <header className="cx-skills-header">
         <div className="cx-skills-heading">
           <p><Blocks size={14} aria-hidden="true" />{copy.eyebrow}</p>
@@ -338,6 +360,14 @@ export function SkillsMcpPage({
         </div>
       ) : (
         <>
+          <div className="cx-skills-tool-meta">
+            <code title={state.skillsDir || state.codexSkillsDir}>
+              Skills: {state.skillsDir || state.codexSkillsDir}
+            </code>
+            <code title={state.configPath || undefined}>
+              MCP: {state.configPath || (lang === "zh" ? "未找到配置" : "Config not found")}
+            </code>
+          </div>
           <div className="cx-skills-tabs" role="tablist" aria-label="Skills and MCP">
             <button
               id={`${tabId}-mcp-tab`}

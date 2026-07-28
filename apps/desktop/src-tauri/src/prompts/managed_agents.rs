@@ -1,5 +1,6 @@
 use crate::constants::{
     AGENTS_FILENAME, AGENTS_MANAGED_BEGIN, AGENTS_MANAGED_END, AGENTS_TEMPLATE_PREFIX,
+    LEGACY_AGENTS_MANAGED_BEGIN, LEGACY_AGENTS_MANAGED_END, LEGACY_AGENTS_TEMPLATE_PREFIX,
 };
 use crate::error::{CodexxError, Result};
 use crate::file_io::{io_err, read_to_string_if_exists, write_text};
@@ -10,13 +11,13 @@ pub(crate) fn agents_path(codex_dir: &Path) -> PathBuf {
     codex_dir.join(AGENTS_FILENAME)
 }
 
-pub(crate) fn managed_agents_bounds(content: &str) -> Result<Option<(usize, usize)>> {
+fn marker_bounds(content: &str, begin: &str, end: &str) -> Result<Option<(usize, usize)>> {
     let begins = content
-        .match_indices(AGENTS_MANAGED_BEGIN)
+        .match_indices(begin)
         .map(|(index, _)| index)
         .collect::<Vec<_>>();
     let ends = content
-        .match_indices(AGENTS_MANAGED_END)
+        .match_indices(end)
         .map(|(index, _)| index)
         .collect::<Vec<_>>();
 
@@ -25,10 +26,27 @@ pub(crate) fn managed_agents_bounds(content: &str) -> Result<Option<(usize, usiz
     }
     if begins.len() != 1 || ends.len() != 1 || begins[0] >= ends[0] {
         return Err(CodexxError::Config(
-            "AGENTS.md 中的 Codex-X 受管区块标记不完整或重复，请先修复 BEGIN/END 标记".to_string(),
+            "AGENTS.md 中的 Everything Patch 受管区块标记不完整或重复，请先修复 BEGIN/END 标记"
+                .to_string(),
         ));
     }
-    Ok(Some((begins[0], ends[0] + AGENTS_MANAGED_END.len())))
+    Ok(Some((begins[0], ends[0] + end.len())))
+}
+
+pub(crate) fn managed_agents_bounds(content: &str) -> Result<Option<(usize, usize)>> {
+    let current = marker_bounds(content, AGENTS_MANAGED_BEGIN, AGENTS_MANAGED_END)?;
+    let legacy = marker_bounds(
+        content,
+        LEGACY_AGENTS_MANAGED_BEGIN,
+        LEGACY_AGENTS_MANAGED_END,
+    )?;
+    match (current, legacy) {
+        (Some(_), Some(_)) => Err(CodexxError::Config(
+            "AGENTS.md 中存在多个 Everything Patch 受管区块，请只保留一个".to_string(),
+        )),
+        (Some(bounds), None) | (None, Some(bounds)) => Ok(Some(bounds)),
+        (None, None) => Ok(None),
+    }
 }
 
 fn remove_managed_agents_block(content: &str) -> Result<(String, bool)> {
@@ -49,8 +67,9 @@ fn remove_managed_agents_block(content: &str) -> Result<(String, bool)> {
 pub(crate) fn managed_agents_template_key_from_content(content: &str) -> Option<String> {
     let (start, end) = managed_agents_bounds(content).ok().flatten()?;
     content[start..end].lines().find_map(|line| {
-        line.trim()
-            .strip_prefix(AGENTS_TEMPLATE_PREFIX)
+        [AGENTS_TEMPLATE_PREFIX, LEGACY_AGENTS_TEMPLATE_PREFIX]
+            .iter()
+            .find_map(|prefix| line.trim().strip_prefix(prefix))
             .and_then(|value| value.strip_suffix("-->"))
             .map(str::trim)
             .filter(|value| !value.is_empty())

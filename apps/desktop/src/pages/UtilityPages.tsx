@@ -3,12 +3,16 @@ import {
   CheckCircle2,
   Download,
   ExternalLink,
+  FileCode2,
   Globe2,
   Loader2,
   RefreshCw,
   Sparkles,
+  TerminalSquare,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { ToolTabs } from "../components/ToolTabs";
+import type { ToolConfigBundle, ToolId, ToolStatus } from "../types";
 import "../styles/utility-pages.css";
 
 export type UtilityLanguage = "zh" | "en";
@@ -34,36 +38,91 @@ function PageHeader({ eyebrow, title, description, aside }: PageHeaderProps) {
   );
 }
 
-export type TomlConfigPageProps = {
-  eyebrow: ReactNode;
-  title: ReactNode;
-  description: ReactNode;
-  loaded: ReactNode;
-  isLoaded: boolean;
+export type ToolConfigPageProps = {
+  lang: UtilityLanguage;
+  tool: ToolId;
+  toolStatuses: readonly ToolStatus[];
+  config: ToolConfigBundle | null;
+  selectedFileId: string;
+  loading: boolean;
   preview: ReactNode;
+  onToolChange: (tool: ToolId) => void;
+  onFileChange: (fileId: string) => void;
+  onRefresh: () => void;
 };
 
-export function TomlConfigPage({
-  eyebrow,
-  title,
-  description,
-  loaded,
-  isLoaded,
+export function ToolConfigPage({
+  lang,
+  tool,
+  toolStatuses,
+  config,
+  selectedFileId,
+  loading,
   preview,
-}: TomlConfigPageProps) {
+  onToolChange,
+  onFileChange,
+  onRefresh,
+}: ToolConfigPageProps) {
+  const isChinese = lang === "zh";
+  const activeFile = config?.files.find((file) => file.id === selectedFileId)
+    || config?.files.find((file) => file.id === config.primaryFileId)
+    || config?.files[0];
+  const title = isChinese ? `${config?.label || "工具"} 配置` : `${config?.label || "Tool"} configuration`;
+  const description = isChinese
+    ? "按工具查看原生配置文件。所有密钥和令牌均由后端递归脱敏。"
+    : "Inspect each tool's native configuration. Secrets and tokens are recursively redacted by the backend.";
+  const loaded = loading
+    ? (isChinese ? "读取中" : "Loading")
+    : activeFile?.exists
+      ? (isChinese ? "已读取" : "Loaded")
+      : (isChinese ? "未找到" : "Missing");
   return (
     <section className="cx-utility cx-page cx-page--toml">
       <PageHeader
-        eyebrow={eyebrow}
+        eyebrow={activeFile?.path || config?.label || "Config"}
         title={title}
         description={description}
         aside={(
-          <div className={`cx-page-header-status${isLoaded ? "" : " cx-page-header-status--missing"}`} aria-live="polite">
+          <button
+            type="button"
+            className={`cx-page-header-status cx-page-header-status--button${activeFile?.exists ? "" : " cx-page-header-status--missing"}`}
+            aria-live="polite"
+            onClick={onRefresh}
+            disabled={loading}
+          >
+            {loading ? <Loader2 size={13} className="cx-page-spin" aria-hidden="true" /> : <RefreshCw size={13} aria-hidden="true" />}
             <span className="cx-page-status-dot" aria-hidden="true" />
             <span>{loaded}</span>
-          </div>
+          </button>
         )}
       />
+      <ToolTabs
+        active={tool}
+        onChange={onToolChange}
+        statuses={toolStatuses}
+        ariaLabel={isChinese ? "配置工具" : "Configuration tools"}
+        className="cx-config-tool-tabs"
+      />
+      <div className="cx-config-file-bar">
+        <div className="cx-config-file-copy">
+          <FileCode2 size={17} aria-hidden="true" />
+          <span>
+            <strong>{activeFile?.label || (isChinese ? "主配置" : "Primary config")}</strong>
+            <code title={activeFile?.path}>{activeFile?.path || (isChinese ? "尚未读取" : "Not loaded")}</code>
+          </span>
+        </div>
+        {(config?.files.length || 0) > 1 && (
+          <label className="cx-config-file-select">
+            <span>{isChinese ? "配置文件" : "Config file"}</span>
+            <select value={activeFile?.id || ""} onChange={(event) => onFileChange(event.target.value)}>
+              {config?.files.map((file) => (
+                <option value={file.id} key={file.id}>{file.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+      {config?.notice && <p className="cx-config-notice">{config.notice}</p>}
       <section className="cx-page-panel cx-page-code-panel">
         <div className="cx-page-code-frame">{preview}</div>
       </section>
@@ -185,9 +244,13 @@ export type AboutCopy = {
   eyebrow: ReactNode;
   title: ReactNode;
   appVersionLabel: ReactNode;
-  codexVersionLabel: ReactNode;
-  codexHomeLabel: ReactNode;
   projectLabel: ReactNode;
+  environmentsTitle: ReactNode;
+  installedLabel: ReactNode;
+  missingLabel: ReactNode;
+  versionLabel: ReactNode;
+  homeLabel: ReactNode;
+  configLabel: ReactNode;
   openProjectLabel: ReactNode;
   openIssuesLabel: ReactNode;
   releasesEyebrow: ReactNode;
@@ -209,8 +272,7 @@ export type AboutReleaseState = {
 export type AboutPageProps = {
   copy: AboutCopy;
   appVersion: ReactNode;
-  codexVersion: ReactNode;
-  codexHome: ReactNode;
+  toolStatuses: readonly ToolStatus[];
   projectUrl: ReactNode;
   release: AboutReleaseState;
   onOpenProject: () => void;
@@ -237,8 +299,7 @@ function InfoRow({ label, value, mono = false }: InfoRowProps) {
 export function AboutPage({
   copy,
   appVersion,
-  codexVersion,
-  codexHome,
+  toolStatuses,
   projectUrl,
   release,
   onOpenProject,
@@ -256,8 +317,6 @@ export function AboutPage({
       <section className="cx-page-panel cx-page-about-panel">
         <div className="cx-page-info-list">
           <InfoRow label={copy.appVersionLabel} value={appVersion} />
-          <InfoRow label={copy.codexVersionLabel} value={codexVersion} />
-          <InfoRow label={copy.codexHomeLabel} value={codexHome} mono />
           <InfoRow label={copy.projectLabel} value={projectUrl} mono />
         </div>
         <div className="cx-page-panel-actions">
@@ -269,6 +328,29 @@ export function AboutPage({
             <ExternalLink size={15} aria-hidden="true" />
             {copy.openIssuesLabel}
           </button>
+        </div>
+      </section>
+
+      <section className="cx-page-panel cx-page-environments-panel">
+        <div className="cx-page-environments-heading">
+          <TerminalSquare size={17} aria-hidden="true" />
+          <h3>{copy.environmentsTitle}</h3>
+        </div>
+        <div className="cx-page-environment-list">
+          {toolStatuses.map((status) => (
+            <article className="cx-page-environment-row" key={status.id}>
+              <span className={`cx-page-environment-dot${status.installed ? " cx-page-environment-dot--ready" : ""}`} aria-hidden="true" />
+              <div className="cx-page-environment-name">
+                <strong>{status.label}</strong>
+                <small>{status.installed ? copy.installedLabel : copy.missingLabel}</small>
+              </div>
+              <dl>
+                <div><dt>{copy.versionLabel}</dt><dd>{status.version || "—"}</dd></div>
+                <div><dt>{copy.homeLabel}</dt><dd title={status.homeDir}>{status.homeDir}</dd></div>
+                <div><dt>{copy.configLabel}</dt><dd title={status.configPath}>{status.configPath}</dd></div>
+              </dl>
+            </article>
+          ))}
         </div>
       </section>
 

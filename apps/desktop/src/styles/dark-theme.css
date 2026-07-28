@@ -99,17 +99,29 @@
 }
 
 :root[data-theme="dark"] .cx-codex-version,
+:root[data-theme="dark"] .cx-tool-status-summary,
 :root[data-theme="dark"] .cx-theme-button {
   color: var(--cx-dark-muted);
 }
 
 :root[data-theme="dark"] .cx-codex-version svg,
+:root[data-theme="dark"] .cx-tool-status-summary-heading svg,
 :root[data-theme="dark"] .cx-theme-button svg,
 :root[data-theme="dark"] .cx-codex-version small {
   color: var(--cx-dark-subtle);
 }
 
 :root[data-theme="dark"] .cx-codex-version strong {
+  color: #d9dde2;
+}
+
+:root[data-theme="dark"] .cx-tool-status-summary-heading small,
+:root[data-theme="dark"] .cx-tool-status-summary-row small {
+  color: var(--cx-dark-subtle);
+}
+
+:root[data-theme="dark"] .cx-tool-status-summary-heading strong,
+:root[data-theme="dark"] .cx-tool-status-summary-label {
   color: #d9dde2;
 }
 
@@ -873,6 +885,58 @@
   border-right-color: var(--cx-dark-border);
 }
 
+:root[data-theme="dark"] .cx-providers-native-model,
+:root[data-theme="dark"] .cx-providers-native-status {
+  color: var(--cx-dark-muted);
+}
+
+:root[data-theme="dark"] .cx-providers-native-model select {
+  color: #d9dce1;
+  background: var(--cx-dark-surface-recessed);
+  border-color: var(--cx-dark-border);
+}
+
+:root[data-theme="dark"] .cx-providers-native-status--blocked {
+  color: #f2a36f;
+}
+
+:root[data-theme="dark"] .cx-prompts-summary-label > button {
+  color: #aeb3bd;
+}
+
+:root[data-theme="dark"] .cx-prompts-summary-label > button:hover:not(:disabled) {
+  color: #e0e3e8;
+}
+
+:root[data-theme="dark"] .cx-prompt-backup-row {
+  border-color: var(--cx-dark-border);
+  background: var(--cx-dark-surface-raised);
+}
+
+:root[data-theme="dark"] .cx-prompt-backup-row--selected {
+  border-color: rgba(74, 181, 126, 0.5);
+  background: rgba(37, 126, 81, 0.12);
+}
+
+:root[data-theme="dark"] .cx-prompt-backup-copy strong {
+  color: var(--cx-dark-text);
+}
+
+:root[data-theme="dark"] .cx-prompt-backup-copy > span,
+:root[data-theme="dark"] .cx-prompt-backups-empty {
+  color: #adb2bc;
+}
+
+:root[data-theme="dark"] .cx-prompt-backups-confirm {
+  color: #e7d6a4;
+  background: rgba(122, 91, 27, 0.16);
+  border-color: rgba(205, 167, 87, 0.38);
+}
+
+:root[data-theme="dark"] .cx-prompt-backups-confirm span {
+  color: #c9ba91;
+}
+
 :root[data-theme="dark"] .cx-prompts-mode-title strong {
   color: #d8dbe0;
 }
@@ -1038,6 +1102,8 @@
 
 :root[data-theme="dark"] .cx-page-header h2,
 :root[data-theme="dark"] .cx-page-setting-copy strong,
+:root[data-theme="dark"] .cx-page-environments-heading h3,
+:root[data-theme="dark"] .cx-page-environment-name strong,
 :root[data-theme="dark"] .cx-page-release-header h3,
 :root[data-theme="dark"] .cx-page-info-value {
   color: #f1f2f4;
@@ -1048,6 +1114,18 @@
   background: var(--cx-page-surface);
   border-color: var(--cx-page-border);
   box-shadow: var(--cx-page-panel-shadow);
+}
+
+:root[data-theme="dark"] .cx-config-file-select select {
+  color: var(--cx-page-text);
+  background: var(--cx-page-control);
+  border-color: var(--cx-page-border);
+}
+
+:root[data-theme="dark"] .cx-config-notice {
+  color: #d4c49f;
+  background: #2a251a;
+  border-left-color: #b88732;
 }
 
 :root[data-theme="dark"] .cx-page-info-row {

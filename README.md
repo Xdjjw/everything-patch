@@ -4,16 +4,16 @@
 </p>
 
 <div align="center">
-  <img src="apps/desktop/src-tauri/icons/icon.png" alt="Codex-X Logo" width="150" />
+  <img src="apps/desktop/src-tauri/icons/icon.png" alt="Everything Patch Logo" width="150" />
 
-  # Codex-X
+  # Everything Patch
 
-  **Codex 可视化提示词注入 · Provider · 会话 · Skills / MCP 管理工具**
+  **Codex · Claude · ZCode · Grok 的可视化提示词与配置管理工具**
 
-  一款面向 **OpenAI Codex 桌面端 / Codex CLI** 的跨平台桌面工具。把提示词模板、自定义 Prompt、第三方 API 供应商、会话同步、Skills / MCP、macOS / Windows 皮肤和 TOML 配置都放进可视化界面里，不用反复手改文件。
+  一款面向多种 AI 编程工具的跨平台桌面管理器。把提示词模板、自定义 Prompt、第三方 API 供应商、Codex 会话、Skills / MCP、Claude 指令、ZCode system role、Grok AGENTS.md、皮肤和 TOML 配置集中到一个界面里。
 
   <p>
-    <img src="https://img.shields.io/github/v/release/yynxxxxx/Codex-X?label=version&color=blue" alt="version" />
+    <img src="https://img.shields.io/github/v/release/Xdjjw/everything-patch?label=version&color=blue" alt="version" />
     <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-555" alt="platform" />
     <img src="https://img.shields.io/badge/built%20with-Tauri%202-24C8DB" alt="tauri" />
     <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
@@ -30,9 +30,9 @@
 
 ---
 
-## Codex-X 是什么？
+## Everything Patch 是什么？
 
-当你同时使用 Codex 桌面端、CLI、第三方 API、Skills / MCP 和多套提示词时，配置很容易散落在不同文件里。Codex-X 把这些高频操作集中到一个桌面界面中，让当前状态看得见、常用操作点一下就能完成。
+当你同时使用 Codex、Claude、ZCode、Grok、第三方 API 和多套提示词时，配置很容易散落在不同目录。Everything Patch 把这些高频操作集中到一个桌面界面中，让当前状态看得见、常用操作点一下就能完成。
 
 你可以用它：
 
@@ -48,7 +48,7 @@
 <summary><b>新版 UI：指令提示词管理中心</b></summary>
 
 <p align="center">
-  <img src="docs/screenshots/app/new-ui/prompts.png" alt="Codex-X 新版指令提示词管理界面" width="920" />
+  <img src="docs/screenshots/app/new-ui/prompts.png" alt="Everything Patch 新版指令提示词管理界面" width="920" />
 </p>
 
 </details>
@@ -59,12 +59,12 @@
     <td align="center" width="50%">
       <b>分类管理</b><br />
       <sub>把提示词按破甲 / 逆向、软件开发、写作辅助等分类维护</sub><br />
-      <img src="docs/screenshots/app/new-ui/prompt-categories.png" alt="Codex-X 提示词分类管理" width="420" />
+      <img src="docs/screenshots/app/new-ui/prompt-categories.png" alt="Everything Patch 提示词分类管理" width="420" />
     </td>
     <td align="center" width="50%">
       <b>自定义提示词</b><br />
       <sub>直接添加、编辑或导入自己的 Markdown 提示词</sub><br />
-      <img src="docs/screenshots/app/new-ui/prompt-form.png" alt="Codex-X 添加自定义提示词" width="420" />
+      <img src="docs/screenshots/app/new-ui/prompt-form.png" alt="Everything Patch 添加自定义提示词" width="420" />
     </td>
   </tr>
 </table>
@@ -74,7 +74,7 @@
 <summary><b>Skills / MCP 可视化管理</b></summary>
 
 <p align="center">
-  <img src="docs/screenshots/app/new-ui/skills-mcp.png" alt="Codex-X Skills 与 MCP 管理界面" width="920" />
+  <img src="docs/screenshots/app/new-ui/skills-mcp.png" alt="Everything Patch Skills 与 MCP 管理界面" width="920" />
 </p>
 
 </details>
@@ -85,7 +85,7 @@
 <table>
   <tr>
     <th align="center" width="190">你想做的事</th>
-    <th align="center">Codex-X 能帮你</th>
+    <th align="center">Everything Patch 能帮你</th>
   </tr>
   <tr>
     <td align="center"><b>提示词注入管理</b></td>
@@ -113,7 +113,7 @@
   </tr>
   <tr>
     <td align="center"><b>macOS / Windows 皮肤中心</b></td>
-    <td align="left">内置“椎名真白·樱花画室”主题，以真实壁纸和完整界面缩略图展示主题效果，支持导入 / 导出、热切换和关闭皮肤；换肤运行时已经内置在 Codex-X 中，无需另装 Codex Dream Skin 引擎。</td>
+    <td align="left">内置“椎名真白·樱花画室”主题，以真实壁纸和完整界面缩略图展示主题效果，支持导入 / 导出、热切换和关闭皮肤；换肤运行时已经内置在 Everything Patch 中，无需另装 Codex Dream Skin 引擎。</td>
   </tr>
   <tr>
     <td align="center"><b>跨平台使用</b></td>
@@ -138,7 +138,7 @@
 >
 > 安装包离线自带当前全部 5 套模板；软件启动后可同步 GitHub `examples/` 的更新和新增模板。同步成功的在线版本会缓存到本地，临时离线仍可继续使用。你也可以导入自己的 `.md`、新增分类、编辑说明，并像切换插件一样启用或禁用任意提示词。
 
-Codex-X 现在不只是“几套内置 Prompt”的启动器，而是一个可视化提示词注入与管理工具：
+Everything Patch 现在不只是“几套内置 Prompt”的启动器，而是一个可视化提示词注入与管理工具：
 
 - 按分类管理提示词，例如破甲 / 逆向、软件开发、写作辅助，也可以新增自己的分类
 - 支持同步 GitHub 模板、导入 Markdown、手动添加提示词、编辑标题 / 文件名 / 内容
@@ -185,7 +185,7 @@ Codex-X 现在不只是“几套内置 Prompt”的启动器，而是一个可�
   <tr>
     <td width="50%" valign="top">
       <b>保留原提示词</b><br />
-      适合已经有个人规则的用户。Codex-X 只追加自己管理的内容，禁用时也只移除这一部分，不动原有提示词。
+      适合已经有个人规则的用户。Everything Patch 只追加自己管理的内容，禁用时也只移除这一部分，不动原有提示词。
     </td>
     <td width="50%" valign="top">
       <b>替换原提示词</b><br />
@@ -197,7 +197,7 @@ Codex-X 现在不只是“几套内置 Prompt”的启动器，而是一个可�
 每次启用或禁用前都会自动创建备份。除了模板库，你也可以导入、编辑、删除自己的 `.md` 提示词，并通过分类管理把常用提示词整理成自己的工作流。
 
 > [!NOTE]
-> 如果你有好用的提示词模板，欢迎在 [Issues](https://github.com/yynxxxxx/Codex-X/issues) 提交：请附上模板名称、适用场景、Markdown 内容、推荐启用方式和必要说明。合适的模板会考虑收录到 `examples/`，让更多用户可以一键同步使用。
+> 如果你有好用的提示词模板，欢迎在 [Issues](https://github.com/Xdjjw/everything-patch/issues) 提交：请附上模板名称、适用场景、Markdown 内容、推荐启用方式和必要说明。合适的模板会考虑收录到 `examples/`，让更多用户可以一键同步使用。
 
 ### 2. Provider / API：添加、检测、获取模型、随时切换
 
@@ -246,7 +246,7 @@ Codex-X 现在不只是“几套内置 Prompt”的启动器，而是一个可�
     </td>
     <td width="50%" valign="top">
       <b>MCP</b><br />
-      导入前先预览现有 MCP Server，再决定哪些需要纳管；启用或禁用后由 Codex-X 自动维护 Codex 配置。
+      导入前先预览现有 MCP Server，再决定哪些需要纳管；启用或禁用后由 Everything Patch 自动维护 Codex 配置。
     </td>
   </tr>
 </table>
@@ -265,8 +265,8 @@ Codex-X 现在不只是“几套内置 Prompt”的启动器，而是一个可�
 ### 6. 逆向 Skills 导航
 
 <div align="center">
-  <a href="https://yynxxxxx.github.io/Codex-X/">
-    <img src="https://img.shields.io/badge/Codex--X-在线逆向%20Skills%20导航-0ea5e9?style=for-the-badge&logo=githubpages&logoColor=white" alt="Codex-X 在线逆向 Skills 导航" />
+  <a href="https://xdjjw.github.io/everything-patch/">
+    <img src="https://img.shields.io/badge/Everything--Patch-在线逆向%20Skills%20导航-0ea5e9?style=for-the-badge&logo=githubpages&logoColor=white" alt="Everything Patch 在线逆向 Skills 导航" />
   </a>
 </div>
 
@@ -275,7 +275,7 @@ Codex-X 现在不只是“几套内置 Prompt”的启动器，而是一个可�
 <table>
   <tr>
     <td width="55%">
-      <b>在线教程页</b>：解释什么是“破甲”、Codex-X 如何启用 GPT-5.5 / unrestricted jeli、以及如何搭配不同领域的逆向 Skills。
+      <b>在线教程页</b>：解释什么是“破甲”、Everything Patch 如何启用 GPT-5.5 / unrestricted jeli、以及如何搭配不同领域的逆向 Skills。
       <br /><br />
       <b>分类覆盖</b>：Android APK / Windows EXE / Web 协议逆向。
       <br /><br />
@@ -294,8 +294,8 @@ Codex-X 现在不只是“几套内置 Prompt”的启动器，而是一个可�
 </table>
 
 <p align="center">
-  <a href="https://yynxxxxx.github.io/Codex-X/">
-    <b>🚀 打开 Codex-X 逆向 Skills 导航</b>
+  <a href="https://xdjjw.github.io/everything-patch/">
+    <b>🚀 打开 Everything Patch 逆向 Skills 导航</b>
   </a>
 </p>
 
@@ -322,7 +322,7 @@ Codex-X 现在不只是“几套内置 Prompt”的启动器，而是一个可�
 
 ## 配置路径
 
-Codex-X 默认读取 Codex 配置目录：
+Everything Patch 默认读取 Codex 配置目录：
 
 ```text
 ~/.codex/config.toml
@@ -333,21 +333,23 @@ Codex-X 默认读取 Codex 配置目录：
 
 ```text
 CODEX_HOME=/path/to/.codex
-CODEXX_HOME=/path/to/codex-x-data
+EVERYTHING_PATCH_HOME=/path/to/everything-patch-data
 CC_SWITCH_HOME=/path/to/.cc-switch
 ```
 
-Codex-X 自身数据库默认位于：
+Everything Patch 自身数据库默认位于：
 
 ```text
-~/.codexx/codexx.db
+~/.everything-patch/everything-patch.db
 ```
+
+旧版 `CODEXX_HOME`、`~/.codexx/codexx.db` 和 `codex-x-skins` 会继续自动识别，无需手动迁移。
 
 ## 下载
 
 请前往 Releases 页面下载：
 
-https://github.com/yynxxxxx/Codex-X/releases
+https://github.com/Xdjjw/everything-patch/releases
 
 ## 开发运行
 
@@ -359,8 +361,10 @@ pnpm dev
 构建桌面端：
 
 ```bash
-pnpm --dir apps/desktop tauri build
+npm run build
 ```
+
+本地未配置 `TAURI_SIGNING_PRIVATE_KEY` 时，构建脚本会跳过需要发布私钥的更新签名产物，MSI、NSIS 等安装包仍会正常生成。CI 发布流程仍直接使用 Tauri 和仓库密钥生成已签名更新包。
 
 ## 桌面端安装说明
 
@@ -379,12 +383,12 @@ pnpm --dir apps/desktop tauri build
 - 仅本地测试：可手动移除 quarantine 属性
 
 ```bash
-xattr -dr com.apple.quarantine /Applications/Codex-X.app
+xattr -dr com.apple.quarantine "/Applications/Everything Patch.app"
 ```
 
 ## 许可证
 
-本项目基于 [MIT License](https://github.com/yynxxxxx/Codex-X/blob/main/LICENSE) 开源。
+本项目基于 [MIT License](https://github.com/Xdjjw/everything-patch/blob/main/LICENSE) 开源。
 
 ## 致谢 / Thanks
 
@@ -393,11 +397,11 @@ xattr -dr com.apple.quarantine /Applications/Codex-X.app
 ## Star History
 
 <p align="center">
-  <a href="https://github.com/yynxxxxx/Codex-X/stargazers">
+  <a href="https://github.com/Xdjjw/everything-patch/stargazers">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://codex-star-history.zhihack0728.workers.dev/v1/charts/codex-x.svg?theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://codex-star-history.zhihack0728.workers.dev/v1/charts/codex-x.svg?theme=light" />
-      <img alt="Codex-X Star History" src="https://codex-star-history.zhihack0728.workers.dev/v1/charts/codex-x.svg?theme=light" width="900" />
+      <source media="(prefers-color-scheme: dark)" srcset="https://codex-star-history.zhihack0728.workers.dev/v1/charts/everything-patch.svg?theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://codex-star-history.zhihack0728.workers.dev/v1/charts/everything-patch.svg?theme=light" />
+      <img alt="Everything Patch Star History" src="https://codex-star-history.zhihack0728.workers.dev/v1/charts/everything-patch.svg?theme=light" width="900" />
     </picture>
   </a>
 </p>

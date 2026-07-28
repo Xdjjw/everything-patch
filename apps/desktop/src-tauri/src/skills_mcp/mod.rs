@@ -1,11 +1,17 @@
 mod mcp;
 mod skills;
+mod tool;
 mod types;
 
 pub(crate) use mcp::{sort_managed_mcp_servers, toggle_codex_mcp_inner};
 pub(crate) use skills::{
     check_skill_updates_inner, install_skill_zip_inner, normalize_legacy_zip_skill_dirs,
     sort_managed_skills, toggle_codex_skill_inner,
+};
+pub(crate) use tool::{
+    build_tool_state_inner, check_tool_skill_updates_inner, import_tool_resources_inner,
+    install_tool_skill_zip_inner, preview_tool_import_inner, toggle_tool_mcp_inner,
+    toggle_tool_skill_inner,
 };
 pub(crate) use types::{
     ManagedMcpServer, SkillsMcpActionResult, SkillsMcpImportPreview, SkillsMcpState,
@@ -20,6 +26,7 @@ use crate::error::Result;
 use crate::file_io::{ensure_directory, io_err};
 use crate::paths::home_dir;
 use crate::resolve_codex_dir;
+use crate::tools::ToolId;
 use mcp::{
     db_managed_mcp, import_ccswitch_mcp_servers_for_codex, list_mcp_from_config, mcp_summary,
     preview_ccswitch_mcp_servers_for_codex, save_managed_mcp,
@@ -61,7 +68,7 @@ pub(crate) fn build_skills_mcp_state_inner(config_dir: Option<String>) -> Result
     if let Err(e) = scan_skill_dir(
         &disabled_dir,
         false,
-        "Codex-X 已禁用",
+        "Everything Patch 已禁用",
         &mut skills,
         &mut seen,
     ) {
@@ -80,7 +87,7 @@ pub(crate) fn build_skills_mcp_state_inner(config_dir: Option<String>) -> Result
             name,
             transport,
             enabled,
-            source: "Codex-X".to_string(),
+            source: "Everything Patch".to_string(),
             summary,
             command,
             url,
@@ -90,6 +97,11 @@ pub(crate) fn build_skills_mcp_state_inner(config_dir: Option<String>) -> Result
     sort_managed_mcp_servers(&mut mcp_servers);
     sort_managed_skills(&mut skills);
     Ok(SkillsMcpState {
+        tool: ToolId::Codex,
+        tool_label: ToolId::Codex.label().to_string(),
+        tool_dir: codex_dir.display().to_string(),
+        skills_dir: skills_dir.display().to_string(),
+        config_path: codex_dir.join("config.toml").display().to_string(),
         codex_dir: codex_dir.display().to_string(),
         codex_skills_dir: skills_dir.display().to_string(),
         disabled_skills_dir: disabled_dir.display().to_string(),

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { AppUpdaterPhase } from "../appUpdater";
+import type { ToolStatus } from "../types";
 import { IconButton } from "./ui/IconButton";
 
 export type AppLanguage = "zh" | "en";
@@ -48,7 +49,7 @@ const NAV_ITEMS: readonly NavItem[] = [
   { id: "skillsMcp", icon: Blocks, label: { zh: "技能和MCP", en: "Skills & MCP" } },
   { id: "skins", icon: Palette, label: { zh: "皮肤中心", en: "Skins" } },
   { id: "instruction", icon: Sparkles, label: { zh: "指令提示词", en: "Prompts" } },
-  { id: "toml", icon: FileCode2, label: { zh: "TOML", en: "TOML" } },
+  { id: "toml", icon: FileCode2, label: { zh: "配置", en: "Config" } },
   { id: "settings", icon: Settings, label: { zh: "设置", en: "Settings" } },
   { id: "about", icon: Info, label: { zh: "关于", en: "About" } },
 ] as const;
@@ -61,6 +62,7 @@ export type AppShellProps = {
   onToggleTheme: () => void;
   codexVersion?: string | null;
   appVersion?: string | null;
+  toolStatuses?: readonly ToolStatus[];
   hasUpdate?: boolean;
   updatePhase?: AppUpdaterPhase;
   onOpenUpdate?: () => void;
@@ -80,6 +82,7 @@ export function AppShell({
   onToggleTheme,
   codexVersion,
   appVersion,
+  toolStatuses = [],
   hasUpdate = false,
   updatePhase = "idle",
   onOpenUpdate,
@@ -136,13 +139,13 @@ export function AppShell({
 
       <aside className="cx-sidebar">
         <div className="cx-brand">
-          <div className="cx-brand-mark" aria-hidden="true">X</div>
+          <div className="cx-brand-mark" aria-hidden="true">EP</div>
           <div className="cx-brand-copy">
             <div className="cx-brand-title-row">
-              <h1>Codex-X</h1>
+              <h1>Everything Patch</h1>
               {appVersion && <span className="cx-app-version">v{appVersion.replace(/^v/i, "")}</span>}
             </div>
-            <p>{lang === "zh" ? "切换 · 指令 · 配置" : "Switch · Instruct · Config"}</p>
+            <p>{lang === "zh" ? "多工具 · 指令 · 配置" : "Multi-tool · Prompts · Config"}</p>
           </div>
           {updateActionState && onOpenUpdate && (
             <IconButton
@@ -183,12 +186,32 @@ export function AppShell({
 
         <div className="cx-sidebar-footer">
           {sidebarFooter}
-          <div className="cx-codex-version" title={`Codex CLI ${codexVersionLabel}`}>
-            <TerminalSquare size={17} strokeWidth={1.8} aria-hidden="true" />
-            <span>
-              <small>Codex CLI</small>
-              <strong>{codexVersionLabel}</strong>
-            </span>
+          <div
+            className="cx-tool-status-summary"
+            aria-label={lang === "zh" ? "工具检测汇总" : "Tool detection summary"}
+          >
+            <div className="cx-tool-status-summary-heading">
+              <TerminalSquare size={16} strokeWidth={1.8} aria-hidden="true" />
+              <span>
+                <small>Everything Patch</small>
+                <strong>{appVersion ? `v${appVersion.replace(/^v/i, "")}` : "—"}</strong>
+              </span>
+            </div>
+            <div className="cx-tool-status-summary-list">
+              {toolStatuses.length > 0 ? toolStatuses.map((status) => (
+                <div className="cx-tool-status-summary-row" key={status.id} title={status.homeDir}>
+                  <span className={`cx-tool-status-summary-dot${status.installed ? " cx-tool-status-summary-dot--ready" : ""}`} aria-hidden="true" />
+                  <span className="cx-tool-status-summary-label">{status.label}</span>
+                  <small>{status.installed ? (status.version || (lang === "zh" ? "已安装" : "Installed")) : (lang === "zh" ? "未检测到" : "Missing")}</small>
+                </div>
+              )) : (
+                <div className="cx-tool-status-summary-row">
+                  <span className="cx-tool-status-summary-dot" aria-hidden="true" />
+                  <span className="cx-tool-status-summary-label">Codex CLI</span>
+                  <small>{codexVersionLabel}</small>
+                </div>
+              )}
+            </div>
           </div>
           <button
             type="button"

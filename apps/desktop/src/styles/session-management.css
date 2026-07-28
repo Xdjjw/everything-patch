@@ -24,6 +24,23 @@
   display: none !important;
 }
 
+.cx-session-tool-tabs {
+  flex: 0 0 auto;
+  margin-bottom: 2px;
+}
+
+.cx-session-page--readonly .cx-session-select-all,
+.cx-session-page--readonly .cx-session-select-box,
+.cx-session-page--readonly .cx-session-group-heading input {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.cx-session-page--readonly .cx-session-row,
+.cx-session-page--readonly .cx-session-group-heading {
+  cursor: default;
+}
+
 .cx-session-header {
   min-width: 0;
   flex: 0 0 auto;

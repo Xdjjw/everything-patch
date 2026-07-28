@@ -88,7 +88,14 @@ pub(crate) fn save_prompt_inner(prompt: SavedPrompt, engine: &str) -> Result<Sav
             content = excluded.content,
             engine = excluded.engine,
             updated_at = excluded.updated_at",
-        params![prompt.id, prompt.title, prompt.filename, prompt.content, engine, now],
+        params![
+            prompt.id,
+            prompt.title,
+            prompt.filename,
+            prompt.content,
+            engine,
+            now
+        ],
     )
     .map_err(|e| CodexxError::Database(e.to_string()))?;
     list_saved_prompts_inner(engine)?

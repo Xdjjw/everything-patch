@@ -75,7 +75,7 @@
   color: #ffffff;
   background: #2563eb;
   box-shadow: 0 5px 14px rgba(37, 99, 235, 0.2);
-  font-size: 20px;
+  font-size: 14px;
   font-weight: 780;
   line-height: 1;
 }
@@ -139,16 +139,17 @@
 
 .cx-brand-title-row {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   gap: 7px;
 }
 
 .cx-brand h1 {
+  min-width: 0;
   margin: 0;
   color: #181a1f;
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 730;
-  line-height: 1.2;
+  line-height: 1.1;
   letter-spacing: 0;
 }
 
@@ -165,6 +166,7 @@
 }
 
 .cx-app-version {
+  flex: 0 0 auto;
   color: #969ba4;
   font-size: 11px;
   font-weight: 650;
@@ -207,6 +209,7 @@
 
 .cx-nav-item:focus-visible,
 .cx-brand-update:focus-visible,
+.cx-tool-status-summary:focus-visible,
 .cx-theme-button:focus-visible {
   outline: 2px solid rgba(37, 99, 235, 0.48);
   outline-offset: 2px;
@@ -266,6 +269,92 @@
   margin-top: auto;
   padding-top: 14px;
   border-top: 1px solid #eceef1;
+}
+
+.cx-tool-status-summary {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 2px 0 3px;
+}
+
+.cx-tool-status-summary-heading {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.cx-tool-status-summary-heading svg {
+  color: #8c929b;
+}
+
+.cx-tool-status-summary-heading span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cx-tool-status-summary-heading small {
+  color: #969ba4;
+  font-size: 10px;
+  font-weight: 560;
+  line-height: 1.1;
+}
+
+.cx-tool-status-summary-heading strong {
+  overflow: hidden;
+  color: #4b5058;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cx-tool-status-summary-list {
+  display: grid;
+  gap: 4px;
+  padding-left: 26px;
+}
+
+.cx-tool-status-summary-row {
+  display: grid;
+  grid-template-columns: 6px minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.cx-tool-status-summary-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #aeb4bd;
+}
+
+.cx-tool-status-summary-dot--ready {
+  background: #2aa36b;
+}
+
+.cx-tool-status-summary-label {
+  overflow: hidden;
+  color: #656b75;
+  font-size: 10px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cx-tool-status-summary-row small {
+  overflow: hidden;
+  max-width: 92px;
+  color: #969ba4;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cx-codex-version,
@@ -507,6 +596,8 @@ html.cx-theme-fallback-transition body *::after {
   .cx-brand-copy,
   .cx-nav-label,
   .cx-codex-version span,
+  .cx-tool-status-summary-heading span,
+  .cx-tool-status-summary-list,
   .cx-theme-copy,
   .cx-theme-switch {
     display: none;
@@ -514,6 +605,7 @@ html.cx-theme-fallback-transition body *::after {
 
   .cx-nav-item,
   .cx-codex-version,
+  .cx-tool-status-summary,
   .cx-theme-button {
     grid-template-columns: 1fr;
     justify-items: center;

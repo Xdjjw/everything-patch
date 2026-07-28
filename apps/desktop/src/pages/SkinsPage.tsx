@@ -63,7 +63,7 @@ function getCopy(lang: Lang) {
     ? {
         eyebrow: "SKIN CENTER",
         title: "皮肤中心",
-        description: "在 Codex-X 中管理主题包，并直接应用到官方 Codex Desktop。",
+        description: "在 Everything Patch 中管理主题包，并直接应用到官方 Codex Desktop。",
         refresh: "刷新",
         refreshingButton: "刷新中",
         refreshing: "正在刷新主题库...",
@@ -94,7 +94,7 @@ function getCopy(lang: Lang) {
     : {
         eyebrow: "SKIN CENTER",
         title: "Skin Center",
-        description: "Manage theme packs in Codex-X and apply them directly to the official Codex Desktop app.",
+        description: "Manage theme packs in Everything Patch and apply them directly to the official Codex Desktop app.",
         refresh: "Refresh",
         refreshingButton: "Refreshing",
         refreshing: "Refreshing skin library...",

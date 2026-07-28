@@ -12,7 +12,7 @@ use std::time::Duration;
 fn temp_dir(name: &str) -> PathBuf {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let path = std::env::temp_dir().join(format!(
-        "codex-x-session-sync-{name}-{}-{}",
+        "everything-patch-session-sync-{name}-{}-{}",
         std::process::id(),
         COUNTER.fetch_add(1, Ordering::Relaxed),
     ));

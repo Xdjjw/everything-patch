@@ -3,11 +3,12 @@ use crate::config_migration::migrate_legacy_prompt_config;
 use crate::error::Result;
 use crate::file_io::{io_err, json_err, parse_toml_document, read_to_string_if_exists};
 use crate::prompts::{
-    agents_path, managed_agents_template_key, prompt_template_key_for_instruction,
-    managed_claude_template_key, claude_builtin_prompt_meta, claude_memory_path,
-    list_saved_prompts_inner, ENGINE_CLAUDE,
+    agents_path, claude_builtin_prompt_meta, claude_memory_path, codex_prompt_id_allowed,
+    list_saved_prompts_inner, managed_agents_template_key, managed_claude_injection_mode,
+    managed_claude_template_key, prompt_template_key_for_instruction, ENGINE_CLAUDE,
 };
 use crate::providers::{list_saved_providers_inner, SavedProvider};
+use crate::tools::{redact_json_value, redacted_json_text, redacted_toml_text};
 use crate::{auth_path, config_path, string_value};
 use serde::Serialize;
 use serde_json::Value;
@@ -44,9 +45,15 @@ pub(crate) struct CodexState {
     agents_path: String,
     active_saved_provider_id: Option<String>,
     providers: Vec<ProviderSummary>,
+    #[serde(skip_serializing)]
     pub(crate) config_text: String,
+    #[serde(rename = "configText")]
+    config_preview: String,
     auth_preview: Option<Value>,
+    #[serde(skip_serializing)]
     auth_text: String,
+    #[serde(rename = "authText")]
+    auth_text_preview: String,
     last_backup: Option<BackupEntry>,
 }
 
@@ -65,19 +72,7 @@ fn redacted_auth_preview(path: &Path) -> Result<Option<Value>> {
     }
     let text = fs::read_to_string(path).map_err(|e| io_err(path, e))?;
     let mut value: Value = serde_json::from_str(&text).map_err(|e| json_err(path, e))?;
-    if let Some(obj) = value.as_object_mut() {
-        for (key, val) in obj.iter_mut() {
-            let lower = key.to_ascii_lowercase();
-            if (lower.contains("key")
-                || lower.contains("token")
-                || lower.contains("secret")
-                || lower.contains("password"))
-                && val.as_str().is_some_and(|s| !s.trim().is_empty())
-            {
-                *val = Value::String("••••••••".to_string());
-            }
-        }
-    }
+    redact_json_value(&mut value);
     Ok(Some(value))
 }
 
@@ -184,7 +179,11 @@ pub(crate) fn build_state(codex_dir: PathBuf) -> Result<CodexState> {
         .map(prompt_template_key_for_instruction)
         .transpose()?
         .flatten();
-    let agents_template_key = managed_agents_template_key(&codex_dir)?;
+    let agents_template_key = managed_agents_template_key(&codex_dir)?.filter(|key| {
+        key.strip_prefix("builtin:")
+            .map(codex_prompt_id_allowed)
+            .unwrap_or(true)
+    });
     let (instruction_injection_mode, instruction_template_key) =
         if let Some(key) = agents_template_key {
             (Some("append".to_string()), Some(key))
@@ -200,6 +199,7 @@ pub(crate) fn build_state(codex_dir: PathBuf) -> Result<CodexState> {
     } else {
         active_saved_provider_id_from_config(&text, &list_saved_providers_inner()?)
     };
+    let auth_text = read_to_string_if_exists(&auth)?;
 
     Ok(CodexState {
         codex_dir: codex_dir.display().to_string(),
@@ -217,9 +217,11 @@ pub(crate) fn build_state(codex_dir: PathBuf) -> Result<CodexState> {
         agents_path: agents_path(&codex_dir).display().to_string(),
         active_saved_provider_id,
         providers,
+        config_preview: redacted_toml_text(&text),
         config_text: text,
         auth_preview: redacted_auth_preview(&auth)?,
-        auth_text: read_to_string_if_exists(&auth)?,
+        auth_text_preview: redacted_json_text(&auth_text),
+        auth_text,
         last_backup: latest_backup()?,
     })
 }
@@ -232,6 +234,7 @@ pub(crate) struct ClaudeState {
     memory_path: String,
     memory_exists: bool,
     pub(crate) instruction_enabled: bool,
+    pub(crate) instruction_injection_mode: Option<String>,
     pub(crate) instruction_template_key: Option<String>,
     pub(crate) active_instruction_title: Option<String>,
 }
@@ -272,9 +275,9 @@ pub(crate) fn build_claude_state() -> Result<ClaudeState> {
     let memory_exists = memory.is_file();
     let template_key = managed_claude_template_key()?;
     let instruction_enabled = template_key.is_some();
-    let active_instruction_title = template_key
-        .as_deref()
-        .and_then(claude_instruction_title);
+    let instruction_injection_mode =
+        managed_claude_injection_mode()?.map(|mode| mode.as_str().to_string());
+    let active_instruction_title = template_key.as_deref().and_then(claude_instruction_title);
     Ok(ClaudeState {
         claude_dir: memory
             .parent()
@@ -283,6 +286,7 @@ pub(crate) fn build_claude_state() -> Result<ClaudeState> {
         memory_path: memory.display().to_string(),
         memory_exists,
         instruction_enabled,
+        instruction_injection_mode,
         instruction_template_key: template_key,
         active_instruction_title,
     })
@@ -296,6 +300,8 @@ pub(crate) struct ZcodeState {
     pub(crate) system_file: String,
     pub(crate) system_file_exists: bool,
     pub(crate) instruction_enabled: bool,
+    pub(crate) instruction_injection_mode: Option<String>,
+    pub(crate) instruction_template_key: Option<String>,
     pub(crate) zcode_app: Option<String>,
     pub(crate) zcode_runtime_exists: bool,
     pub(crate) runtime_patchable: bool,
@@ -360,11 +366,13 @@ pub(crate) fn build_zcode_state() -> Result<ZcodeState> {
         .map(|app| crate::zcode::app_supports_agent_override(app))
         .unwrap_or(false);
     let zcode_running = crate::zcode::is_zcode_running();
+    let (injection_mode, instruction_template_key, configured_title) =
+        crate::zcode::current_install_metadata()?;
 
     // 指令已启用 = system-role.md 存在 + launcher 存在
     let instruction_enabled = system_file_exists && launcher_exists;
     let active_instruction_title = if instruction_enabled {
-        crate::constants::ZCODE_BUILTIN_TITLE.to_string().into()
+        configured_title.or_else(|| Some(crate::constants::ZCODE_BUILTIN_TITLE.to_string()))
     } else {
         None
     };
@@ -374,6 +382,8 @@ pub(crate) fn build_zcode_state() -> Result<ZcodeState> {
         system_file: paths.system_file.display().to_string(),
         system_file_exists,
         instruction_enabled,
+        instruction_injection_mode: injection_mode.map(|mode| mode.as_str().to_string()),
+        instruction_template_key,
         zcode_app: zcode_app.map(|p| p.display().to_string()),
         zcode_runtime_exists,
         runtime_patchable,
@@ -396,6 +406,8 @@ pub(crate) struct GrokState {
     pub(crate) disabled_hooks_count: usize,
     pub(crate) manifest_exists: bool,
     pub(crate) instruction_enabled: bool,
+    pub(crate) instruction_injection_mode: Option<String>,
+    pub(crate) instruction_template_key: Option<String>,
     pub(crate) active_instruction_title: Option<String>,
 }
 
@@ -415,8 +427,10 @@ pub(crate) fn build_grok_state() -> Result<GrokState> {
     let grok_dir = crate::grok::grok_home_dir()?;
     // 指令已启用 = AGENTS.md 存在 + manifest 存在
     let instruction_enabled = status.agents_md_exists && status.manifest_exists;
+    let (injection_mode, instruction_template_key, configured_title) =
+        crate::grok::current_install_metadata()?;
     let active_instruction_title = if instruction_enabled {
-        Some(crate::constants::GROK_BUILTIN_TITLE.to_string())
+        configured_title.or_else(|| Some(crate::constants::GROK_BUILTIN_TITLE.to_string()))
     } else {
         None
     };
@@ -430,6 +444,8 @@ pub(crate) fn build_grok_state() -> Result<GrokState> {
         disabled_hooks_count: status.disabled_hooks_count,
         manifest_exists: status.manifest_exists,
         instruction_enabled,
+        instruction_injection_mode: injection_mode.map(|mode| mode.as_str().to_string()),
+        instruction_template_key,
         active_instruction_title,
     })
 }

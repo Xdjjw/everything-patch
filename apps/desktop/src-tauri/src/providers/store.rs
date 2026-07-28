@@ -1,15 +1,35 @@
 use super::open_store as open_db;
 use crate::error::{CodexxError, Result};
+use crate::tools::{redacted_json_text, redacted_toml_text, ToolId};
 use crate::{now_rfc3339, sanitize_id};
 use rusqlite::{params, Connection, TransactionBehavior};
-use serde::{Deserialize, Serialize};
+use serde::ser::SerializeStruct;
+use serde::{Deserialize, Serialize, Serializer};
 use std::collections::HashMap;
 use toml_edit::DocumentMut;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+fn default_provider_app_type() -> String {
+    "codex".to_string()
+}
+
+fn default_provider_available() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SavedProvider {
+    #[serde(default = "default_provider_app_type")]
+    pub(crate) app_type: String,
     pub(crate) id: String,
+    #[serde(default)]
+    pub(crate) native: bool,
+    #[serde(default = "default_provider_available")]
+    pub(crate) available: bool,
+    #[serde(default)]
+    pub(crate) status_message: Option<String>,
+    #[serde(default)]
+    pub(crate) models: Vec<String>,
     pub(crate) provider_name: String,
     pub(crate) base_url: String,
     pub(crate) model: String,
@@ -17,6 +37,41 @@ pub(crate) struct SavedProvider {
     pub(crate) toml_config: Option<String>,
     pub(crate) wire_api: String,
     pub(crate) requires_openai_auth: bool,
+}
+
+impl Serialize for SavedProvider {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let has_api_key = self
+            .api_key
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty());
+        let config_preview = self.toml_config.as_deref().map(|text| {
+            if self.app_type == "claude" || text.trim_start().starts_with('{') {
+                redacted_json_text(text)
+            } else {
+                redacted_toml_text(text)
+            }
+        });
+        let mut state = serializer.serialize_struct("SavedProvider", 14)?;
+        state.serialize_field("appType", &self.app_type)?;
+        state.serialize_field("id", &self.id)?;
+        state.serialize_field("native", &self.native)?;
+        state.serialize_field("available", &self.available)?;
+        state.serialize_field("statusMessage", &self.status_message)?;
+        state.serialize_field("models", &self.models)?;
+        state.serialize_field("providerName", &self.provider_name)?;
+        state.serialize_field("baseUrl", &self.base_url)?;
+        state.serialize_field("model", &self.model)?;
+        state.serialize_field("apiKey", &Option::<String>::None)?;
+        state.serialize_field("hasApiKey", &has_api_key)?;
+        state.serialize_field("tomlConfig", &config_preview)?;
+        state.serialize_field("wireApi", &self.wire_api)?;
+        state.serialize_field("requiresOpenaiAuth", &self.requires_openai_auth)?;
+        state.end()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -121,6 +176,7 @@ pub(crate) fn provider_identity(provider: &SavedProvider) -> Option<ProviderIden
         // Hash the complete endpoint/credential tuple so neither the key nor a
         // reusable key-only fingerprint is persisted, logged, or sent to the UI.
         let mut hasher = Sha256::new();
+        // Keep this namespace stable so the product rename does not change provider identities.
         hasher.update(b"codex-x/provider-identity/v1\0");
         hasher.update(base_url.as_bytes());
         hasher.update(b"\0");
@@ -140,35 +196,54 @@ pub(crate) fn provider_identity(provider: &SavedProvider) -> Option<ProviderIden
 
 fn saved_provider_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SavedProvider> {
     Ok(SavedProvider {
-        id: row.get(0)?,
-        provider_name: row.get(1)?,
-        base_url: row.get(2)?,
-        model: row.get(3)?,
-        api_key: row.get(4)?,
-        toml_config: row.get(5)?,
-        wire_api: row.get(6)?,
-        requires_openai_auth: row.get::<_, i64>(7)? != 0,
+        app_type: row.get(0)?,
+        id: row.get(1)?,
+        native: false,
+        available: true,
+        status_message: None,
+        models: Vec::new(),
+        provider_name: row.get(2)?,
+        base_url: row.get(3)?,
+        model: row.get(4)?,
+        api_key: row.get(5)?,
+        toml_config: row.get(6)?,
+        wire_api: row.get(7)?,
+        requires_openai_auth: row.get::<_, i64>(8)? != 0,
     })
 }
 
-fn stored_providers_on_connection(conn: &Connection) -> Result<Vec<StoredProvider>> {
+fn stored_providers_on_connection(
+    conn: &Connection,
+    app_type: Option<&str>,
+) -> Result<Vec<StoredProvider>> {
+    let query = if app_type.is_some() {
+        "SELECT app_type, id, provider_name, base_url, model, api_key, toml_config, wire_api,
+                requires_openai_auth, created_at, updated_at
+         FROM providers
+         WHERE app_type = ?1
+         ORDER BY created_at ASC, updated_at ASC, id ASC"
+    } else {
+        "SELECT app_type, id, provider_name, base_url, model, api_key, toml_config, wire_api,
+                requires_openai_auth, created_at, updated_at
+         FROM providers
+         ORDER BY app_type ASC, created_at ASC, updated_at ASC, id ASC"
+    };
     let mut stmt = conn
-        .prepare(
-            "SELECT id, provider_name, base_url, model, api_key, toml_config, wire_api,
-                    requires_openai_auth, created_at, updated_at
-             FROM providers
-             ORDER BY created_at ASC, updated_at ASC, id ASC",
-        )
+        .prepare(query)
         .map_err(|e| CodexxError::Database(e.to_string()))?;
-    let rows = stmt
-        .query_map([], |row| {
-            Ok(StoredProvider {
-                provider: saved_provider_from_row(row)?,
-                created_at: row.get(8)?,
-                updated_at: row.get(9)?,
-            })
+    let collect = |row: &rusqlite::Row<'_>| {
+        Ok(StoredProvider {
+            provider: saved_provider_from_row(row)?,
+            created_at: row.get(9)?,
+            updated_at: row.get(10)?,
         })
-        .map_err(|e| CodexxError::Database(e.to_string()))?;
+    };
+    let rows = if let Some(app_type) = app_type {
+        stmt.query_map([app_type], collect)
+    } else {
+        stmt.query_map([], collect)
+    }
+    .map_err(|e| CodexxError::Database(e.to_string()))?;
 
     let mut providers = Vec::new();
     for row in rows {
@@ -178,29 +253,48 @@ fn stored_providers_on_connection(conn: &Connection) -> Result<Vec<StoredProvide
 }
 
 pub(crate) fn list_saved_providers_on_connection(conn: &Connection) -> Result<Vec<SavedProvider>> {
-    Ok(stored_providers_on_connection(conn)?
+    list_saved_providers_on_connection_for_app(conn, "codex")
+}
+
+pub(crate) fn list_saved_providers_on_connection_for_app(
+    conn: &Connection,
+    app_type: &str,
+) -> Result<Vec<SavedProvider>> {
+    Ok(stored_providers_on_connection(conn, Some(app_type))?
         .into_iter()
         .map(|stored| stored.provider)
         .collect())
 }
 
 pub(crate) fn list_saved_providers_inner() -> Result<Vec<SavedProvider>> {
+    list_saved_providers_for_app_inner("codex")
+}
+
+pub(crate) fn list_saved_providers_for_app_inner(app_type: &str) -> Result<Vec<SavedProvider>> {
     let conn = open_db()?;
-    list_saved_providers_on_connection(&conn)
+    list_saved_providers_on_connection_for_app(&conn, app_type)
 }
 
 pub(crate) fn provider_by_id_on_connection(
     conn: &Connection,
     id: &str,
 ) -> Result<Option<SavedProvider>> {
+    provider_by_id_on_connection_for_app(conn, "codex", id)
+}
+
+pub(crate) fn provider_by_id_on_connection_for_app(
+    conn: &Connection,
+    app_type: &str,
+    id: &str,
+) -> Result<Option<SavedProvider>> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, provider_name, base_url, model, api_key, toml_config, wire_api,
+            "SELECT app_type, id, provider_name, base_url, model, api_key, toml_config, wire_api,
                     requires_openai_auth
-             FROM providers WHERE id = ?1 LIMIT 1",
+             FROM providers WHERE app_type = ?1 AND id = ?2 LIMIT 1",
         )
         .map_err(|e| CodexxError::Database(e.to_string()))?;
-    stmt.query_row([id], saved_provider_from_row)
+    stmt.query_row(params![app_type, id], saved_provider_from_row)
         .map(Some)
         .or_else(|error| {
             if matches!(error, rusqlite::Error::QueryReturnedNoRows) {
@@ -216,9 +310,9 @@ fn write_provider_on_connection(conn: &Connection, provider: &SavedProvider) -> 
     let now = now_rfc3339();
     conn.execute(
         "INSERT INTO providers
-            (id, provider_name, base_url, model, api_key, toml_config, wire_api, requires_openai_auth, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9)
-         ON CONFLICT(id) DO UPDATE SET
+            (app_type, id, provider_name, base_url, model, api_key, toml_config, wire_api, requires_openai_auth, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)
+         ON CONFLICT(app_type, id) DO UPDATE SET
             provider_name = excluded.provider_name,
             base_url = excluded.base_url,
             model = excluded.model,
@@ -228,6 +322,7 @@ fn write_provider_on_connection(conn: &Connection, provider: &SavedProvider) -> 
             requires_openai_auth = excluded.requires_openai_auth,
             updated_at = excluded.updated_at",
         params![
+            provider.app_type,
             provider.id,
             provider.provider_name,
             provider.base_url,
@@ -243,14 +338,18 @@ fn write_provider_on_connection(conn: &Connection, provider: &SavedProvider) -> 
     Ok(())
 }
 
-fn unique_provider_id_on_connection(conn: &Connection, preferred: &str) -> Result<String> {
-    if provider_by_id_on_connection(conn, preferred)?.is_none() {
+fn unique_provider_id_on_connection(
+    conn: &Connection,
+    app_type: &str,
+    preferred: &str,
+) -> Result<String> {
+    if provider_by_id_on_connection_for_app(conn, app_type, preferred)?.is_none() {
         return Ok(preferred.to_string());
     }
     let mut index = 2usize;
     loop {
         let candidate = format!("{preferred}-{index}");
-        if provider_by_id_on_connection(conn, &candidate)?.is_none() {
+        if provider_by_id_on_connection_for_app(conn, app_type, &candidate)?.is_none() {
             return Ok(candidate);
         }
         index += 1;
@@ -298,8 +397,9 @@ pub(crate) fn upsert_provider_on_connection(
     mode: ProviderUpsertMode,
 ) -> Result<ProviderUpsertResult> {
     let requested_id = provider.id.clone();
+    let app_type = provider.app_type.clone();
     let identity = provider_identity(&provider);
-    let stored = stored_providers_on_connection(conn)?;
+    let stored = stored_providers_on_connection(conn, Some(&app_type))?;
     let identity_match = identity.as_ref().and_then(|identity| {
         stored
             .iter()
@@ -327,23 +427,26 @@ pub(crate) fn upsert_provider_on_connection(
         }
     } else {
         if exact_id_match.is_some() {
-            provider.id = unique_provider_id_on_connection(conn, &provider.id)?;
+            provider.id = unique_provider_id_on_connection(conn, &app_type, &provider.id)?;
         }
         ProviderUpsertKind::Added
     };
 
     write_provider_on_connection(conn, &provider)?;
-    let provider = provider_by_id_on_connection(conn, &provider.id)?
+    let provider = provider_by_id_on_connection_for_app(conn, &app_type, &provider.id)?
         .ok_or_else(|| CodexxError::Database("provider saved but not found".to_string()))?;
     Ok(ProviderUpsertResult { provider, kind })
 }
 
 pub(crate) fn merge_duplicate_provider_identities(conn: &mut Connection) -> Result<usize> {
-    let rows = stored_providers_on_connection(conn)?;
-    let mut groups: HashMap<ProviderIdentity, Vec<StoredProvider>> = HashMap::new();
+    let rows = stored_providers_on_connection(conn, None)?;
+    let mut groups: HashMap<(String, ProviderIdentity), Vec<StoredProvider>> = HashMap::new();
     for row in rows {
         if let Some(identity @ ProviderIdentity::Credential(_)) = provider_identity(&row.provider) {
-            groups.entry(identity).or_default().push(row);
+            groups
+                .entry((row.provider.app_type.clone(), identity))
+                .or_default()
+                .push(row);
         }
     }
     let duplicate_groups = groups
@@ -401,11 +504,12 @@ pub(crate) fn merge_duplicate_provider_identities(conn: &mut Connection) -> Resu
             .filter(|value| !value.is_empty());
         transaction
             .execute(
-                "UPDATE providers SET provider_name = ?2, base_url = ?3, model = ?4,
-                        api_key = ?5, toml_config = ?6, wire_api = ?7,
-                        requires_openai_auth = ?8, updated_at = ?9
-                 WHERE id = ?1",
+                "UPDATE providers SET provider_name = ?3, base_url = ?4, model = ?5,
+                        api_key = ?6, toml_config = ?7, wire_api = ?8,
+                        requires_openai_auth = ?9, updated_at = ?10
+                 WHERE app_type = ?1 AND id = ?2",
                 params![
+                    survivor.provider.app_type,
                     survivor.provider.id,
                     survivor.provider.provider_name,
                     survivor.provider.base_url,
@@ -425,8 +529,8 @@ pub(crate) fn merge_duplicate_provider_identities(conn: &mut Connection) -> Resu
         for duplicate in group.iter().skip(1) {
             transaction
                 .execute(
-                    "DELETE FROM providers WHERE id = ?1",
-                    [&duplicate.provider.id],
+                    "DELETE FROM providers WHERE app_type = ?1 AND id = ?2",
+                    params![duplicate.provider.app_type, duplicate.provider.id],
                 )
                 .map_err(|e| CodexxError::Database(e.to_string()))?;
             merged += 1;
@@ -443,8 +547,14 @@ pub(crate) fn normalize_saved_provider(provider: SavedProvider) -> Result<SavedP
     if raw_id.is_empty() {
         return Err(CodexxError::Config("provider id 不能为空".to_string()));
     }
+    let app_type = ToolId::parse(&provider.app_type)?.as_str().to_string();
     let normalized = SavedProvider {
+        app_type,
         id: custom_provider_id(raw_id),
+        native: false,
+        available: true,
+        status_message: None,
+        models: Vec::new(),
         provider_name: provider.provider_name.trim().to_string(),
         base_url: canonical_provider_base_url(&provider.base_url),
         model: provider.model.trim().to_string(),
@@ -480,12 +590,32 @@ pub(crate) fn save_manual_provider_on_connection(
     provider: SavedProvider,
 ) -> Result<SavedProvider> {
     let requested_id = provider.id.trim().to_string();
-    let provider = normalize_saved_provider(provider)?;
-    if requested_id != provider.id && provider_by_id_on_connection(conn, &provider.id)?.is_some() {
+    let mut provider = normalize_saved_provider(provider)?;
+    if requested_id != provider.id
+        && provider_by_id_on_connection_for_app(conn, &provider.app_type, &provider.id)?.is_some()
+    {
         return Err(CodexxError::Config(format!(
             "供应商 ID {} 规范化后与现有供应商冲突，请更换名称或 ID",
             requested_id
         )));
+    }
+    if let Some(existing) =
+        provider_by_id_on_connection_for_app(conn, &provider.app_type, &provider.id)?
+    {
+        if provider
+            .api_key
+            .as_deref()
+            .is_none_or(|value| value.trim().is_empty() || value == crate::tools::REDACTED_VALUE)
+        {
+            provider.api_key = existing.api_key;
+        }
+        if provider
+            .toml_config
+            .as_deref()
+            .is_some_and(|value| value.contains(crate::tools::REDACTED_VALUE))
+        {
+            provider.toml_config = existing.toml_config;
+        }
     }
     Ok(upsert_provider_on_connection(conn, provider, ProviderUpsertMode::Manual)?.provider)
 }
@@ -502,9 +632,16 @@ pub(crate) fn save_detected_provider_inner(provider: SavedProvider) -> Result<Sa
 }
 
 pub(crate) fn delete_provider_inner(id: &str) -> Result<()> {
+    delete_provider_for_app_inner("codex", id)
+}
+
+pub(crate) fn delete_provider_for_app_inner(app_type: &str, id: &str) -> Result<()> {
     let conn = open_db()?;
-    conn.execute("DELETE FROM providers WHERE id = ?1", params![id])
-        .map_err(|e| CodexxError::Database(e.to_string()))?;
+    conn.execute(
+        "DELETE FROM providers WHERE app_type = ?1 AND id = ?2",
+        params![app_type, id],
+    )
+    .map_err(|e| CodexxError::Database(e.to_string()))?;
     Ok(())
 }
 

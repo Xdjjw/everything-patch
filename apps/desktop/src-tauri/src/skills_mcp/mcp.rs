@@ -30,7 +30,7 @@ fn toml_value_to_json(value: &toml_edit::Value) -> Value {
     Value::String(value.to_string())
 }
 
-fn toml_item_to_json(item: &Item) -> Value {
+pub(super) fn toml_item_to_json(item: &Item) -> Value {
     if let Some(v) = item.as_value() {
         return toml_value_to_json(v);
     }
@@ -44,7 +44,7 @@ fn toml_item_to_json(item: &Item) -> Value {
     Value::Null
 }
 
-fn json_to_toml_item(value_json: &Value) -> Item {
+pub(super) fn json_to_toml_item(value_json: &Value) -> Item {
     match value_json {
         Value::String(s) => value(s.clone()),
         Value::Bool(b) => value(*b),

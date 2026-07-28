@@ -331,7 +331,9 @@ fn resolve_node_candidate(path: &Path) -> Option<PathBuf> {
 
 fn discover_node_runtime() -> Result<NodeRuntime> {
     let mut candidates = Vec::new();
-    if let Some(path) = env::var_os("CODEX_X_SKIN_NODE") {
+    if let Some(path) =
+        env::var_os("EVERYTHING_PATCH_SKIN_NODE").or_else(|| env::var_os("CODEX_X_SKIN_NODE"))
+    {
         candidates.push(PathBuf::from(path));
     }
     if let Ok(executable) = env::current_exe() {
@@ -348,7 +350,7 @@ fn discover_node_runtime() -> Result<NodeRuntime> {
         }
     }
     Err(CodexxError::Config(
-        "Windows 皮肤运行时缺少内置 Node.js；请重新安装 Codex-X".to_string(),
+        "Windows 皮肤运行时缺少内置 Node.js；请重新安装 Everything Patch".to_string(),
     ))
 }
 
@@ -813,8 +815,8 @@ mod tests {
             browser_id: "browser-1".to_string(),
             injector_pid: 42,
             injector_started_at: "2026-07-24T00:00:00.0000000Z".to_string(),
-            injector_path: r"C:\Users\test\.codexx\runtime\injector.mjs".to_string(),
-            node_path: r"C:\Program Files\Codex-X\skin-runtime\node\node.exe".to_string(),
+            injector_path: r"C:\Users\test\.everything-patch\runtime\injector.mjs".to_string(),
+            node_path: r"C:\Program Files\Everything Patch\skin-runtime\node\node.exe".to_string(),
             node_version: "v22.23.1".to_string(),
             codex_package_root: r"C:\Program Files\WindowsApps\OpenAI.Codex_1.0.0.0_x64"
                 .to_string(),
@@ -825,7 +827,7 @@ mod tests {
             codex_package_family_name: "OpenAI.Codex_test".to_string(),
             codex_app_user_model_id: "OpenAI.Codex_test!App".to_string(),
             theme_id: "theme".to_string(),
-            theme_dir: r"C:\Users\test\.codexx\runtime\themes\theme".to_string(),
+            theme_dir: r"C:\Users\test\.everything-patch\runtime\themes\theme".to_string(),
             created_at: "2026-07-24T00:00:00Z".to_string(),
             updated_at: "2026-07-24T00:00:00Z".to_string(),
         }
@@ -848,18 +850,19 @@ mod tests {
         assert_eq!(value["injectorPid"], 42);
         assert_eq!(
             value["injectorPath"],
-            r"C:\Users\test\.codexx\runtime\injector.mjs"
+            r"C:\Users\test\.everything-patch\runtime\injector.mjs"
         );
         assert_eq!(
             value["nodePath"],
-            r"C:\Program Files\Codex-X\skin-runtime\node\node.exe"
+            r"C:\Program Files\Everything Patch\skin-runtime\node\node.exe"
         );
         assert_eq!(value["browserId"], "browser-1");
     }
 
     #[test]
     fn adapter_keeps_store_identity_and_loopback_guards() {
-        let source = include_str!("../../resources/skin-runtime/windows/codexx-windows.ps1");
+        let source =
+            include_str!("../../resources/skin-runtime/windows/everything-patch-windows.ps1");
         assert!(source.contains("Get-DreamSkinCodexInstall"));
         assert!(source.contains("Start-DreamSkinCodexForDebugging"));
         assert!(source.contains("--remote-debugging-address=127.0.0.1"));

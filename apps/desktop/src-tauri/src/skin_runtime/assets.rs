@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub(super) const RUNTIME_VERSION: &str = "1.2.2-codexx.3";
+pub(super) const RUNTIME_VERSION: &str = "1.2.2-everything-patch.1";
 pub(super) const UPSTREAM_COMMIT: &str = "5fd8af532efbaa87d2d0092297fd2d45cd56574e";
 
 struct EmbeddedRuntimeAsset {
@@ -36,8 +36,10 @@ fn embedded_assets() -> &'static [EmbeddedRuntimeAsset] {
             bytes: include_bytes!("../../resources/skin-runtime/assets/renderer-inject.js"),
         },
         EmbeddedRuntimeAsset {
-            relative_path: "windows/codexx-windows.ps1",
-            bytes: include_bytes!("../../resources/skin-runtime/windows/codexx-windows.ps1"),
+            relative_path: "windows/everything-patch-windows.ps1",
+            bytes: include_bytes!(
+                "../../resources/skin-runtime/windows/everything-patch-windows.ps1"
+            ),
         },
         EmbeddedRuntimeAsset {
             relative_path: "windows/common-windows.ps1",
@@ -125,6 +127,6 @@ pub(super) fn ensure_runtime_assets() -> Result<RuntimeAssets> {
         injector: root.join("scripts/injector.mjs"),
         stage_theme: root.join("scripts/stage-theme.mjs"),
         #[cfg(any(target_os = "windows", feature = "windows-runtime-check"))]
-        windows_adapter: root.join("windows/codexx-windows.ps1"),
+        windows_adapter: root.join("windows/everything-patch-windows.ps1"),
     })
 }

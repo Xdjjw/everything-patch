@@ -4,14 +4,15 @@ mod managed_agents;
 mod store;
 mod types;
 
-pub(crate) use claude::{
-    claude_builtin_prompt_content, claude_builtin_prompt_status_inner, claude_home_dir,
-    claude_instruction_file, claude_memory_path, install_managed_claude_block,
-    managed_claude_bounds, managed_claude_template_key, uninstall_managed_claude_block,
-};
 pub(crate) use catalog::{
     builtin_prompt_content, builtin_prompt_status_inner, bundled_prompt_meta, bundled_prompt_metas,
-    refresh_builtin_prompts_with_active,
+    codex_prompt_filename_allowed, codex_prompt_id_allowed, refresh_builtin_prompts_with_active,
+};
+pub(crate) use claude::{
+    claude_builtin_prompt_content, claude_builtin_prompt_meta, claude_builtin_prompt_status_inner,
+    claude_instruction_file, claude_memory_path, install_managed_claude_block,
+    managed_claude_injection_mode, managed_claude_instruction_filename,
+    managed_claude_template_key, uninstall_managed_claude_block,
 };
 pub(crate) use managed_agents::{
     agents_path, install_managed_agents_block, managed_agents_bounds, managed_agents_template_key,
@@ -22,7 +23,7 @@ pub(crate) use store::{
     normalize_prompt_filename, save_prompt_inner, ENGINE_CLAUDE, ENGINE_CODEX, ENGINE_GROK,
     ENGINE_ZCODE,
 };
-pub(crate) use types::{BuiltinPromptStatus, SavedPrompt};
+pub(crate) use types::{BuiltinPromptStatus, PromptInjectionMode, SavedPrompt};
 
 #[cfg(test)]
 pub(crate) use catalog::{
@@ -44,6 +45,9 @@ use std::path::{Path, PathBuf};
 use store::find_saved_prompt_by_current_file;
 
 fn builtin_prompt_id_for_filename(filename: &str) -> Result<Option<String>> {
+    if !codex_prompt_filename_allowed(filename) {
+        return Ok(None);
+    }
     if let Some(meta) = bundled_prompt_metas()
         .into_iter()
         .find(|item| item.filename.eq_ignore_ascii_case(filename))

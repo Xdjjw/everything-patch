@@ -989,7 +989,7 @@ mod tests {
     fn temp_codex_dir() -> PathBuf {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
         let path = std::env::temp_dir().join(format!(
-            "codex-x-delete-verification-{}-{}",
+            "everything-patch-delete-verification-{}-{}",
             std::process::id(),
             COUNTER.fetch_add(1, Ordering::Relaxed),
         ));

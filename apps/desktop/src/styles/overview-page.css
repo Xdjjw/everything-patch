@@ -17,6 +17,24 @@
   color: var(--cx-overview-ink);
 }
 
+.cx-overview-tool-tabs {
+  margin-top: -4px;
+}
+
+.cx-overview-tool-notice {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 13px;
+  border: 1px solid #ead9ad;
+  border-radius: 8px;
+  color: #735914;
+  background: #fffaf0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .cx-overview-header {
   min-width: 0;
   display: flex;
@@ -215,7 +233,7 @@
 .cx-overview-status-grid {
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 

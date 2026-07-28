@@ -23,6 +23,7 @@ mod file_io;
 mod grok;
 mod paths;
 mod platform;
+mod prompt_backups;
 mod prompts;
 mod providers;
 mod remote;
@@ -34,13 +35,12 @@ mod skins;
 mod sqlite_utils;
 mod state;
 mod toml_utils;
+mod tool_sessions;
+mod tools;
 mod updates;
 mod zcode;
 
-use backups::{
-    action_backup_root, backups, create_backup, create_claude_backup, create_grok_backup,
-    create_zcode_backup, BackupEntry, BackupMeta,
-};
+use backups::{action_backup_root, backups, create_backup, BackupEntry, BackupMeta};
 use constants::*;
 use error::{CodexxError, Result};
 #[cfg(test)]
@@ -52,16 +52,21 @@ use file_io::{
 #[cfg(test)]
 use paths::app_home;
 use paths::home_dir;
+use prompt_backups::{
+    create_claude_prompt_backup, create_codex_prompt_backup, create_grok_prompt_backup,
+    create_zcode_prompt_backup, list_prompt_backups as prompt_backup_entries,
+    restore_prompt_backup as restore_prompt_backup_snapshot, PromptBackupEntry,
+};
 use prompts::{
     agents_path, builtin_prompt_content, builtin_prompt_status_inner, bundled_prompt_meta,
-    claude_builtin_prompt_content, claude_builtin_prompt_status_inner,
+    claude_builtin_prompt_content, claude_builtin_prompt_status_inner, codex_prompt_id_allowed,
     delete_prompt_inner, get_saved_prompt_inner, install_managed_agents_block,
     install_managed_claude_block, list_saved_prompts_inner, managed_agents_bounds,
     normalize_prompt_filename, prompt_template_key_for_instruction,
     refresh_builtin_prompts_with_active, remember_current_instruction_prompt,
     resolve_instruction_path, save_prompt_inner, uninstall_managed_agents_block,
-    uninstall_managed_claude_block, BuiltinPromptStatus, SavedPrompt, ENGINE_CLAUDE,
-    ENGINE_CODEX, ENGINE_GROK, ENGINE_ZCODE,
+    uninstall_managed_claude_block, BuiltinPromptStatus, PromptInjectionMode, SavedPrompt,
+    ENGINE_CLAUDE, ENGINE_CODEX, ENGINE_GROK, ENGINE_ZCODE,
 };
 #[cfg(test)]
 use prompts::{
@@ -69,6 +74,17 @@ use prompts::{
     github_prompt_catalog_from_entries, jsdelivr_prompt_catalog_from_entries,
     managed_agents_template_key_from_content, prompt_content_source_urls, stable_remote_prompt_id,
     stale_cached_prompt_ids, CachedBuiltinPrompt, GithubContentEntry,
+};
+use providers::{
+    activate_saved_provider_inner, delete_provider_for_app_inner, fetch_provider_models_inner,
+    import_ccswitch_codex_providers_inner, import_ccswitch_providers_inner,
+    list_saved_providers_for_app_inner, list_zcode_providers_inner,
+    provider_by_id_on_connection_for_app,
+    read_ccswitch_official_auth_inner, save_official_config_inner, save_provider_inner,
+    save_provider_toml_config_inner, switch_official_provider_inner, switch_provider_inner,
+    test_provider_connection_inner, ImportResult, OfficialAuthCandidate, OfficialConfigInput,
+    ProviderConnectionResult, ProviderInput, ProviderModelsResult, ProviderTomlInput,
+    SavedProvider, ToolProviderActionResult,
 };
 #[cfg(test)]
 use providers::{
@@ -79,14 +95,6 @@ use providers::{
     save_manual_provider_on_connection, save_provider_toml_config_with_pre_persist,
     switch_official_provider_with_pre_persist, switch_provider_with_pre_persist,
     upsert_provider_on_connection, CcSwitchCodexRow, ProviderUpsertKind, ProviderUpsertMode,
-};
-use providers::{
-    delete_provider_inner, fetch_provider_models_inner, import_ccswitch_codex_providers_inner,
-    list_saved_providers_inner, read_ccswitch_official_auth_inner, save_official_config_inner,
-    save_provider_inner, save_provider_toml_config_inner, switch_official_provider_inner,
-    switch_provider_inner, test_provider_connection_inner, ImportResult, OfficialAuthCandidate,
-    OfficialConfigInput, ProviderConnectionResult, ProviderInput, ProviderModelsResult,
-    ProviderTomlInput, SavedProvider,
 };
 #[cfg(test)]
 use sessions::{
@@ -101,9 +109,12 @@ use sessions::{
     SessionSyncStatus,
 };
 use skills_mcp::{
-    build_skills_mcp_state_inner, check_skill_updates_inner, import_existing_skills_mcp_inner,
-    install_skill_zip_inner, preview_existing_skills_mcp_inner, toggle_codex_mcp_inner,
-    toggle_codex_skill_inner, SkillsMcpActionResult, SkillsMcpImportPreview, SkillsMcpState,
+    build_skills_mcp_state_inner, build_tool_state_inner, check_skill_updates_inner,
+    check_tool_skill_updates_inner, import_existing_skills_mcp_inner, import_tool_resources_inner,
+    install_skill_zip_inner, install_tool_skill_zip_inner, preview_existing_skills_mcp_inner,
+    preview_tool_import_inner, toggle_codex_mcp_inner, toggle_codex_skill_inner,
+    toggle_tool_mcp_inner, toggle_tool_skill_inner, SkillsMcpActionResult, SkillsMcpImportPreview,
+    SkillsMcpState,
 };
 #[cfg(test)]
 use skills_mcp::{
@@ -118,31 +129,16 @@ use skins::{
 };
 #[cfg(test)]
 use state::active_saved_provider_id_from_config;
-use state::{auth_has_material, build_claude_state, build_grok_state, build_zcode_state, ActionResult, ClaudeActionResult, ClaudeState, CodexState, GrokActionResult, GrokState, ZcodeActionResult, ZcodeDoctor, ZcodeState, ZcodeVerify};
+use state::{
+    auth_has_material, build_claude_state, build_grok_state, build_state, build_zcode_state,
+    ActionResult, ClaudeActionResult, ClaudeState, CodexState, GrokActionResult, GrokState,
+    ZcodeActionResult, ZcodeDoctor, ZcodeState, ZcodeVerify,
+};
 use toml_edit::{value, DocumentMut};
 pub(crate) use toml_utils::string_value;
+use tool_sessions::{get_tool_sessions_inner, ToolSessionList};
+use tools::{get_tool_config_inner, get_tool_statuses_inner, ToolConfigBundle, ToolId, ToolStatus};
 use updates::check_app_update;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PromptInjectionMode {
-    Replace,
-    Append,
-}
-
-impl PromptInjectionMode {
-    fn parse(value: Option<&str>) -> Result<Self> {
-        match value
-            .unwrap_or("replace")
-            .trim()
-            .to_ascii_lowercase()
-            .as_str()
-        {
-            "replace" | "model" => Ok(Self::Replace),
-            "append" | "agents" => Ok(Self::Append),
-            other => Err(CodexxError::Config(format!("未知提示词注入模式: {other}"))),
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -153,6 +149,15 @@ struct AboutInfo {
     project_url: String,
     github_repo: String,
     native_updater_supported: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PromptRestoreResult {
+    ok: bool,
+    message: String,
+    backup_id: Option<String>,
+    engine: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -187,7 +192,7 @@ fn active_remote_builtin_prompt_id(config_dir: Option<String>) -> Option<String>
     let state = build_state(codex_dir).ok()?;
     let template_key = state.instruction_template_key.as_deref()?;
     let id = template_key.strip_prefix("builtin:")?.trim();
-    if id.is_empty() || bundled_prompt_meta(id).is_some() {
+    if id.is_empty() || !codex_prompt_id_allowed(id) || bundled_prompt_meta(id).is_some() {
         return None;
     }
     Some(id.to_string())
@@ -432,10 +437,113 @@ fn startup_diagnostics_inner(config_dir: Option<String>) -> Result<StartupDiagno
 }
 
 #[tauri::command]
+async fn get_tool_statuses(config_dir: Option<String>) -> Result<Vec<ToolStatus>> {
+    tauri::async_runtime::spawn_blocking(move || get_tool_statuses_inner(config_dir))
+        .await
+        .map_err(|e| CodexxError::Config(format!("读取工具状态失败: {e}")))?
+}
+
+#[tauri::command]
+async fn get_tool_config(tool: ToolId, config_dir: Option<String>) -> Result<ToolConfigBundle> {
+    tauri::async_runtime::spawn_blocking(move || get_tool_config_inner(tool, config_dir))
+        .await
+        .map_err(|e| CodexxError::Config(format!("读取工具配置失败: {e}")))?
+}
+
+#[tauri::command]
+async fn get_tool_sessions(tool: ToolId, config_dir: Option<String>) -> Result<ToolSessionList> {
+    tauri::async_runtime::spawn_blocking(move || get_tool_sessions_inner(tool, config_dir))
+        .await
+        .map_err(|e| CodexxError::Config(format!("读取工具会话失败: {e}")))?
+}
+
+#[tauri::command]
 async fn get_skills_mcp_state(config_dir: Option<String>) -> Result<SkillsMcpState> {
     tauri::async_runtime::spawn_blocking(move || build_skills_mcp_state_inner(config_dir))
         .await
         .map_err(|e| CodexxError::Config(format!("读取 Skills/MCP 失败: {e}")))?
+}
+
+#[tauri::command]
+async fn get_tool_skills_mcp_state(
+    tool: ToolId,
+    config_dir: Option<String>,
+) -> Result<SkillsMcpState> {
+    tauri::async_runtime::spawn_blocking(move || build_tool_state_inner(tool, config_dir))
+        .await
+        .map_err(|e| CodexxError::Config(format!("读取工具 Skills/MCP 失败: {e}")))?
+}
+
+#[tauri::command]
+async fn preview_tool_skills_mcp_import(
+    tool: ToolId,
+    config_dir: Option<String>,
+) -> Result<SkillsMcpImportPreview> {
+    tauri::async_runtime::spawn_blocking(move || preview_tool_import_inner(tool, config_dir))
+        .await
+        .map_err(|e| CodexxError::Config(format!("预览工具 Skills/MCP 失败: {e}")))?
+}
+
+#[tauri::command]
+async fn import_tool_skills_mcp(
+    tool: ToolId,
+    config_dir: Option<String>,
+) -> Result<SkillsMcpActionResult> {
+    tauri::async_runtime::spawn_blocking(move || import_tool_resources_inner(tool, config_dir))
+        .await
+        .map_err(|e| CodexxError::Config(format!("导入工具 Skills/MCP 失败: {e}")))?
+}
+
+#[tauri::command]
+async fn toggle_tool_skill(
+    tool: ToolId,
+    config_dir: Option<String>,
+    id: String,
+    enabled: bool,
+) -> Result<SkillsMcpState> {
+    tauri::async_runtime::spawn_blocking(move || {
+        toggle_tool_skill_inner(tool, config_dir, id, enabled)
+    })
+    .await
+    .map_err(|e| CodexxError::Config(format!("切换工具 Skill 失败: {e}")))?
+}
+
+#[tauri::command]
+async fn toggle_tool_mcp(
+    tool: ToolId,
+    config_dir: Option<String>,
+    id: String,
+    enabled: bool,
+) -> Result<SkillsMcpState> {
+    tauri::async_runtime::spawn_blocking(move || {
+        toggle_tool_mcp_inner(tool, config_dir, id, enabled)
+    })
+    .await
+    .map_err(|e| CodexxError::Config(format!("切换工具 MCP 失败: {e}")))?
+}
+
+#[tauri::command]
+async fn install_tool_skill_zip(
+    tool: ToolId,
+    config_dir: Option<String>,
+    file_name: String,
+    bytes: Vec<u8>,
+) -> Result<SkillsMcpActionResult> {
+    tauri::async_runtime::spawn_blocking(move || {
+        install_tool_skill_zip_inner(tool, config_dir, file_name, bytes)
+    })
+    .await
+    .map_err(|e| CodexxError::Config(format!("安装工具 Skill ZIP 失败: {e}")))?
+}
+
+#[tauri::command]
+async fn check_tool_skill_updates(
+    tool: ToolId,
+    config_dir: Option<String>,
+) -> Result<SkillsMcpState> {
+    tauri::async_runtime::spawn_blocking(move || check_tool_skill_updates_inner(tool, config_dir))
+        .await
+        .map_err(|e| CodexxError::Config(format!("检查工具 Skill 更新失败: {e}")))?
 }
 
 #[tauri::command]
@@ -616,12 +724,22 @@ async fn import_ccswitch_codex_providers(db_path: Option<String>) -> Result<Impo
         .map_err(|e| CodexxError::Config(format!("导入 cc-switch Provider 失败: {e}")))?
 }
 
+#[tauri::command]
+async fn import_ccswitch_providers(tool: ToolId, db_path: Option<String>) -> Result<ImportResult> {
+    tauri::async_runtime::spawn_blocking(move || import_ccswitch_providers_inner(tool, db_path))
+        .await
+        .map_err(|e| CodexxError::Config(format!("导入 cc-switch Provider 失败: {e}")))?
+}
+
 fn get_about_info_inner(config_dir: Option<String>) -> Result<AboutInfo> {
     let codex_dir = resolve_codex_dir(config_dir)?;
     #[cfg(target_os = "windows")]
     let native_updater_supported = std::env::current_exe()
         .ok()
-        .and_then(|path| path.parent().map(|parent| parent.join("Codex-X.portable")))
+        .and_then(|path| {
+            path.parent()
+                .map(|parent| parent.join("Everything-Patch.portable"))
+        })
         .map(|marker| !marker.is_file())
         .unwrap_or(true);
     #[cfg(target_os = "linux")]
@@ -634,8 +752,8 @@ fn get_about_info_inner(config_dir: Option<String>) -> Result<AboutInfo> {
         app_version: env!("CARGO_PKG_VERSION").to_string(),
         codex_version: platform::detect_codex_version(),
         codex_dir: codex_dir.display().to_string(),
-        project_url: "https://github.com/yynxxxxx/Codex-X".to_string(),
-        github_repo: "yynxxxxx/Codex-X".to_string(),
+        project_url: "https://github.com/Xdjjw/everything-patch".to_string(),
+        github_repo: "Xdjjw/everything-patch".to_string(),
         native_updater_supported,
     })
 }
@@ -762,7 +880,7 @@ fn enable_prompt_content_inner(
     if injection_mode == PromptInjectionMode::Replace {
         let _ = remember_current_instruction_prompt(&codex_dir);
     }
-    let backup_id = create_backup(&codex_dir, action)?;
+    let backup_id = create_codex_prompt_backup(&codex_dir, action)?;
 
     match injection_mode {
         PromptInjectionMode::Replace => {
@@ -840,13 +958,30 @@ async fn enable_saved_prompt(
 }
 
 #[tauri::command]
-async fn list_saved_providers() -> Result<Vec<SavedProvider>> {
-    tauri::async_runtime::spawn_blocking(list_saved_providers_inner)
-        .await
-        .map_err(|e| CodexxError::Config(format!("读取供应商列表失败: {e}")))?
+async fn list_saved_providers(app_type: Option<String>) -> Result<Vec<SavedProvider>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let tool = app_type
+            .as_deref()
+            .map(ToolId::parse)
+            .transpose()?
+            .unwrap_or(ToolId::Codex);
+        if tool == ToolId::Zcode {
+            list_zcode_providers_inner()
+        } else {
+            list_saved_providers_for_app_inner(tool.as_str())
+        }
+    })
+    .await
+    .map_err(|e| CodexxError::Config(format!("读取供应商列表失败: {e}")))?
 }
 
 fn save_provider_command_inner(provider: SavedProvider) -> Result<SavedProvider> {
+    if ToolId::parse(&provider.app_type)? == ToolId::Zcode {
+        return Err(CodexxError::Config(
+            "ZCode 原生供应商请在 ZCode 中增删改；Everything Patch 只负责读取和切换"
+                .to_string(),
+        ));
+    }
     save_provider_inner(provider)
 }
 
@@ -858,10 +993,36 @@ async fn save_provider(provider: SavedProvider) -> Result<SavedProvider> {
 }
 
 #[tauri::command]
-async fn delete_saved_provider(id: String) -> Result<()> {
-    tauri::async_runtime::spawn_blocking(move || delete_provider_inner(id.trim()))
-        .await
-        .map_err(|e| CodexxError::Config(format!("删除供应商失败: {e}")))?
+async fn delete_saved_provider(id: String, app_type: Option<String>) -> Result<()> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let tool = app_type
+            .as_deref()
+            .map(ToolId::parse)
+            .transpose()?
+            .unwrap_or(ToolId::Codex);
+        if tool == ToolId::Zcode {
+            return Err(CodexxError::Config(
+                "ZCode 原生供应商请在 ZCode 中删除".to_string(),
+            ));
+        }
+        delete_provider_for_app_inner(tool.as_str(), id.trim())
+    })
+    .await
+    .map_err(|e| CodexxError::Config(format!("删除供应商失败: {e}")))?
+}
+
+#[tauri::command]
+async fn activate_saved_provider(
+    tool: ToolId,
+    id: String,
+    model: Option<String>,
+    config_dir: Option<String>,
+) -> Result<ToolProviderActionResult> {
+    tauri::async_runtime::spawn_blocking(move || {
+        activate_saved_provider_inner(tool, id.trim(), model, config_dir)
+    })
+    .await
+    .map_err(|e| CodexxError::Config(format!("切换供应商失败: {e}")))?
 }
 
 #[tauri::command]
@@ -947,7 +1108,7 @@ fn disable_instruction_inner(
     let cfg = config_path(&codex_dir);
     let agents_text = read_to_string_if_exists(&agents_path(&codex_dir))?;
     managed_agents_bounds(&agents_text)?;
-    let backup_id = create_backup(&codex_dir, "disable-instruct")?;
+    let backup_id = create_codex_prompt_backup(&codex_dir, "disable-instruct")?;
 
     let text = read_to_string_if_exists(&cfg)?;
     let mut doc = parse_toml_document(&cfg, &text)?;
@@ -974,9 +1135,9 @@ fn disable_instruction_inner(
         message: if removed {
             "已禁用指令提示词".to_string()
         } else if current.is_some() {
-            "当前使用的是用户自己的提示词，Codex-X 未做修改".to_string()
+            "当前使用的是用户自己的提示词，Everything Patch 未做修改".to_string()
         } else {
-            "当前没有启用 Codex-X 提示词".to_string()
+            "当前没有启用 Everything Patch 提示词".to_string()
         },
         backup_id,
         state,
@@ -1002,11 +1163,11 @@ fn disable_external_instruction_inner(config_dir: Option<String>) -> Result<Acti
     if let Some(value) = current.as_deref() {
         if prompt_template_key_for_instruction(value)?.is_some() {
             return Err(CodexxError::Config(
-                "当前是 Codex-X 管理的提示词，请使用普通禁用按钮".to_string(),
+                "当前是 Everything Patch 管理的提示词，请使用普通禁用按钮".to_string(),
             ));
         }
     }
-    let backup_id = create_backup(&codex_dir, "disable-external-instruct")?;
+    let backup_id = create_codex_prompt_backup(&codex_dir, "disable-external-instruct")?;
     if current.is_some() {
         doc.as_table_mut().remove("model_instructions_file");
         write_text(&cfg, &doc.to_string())?;
@@ -1038,24 +1199,57 @@ async fn save_provider_toml_config(input: ProviderTomlInput) -> Result<ActionRes
         .map_err(|e| CodexxError::Config(format!("保存供应商 TOML 失败: {e}")))?
 }
 
+fn stored_provider_api_key(
+    api_key: Option<String>,
+    tool: Option<ToolId>,
+    provider_id: Option<String>,
+) -> Result<Option<String>> {
+    let explicit = api_key
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty() && value != tools::REDACTED_VALUE);
+    if explicit.is_some() {
+        return Ok(explicit);
+    }
+    let (Some(tool), Some(provider_id)) = (tool, provider_id) else {
+        return Ok(None);
+    };
+    let connection = open_db()?;
+    Ok(
+        provider_by_id_on_connection_for_app(&connection, tool.as_str(), provider_id.trim())?
+            .and_then(|provider| provider.api_key)
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty()),
+    )
+}
+
 #[tauri::command]
 async fn test_provider_connection(
     base_url: String,
     api_key: Option<String>,
+    tool: Option<ToolId>,
+    provider_id: Option<String>,
 ) -> Result<ProviderConnectionResult> {
-    tauri::async_runtime::spawn_blocking(move || test_provider_connection_inner(base_url, api_key))
-        .await
-        .map_err(|e| CodexxError::Config(format!("测试连接失败: {e}")))?
+    tauri::async_runtime::spawn_blocking(move || {
+        let api_key = stored_provider_api_key(api_key, tool, provider_id)?;
+        test_provider_connection_inner(base_url, api_key)
+    })
+    .await
+    .map_err(|e| CodexxError::Config(format!("测试连接失败: {e}")))?
 }
 
 #[tauri::command]
 async fn fetch_provider_models(
     base_url: String,
     api_key: Option<String>,
+    tool: Option<ToolId>,
+    provider_id: Option<String>,
 ) -> Result<ProviderModelsResult> {
-    tauri::async_runtime::spawn_blocking(move || fetch_provider_models_inner(base_url, api_key))
-        .await
-        .map_err(|e| CodexxError::Config(format!("获取模型列表失败: {e}")))?
+    tauri::async_runtime::spawn_blocking(move || {
+        let api_key = stored_provider_api_key(api_key, tool, provider_id)?;
+        fetch_provider_models_inner(base_url, api_key)
+    })
+    .await
+    .map_err(|e| CodexxError::Config(format!("获取模型列表失败: {e}")))?
 }
 
 #[tauri::command]
@@ -1131,9 +1325,60 @@ async fn restore_backup(config_dir: Option<String>, backup_id: String) -> Result
         .map_err(|e| CodexxError::Config(format!("恢复备份失败: {e}")))?
 }
 
+#[tauri::command]
+async fn list_prompt_backups(
+    engine: String,
+    config_dir: Option<String>,
+) -> Result<Vec<PromptBackupEntry>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let codex_dir = if engine.trim().eq_ignore_ascii_case("codex") {
+            Some(resolve_codex_dir(config_dir)?)
+        } else {
+            None
+        };
+        prompt_backup_entries(&engine, codex_dir.as_deref())
+    })
+    .await
+    .map_err(|e| CodexxError::Config(format!("读取提示词备份失败: {e}")))?
+}
+
+fn restore_prompt_backup_inner(
+    engine: String,
+    config_dir: Option<String>,
+    backup_id: String,
+) -> Result<PromptRestoreResult> {
+    let normalized_engine = engine.trim().to_ascii_lowercase();
+    let codex_dir = if normalized_engine == "codex" {
+        Some(resolve_codex_dir(config_dir)?)
+    } else {
+        None
+    };
+    let restore_marker =
+        restore_prompt_backup_snapshot(&normalized_engine, codex_dir.as_deref(), &backup_id)?;
+    Ok(PromptRestoreResult {
+        ok: true,
+        message: format!("已恢复 {} 提示词备份 {backup_id}", normalized_engine),
+        backup_id: restore_marker,
+        engine: normalized_engine,
+    })
+}
+
+#[tauri::command]
+async fn restore_prompt_backup(
+    engine: String,
+    config_dir: Option<String>,
+    backup_id: String,
+) -> Result<PromptRestoreResult> {
+    tauri::async_runtime::spawn_blocking(move || {
+        restore_prompt_backup_inner(engine, config_dir, backup_id)
+    })
+    .await
+    .map_err(|e| CodexxError::Config(format!("恢复提示词备份失败: {e}")))?
+}
+
 // ─── Claude Code 指令管理命令 ─────────────────────────────────────────────
-// Claude 不走 config.toml/model_instructions_file，只通过往 ~/.claude/CLAUDE.md
-// 注入受管 import-block 的方式启用指令，因此没有 replace/append 模式区分。
+// Claude 不走 config.toml/model_instructions_file；追加模式注入 import-block，
+// 替换模式则让受管 import-block 成为 CLAUDE.md 的唯一内容。
 
 #[tauri::command]
 async fn get_claude_state() -> Result<ClaudeState> {
@@ -1206,6 +1451,7 @@ fn enable_claude_prompt_content_inner(
     template_key: &str,
     title: &str,
     content_source: &str,
+    injection_mode: PromptInjectionMode,
     action: &str,
 ) -> Result<ClaudeActionResult> {
     if filename.trim().is_empty()
@@ -1219,61 +1465,90 @@ fn enable_claude_prompt_content_inner(
         return Err(CodexxError::Config("提示词模板标识无效".to_string()));
     }
 
-    let backup_id = create_claude_backup(action)?;
-    install_managed_claude_block(template_key, filename, content)?;
+    let backup_id = create_claude_prompt_backup(action)?;
+    install_managed_claude_block(template_key, filename, content, injection_mode)?;
 
     let state = build_claude_state()?;
     Ok(ClaudeActionResult {
         ok: true,
-        message: format!("已启用 {title}（来源：{content_source}）"),
+        message: format!(
+            "已用{}模式启用 {title}（来源：{content_source}）",
+            if injection_mode == PromptInjectionMode::Append {
+                "保留"
+            } else {
+                "替换"
+            }
+        ),
         backup_id,
         state,
     })
 }
 
-fn enable_claude_instruction_inner(template_id: &str) -> Result<ClaudeActionResult> {
+fn enable_claude_instruction_inner(
+    template_id: &str,
+    injection_mode: Option<String>,
+) -> Result<ClaudeActionResult> {
     let resolved_id = if template_id.trim().is_empty() {
         "claude-project-rules"
     } else {
         template_id.trim()
     };
-    let (filename, _relative, content, content_source) = claude_builtin_prompt_content(resolved_id)?;
+    let (filename, _relative, content, content_source) =
+        claude_builtin_prompt_content(resolved_id)?;
+    let mode = PromptInjectionMode::parse(injection_mode.as_deref())?;
     enable_claude_prompt_content_inner(
         &filename,
         &content,
         &format!("builtin:{resolved_id}"),
         &filename,
         &content_source,
+        mode,
         "enable-claude-instruct",
     )
 }
 
 #[tauri::command]
-async fn enable_claude_instruction(template_id: Option<String>) -> Result<ClaudeActionResult> {
+async fn enable_claude_instruction(
+    template_id: Option<String>,
+    injection_mode: Option<String>,
+) -> Result<ClaudeActionResult> {
     tauri::async_runtime::spawn_blocking(move || {
-        enable_claude_instruction_inner(template_id.as_deref().unwrap_or("claude-project-rules"))
+        enable_claude_instruction_inner(
+            template_id.as_deref().unwrap_or("claude-project-rules"),
+            injection_mode,
+        )
     })
     .await
     .map_err(|e| CodexxError::Config(format!("启用 Claude 指令失败: {e}")))?
 }
 
-fn enable_claude_saved_prompt_inner(id: String) -> Result<ClaudeActionResult> {
+fn enable_claude_saved_prompt_inner(
+    id: String,
+    injection_mode: Option<String>,
+) -> Result<ClaudeActionResult> {
     let prompt = get_saved_prompt_inner(id.trim(), ENGINE_CLAUDE)?;
+    let mode = PromptInjectionMode::parse(injection_mode.as_deref())?;
     enable_claude_prompt_content_inner(
         &prompt.filename,
         &prompt.content,
         &format!("saved:{}", prompt.id),
         &prompt.title,
         "本地自定义",
+        mode,
         "enable-claude-custom-prompt",
     )
 }
 
 #[tauri::command]
-async fn enable_claude_saved_prompt(id: String) -> Result<ClaudeActionResult> {
-    tauri::async_runtime::spawn_blocking(move || enable_claude_saved_prompt_inner(id))
-        .await
-        .map_err(|e| CodexxError::Config(format!("启用 Claude 自定义提示词失败: {e}")))?
+async fn enable_claude_saved_prompt(
+    id: String,
+    injection_mode: Option<String>,
+) -> Result<ClaudeActionResult> {
+    tauri::async_runtime::spawn_blocking(move || {
+        enable_claude_saved_prompt_inner(id, injection_mode)
+    })
+    .await
+    .map_err(|e| CodexxError::Config(format!("启用 Claude 自定义提示词失败: {e}")))?
 }
 
 fn disable_claude_instruction_inner(delete_file: Option<bool>) -> Result<ClaudeActionResult> {
@@ -1281,7 +1556,7 @@ fn disable_claude_instruction_inner(delete_file: Option<bool>) -> Result<ClaudeA
     // 对应的 keysmith 指令文件。delete_file=false 当前行为一致，仅为保持与
     // Codex disable_instruction 命令签名对齐。
     let _ = delete_file;
-    let backup_id = create_claude_backup("disable-claude-instruct")?;
+    let backup_id = create_claude_prompt_backup("disable-claude-instruct")?;
     let removed = uninstall_managed_claude_block()?;
     let state = build_claude_state()?;
     Ok(ClaudeActionResult {
@@ -1289,7 +1564,7 @@ fn disable_claude_instruction_inner(delete_file: Option<bool>) -> Result<ClaudeA
         message: if removed {
             "已禁用 Claude 指令提示词".to_string()
         } else {
-            "当前没有启用 Codex-X 管理的 Claude 指令".to_string()
+            "当前没有启用 Everything Patch 管理的 Claude 指令".to_string()
         },
         backup_id,
         state,
@@ -1324,7 +1599,7 @@ async fn list_zcode_prompts() -> Result<Vec<SavedPrompt>> {
 async fn get_zcode_builtin_prompt_status() -> Result<Vec<BuiltinPromptStatus>> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = build_zcode_state()?;
-        let active = if state.instruction_enabled { Some("builtin:zcode-system-role") } else { None };
+        let active = state.instruction_template_key.as_deref();
         Ok(vec![BuiltinPromptStatus {
             id: crate::constants::ZCODE_BUILTIN_ID.to_string(),
             filename: crate::constants::ZCODE_BUILTIN_FILENAME.to_string(),
@@ -1337,7 +1612,11 @@ async fn get_zcode_builtin_prompt_status() -> Result<Vec<BuiltinPromptStatus>> {
             content_source: "打包内置".to_string(),
             sync_issue: None,
             checked_at: None,
-            message: if active.is_some() { "已启用".to_string() } else { "未启用".to_string() },
+            message: if active == Some("builtin:zcode-system-role") {
+                "已启用".to_string()
+            } else {
+                "未启用".to_string()
+            },
         }])
     })
     .await
@@ -1384,55 +1663,102 @@ async fn delete_zcode_prompt(id: String) -> Result<()> {
         .map_err(|e| CodexxError::Config(format!("删除 ZCode 提示词失败: {e}")))?
 }
 
-fn install_zcode_instruction_inner(template_id: &str) -> Result<ZcodeActionResult> {
+fn install_zcode_instruction_inner(
+    template_id: &str,
+    injection_mode: Option<String>,
+) -> Result<ZcodeActionResult> {
     let resolved_id = if template_id.trim().is_empty() {
         crate::constants::ZCODE_BUILTIN_ID
     } else {
         template_id.trim()
     };
-    let (_filename, _relative, content, content_source) = zcode::zcode_builtin_content(resolved_id)?;
-    let backup_id = create_zcode_backup("install-zcode-instruct")?;
-    zcode::install_zcode(&content)?;
+    let (_filename, _relative, content, content_source) =
+        zcode::zcode_builtin_content(resolved_id)?;
+    let mode = PromptInjectionMode::parse(injection_mode.as_deref())?;
+    let backup_id = create_zcode_prompt_backup("install-zcode-instruct")?;
+    zcode::install_zcode(
+        &content,
+        mode,
+        &format!("builtin:{resolved_id}"),
+        ZCODE_BUILTIN_TITLE,
+    )?;
     let state = build_zcode_state()?;
     Ok(ZcodeActionResult {
         ok: true,
-        message: format!("已安装 ZCode system-role（来源：{content_source}）"),
+        message: format!(
+            "已用{}模式安装 ZCode system-role（来源：{content_source}）",
+            if mode == PromptInjectionMode::Append {
+                "保留"
+            } else {
+                "替换"
+            }
+        ),
         backup_id,
         state,
     })
 }
 
 #[tauri::command]
-async fn install_zcode_instruction(template_id: Option<String>) -> Result<ZcodeActionResult> {
+async fn install_zcode_instruction(
+    template_id: Option<String>,
+    injection_mode: Option<String>,
+) -> Result<ZcodeActionResult> {
     tauri::async_runtime::spawn_blocking(move || {
-        install_zcode_instruction_inner(template_id.as_deref().unwrap_or(crate::constants::ZCODE_BUILTIN_ID))
+        install_zcode_instruction_inner(
+            template_id
+                .as_deref()
+                .unwrap_or(crate::constants::ZCODE_BUILTIN_ID),
+            injection_mode,
+        )
     })
     .await
     .map_err(|e| CodexxError::Config(format!("安装 ZCode 指令失败: {e}")))?
 }
 
-fn install_zcode_saved_prompt_inner(id: String) -> Result<ZcodeActionResult> {
+fn install_zcode_saved_prompt_inner(
+    id: String,
+    injection_mode: Option<String>,
+) -> Result<ZcodeActionResult> {
     let prompt = get_saved_prompt_inner(id.trim(), ENGINE_ZCODE)?;
-    let backup_id = create_zcode_backup("install-zcode-custom-prompt")?;
-    zcode::install_zcode(&prompt.content)?;
+    let mode = PromptInjectionMode::parse(injection_mode.as_deref())?;
+    let backup_id = create_zcode_prompt_backup("install-zcode-custom-prompt")?;
+    zcode::install_zcode(
+        &prompt.content,
+        mode,
+        &format!("saved:{}", prompt.id),
+        &prompt.title,
+    )?;
     let state = build_zcode_state()?;
     Ok(ZcodeActionResult {
         ok: true,
-        message: format!("已安装 ZCode system-role：{}", prompt.title),
+        message: format!(
+            "已用{}模式安装 ZCode system-role：{}",
+            if mode == PromptInjectionMode::Append {
+                "保留"
+            } else {
+                "替换"
+            },
+            prompt.title
+        ),
         backup_id,
         state,
     })
 }
 
 #[tauri::command]
-async fn install_zcode_saved_prompt(id: String) -> Result<ZcodeActionResult> {
-    tauri::async_runtime::spawn_blocking(move || install_zcode_saved_prompt_inner(id))
-        .await
-        .map_err(|e| CodexxError::Config(format!("安装 ZCode 自定义提示词失败: {e}")))?
+async fn install_zcode_saved_prompt(
+    id: String,
+    injection_mode: Option<String>,
+) -> Result<ZcodeActionResult> {
+    tauri::async_runtime::spawn_blocking(move || {
+        install_zcode_saved_prompt_inner(id, injection_mode)
+    })
+    .await
+    .map_err(|e| CodexxError::Config(format!("安装 ZCode 自定义提示词失败: {e}")))?
 }
 
 fn uninstall_zcode_instruction_inner() -> Result<ZcodeActionResult> {
-    let backup_id = create_zcode_backup("uninstall-zcode-instruct")?;
+    let backup_id = create_zcode_prompt_backup("uninstall-zcode-instruct")?;
     let removed = zcode::uninstall_zcode()?;
     let state = build_zcode_state()?;
     Ok(ZcodeActionResult {
@@ -1514,11 +1840,7 @@ async fn list_grok_prompts() -> Result<Vec<SavedPrompt>> {
 async fn get_grok_builtin_prompt_status() -> Result<Vec<BuiltinPromptStatus>> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = build_grok_state()?;
-        let active_id = if state.instruction_enabled {
-            Some(GROK_BUILTIN_ID.to_string())
-        } else {
-            None
-        };
+        let active_key = state.instruction_template_key.as_deref();
         Ok(vec![BuiltinPromptStatus {
             id: GROK_BUILTIN_ID.to_string(),
             filename: GROK_BUILTIN_FILENAME.to_string(),
@@ -1531,7 +1853,7 @@ async fn get_grok_builtin_prompt_status() -> Result<Vec<BuiltinPromptStatus>> {
             content_source: "打包内置".to_string(),
             sync_issue: None,
             checked_at: None,
-            message: if active_id.as_deref() == Some(GROK_BUILTIN_ID) {
+            message: if active_key == Some("builtin:grok-unrestricted") {
                 "已启用".to_string()
             } else {
                 "未启用".to_string()
@@ -1569,55 +1891,99 @@ async fn delete_grok_prompt(id: String) -> Result<()> {
         .map_err(|e| CodexxError::Config(format!("删除 Grok 提示词失败: {e}")))?
 }
 
-fn install_grok_instruction_inner(template_id: &str) -> Result<GrokActionResult> {
+fn install_grok_instruction_inner(
+    template_id: &str,
+    injection_mode: Option<String>,
+) -> Result<GrokActionResult> {
     let resolved_id = if template_id.trim().is_empty() {
         GROK_BUILTIN_ID
     } else {
         template_id.trim()
     };
     let (_filename, _relative, content, content_source) = grok::grok_builtin_content(resolved_id)?;
-    let backup_id = create_grok_backup("install-grok-instruct")?;
-    grok::install_grok(&content)?;
+    let mode = PromptInjectionMode::parse(injection_mode.as_deref())?;
+    let backup_id = create_grok_prompt_backup("install-grok-instruct")?;
+    grok::install_grok(
+        &content,
+        mode,
+        &format!("builtin:{resolved_id}"),
+        GROK_BUILTIN_TITLE,
+    )?;
     let state = build_grok_state()?;
     Ok(GrokActionResult {
         ok: true,
-        message: format!("已安装 Grok AGENTS.md（来源：{content_source}）"),
+        message: format!(
+            "已用{}模式安装 Grok AGENTS.md（来源：{content_source}）",
+            if mode == PromptInjectionMode::Append {
+                "保留"
+            } else {
+                "替换"
+            }
+        ),
         backup_id,
         state,
     })
 }
 
 #[tauri::command]
-async fn install_grok_instruction(template_id: Option<String>) -> Result<GrokActionResult> {
+async fn install_grok_instruction(
+    template_id: Option<String>,
+    injection_mode: Option<String>,
+) -> Result<GrokActionResult> {
     tauri::async_runtime::spawn_blocking(move || {
-        install_grok_instruction_inner(template_id.as_deref().unwrap_or(GROK_BUILTIN_ID))
+        install_grok_instruction_inner(
+            template_id.as_deref().unwrap_or(GROK_BUILTIN_ID),
+            injection_mode,
+        )
     })
     .await
     .map_err(|e| CodexxError::Config(format!("安装 Grok 指令失败: {e}")))?
 }
 
-fn install_grok_saved_prompt_inner(id: String) -> Result<GrokActionResult> {
+fn install_grok_saved_prompt_inner(
+    id: String,
+    injection_mode: Option<String>,
+) -> Result<GrokActionResult> {
     let prompt = get_saved_prompt_inner(id.trim(), ENGINE_GROK)?;
-    let backup_id = create_grok_backup("install-grok-custom-prompt")?;
-    grok::install_grok(&prompt.content)?;
+    let mode = PromptInjectionMode::parse(injection_mode.as_deref())?;
+    let backup_id = create_grok_prompt_backup("install-grok-custom-prompt")?;
+    grok::install_grok(
+        &prompt.content,
+        mode,
+        &format!("saved:{}", prompt.id),
+        &prompt.title,
+    )?;
     let state = build_grok_state()?;
     Ok(GrokActionResult {
         ok: true,
-        message: format!("已安装 Grok AGENTS.md：{}", prompt.title),
+        message: format!(
+            "已用{}模式安装 Grok AGENTS.md：{}",
+            if mode == PromptInjectionMode::Append {
+                "保留"
+            } else {
+                "替换"
+            },
+            prompt.title
+        ),
         backup_id,
         state,
     })
 }
 
 #[tauri::command]
-async fn install_grok_saved_prompt(id: String) -> Result<GrokActionResult> {
-    tauri::async_runtime::spawn_blocking(move || install_grok_saved_prompt_inner(id))
-        .await
-        .map_err(|e| CodexxError::Config(format!("安装 Grok 自定义提示词失败: {e}")))?
+async fn install_grok_saved_prompt(
+    id: String,
+    injection_mode: Option<String>,
+) -> Result<GrokActionResult> {
+    tauri::async_runtime::spawn_blocking(move || {
+        install_grok_saved_prompt_inner(id, injection_mode)
+    })
+    .await
+    .map_err(|e| CodexxError::Config(format!("安装 Grok 自定义提示词失败: {e}")))?
 }
 
 fn uninstall_grok_instruction_inner() -> Result<GrokActionResult> {
-    let backup_id = create_grok_backup("uninstall-grok-instruct")?;
+    let backup_id = create_grok_prompt_backup("uninstall-grok-instruct")?;
     let removed = grok::uninstall_grok()?;
     let state = build_grok_state()?;
     Ok(GrokActionResult {
@@ -1642,7 +2008,7 @@ async fn uninstall_grok_instruction() -> Result<GrokActionResult> {
 #[tauri::command]
 async fn restore_grok_hooks_command() -> Result<GrokActionResult> {
     tauri::async_runtime::spawn_blocking(move || {
-        let backup_id = create_grok_backup("restore-grok-hooks")?;
+        let backup_id = create_grok_prompt_backup("restore-grok-hooks")?;
         let restored = grok::restore_grok_hooks()?;
         let state = build_grok_state()?;
         Ok(GrokActionResult {
@@ -1699,7 +2065,17 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_about_info,
             check_app_update,
+            get_tool_statuses,
+            get_tool_config,
+            get_tool_sessions,
             get_skills_mcp_state,
+            get_tool_skills_mcp_state,
+            preview_tool_skills_mcp_import,
+            import_tool_skills_mcp,
+            toggle_tool_skill,
+            toggle_tool_mcp,
+            install_tool_skill_zip,
+            check_tool_skill_updates,
             preview_existing_skills_mcp,
             import_existing_skills_mcp,
             toggle_codex_skill,
@@ -1720,6 +2096,7 @@ pub fn run() {
             delete_codex_sessions,
             read_ccswitch_official_auth,
             import_ccswitch_codex_providers,
+            import_ccswitch_providers,
             list_saved_prompts,
             get_builtin_prompt_status,
             refresh_builtin_prompts,
@@ -1730,6 +2107,7 @@ pub fn run() {
             list_saved_providers,
             save_provider,
             delete_saved_provider,
+            activate_saved_provider,
             get_codex_state,
             switch_official_provider,
             save_official_config,
@@ -1743,6 +2121,8 @@ pub fn run() {
             fetch_provider_models,
             list_backups,
             restore_backup,
+            list_prompt_backups,
+            restore_prompt_backup,
             get_claude_state,
             list_claude_prompts,
             get_claude_builtin_prompt_status,
@@ -1773,7 +2153,7 @@ pub fn run() {
             open_url,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Codex-X");
+        .expect("error while running Everything Patch");
 }
 
 #[cfg(test)]

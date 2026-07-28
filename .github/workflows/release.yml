@@ -93,7 +93,7 @@ jobs:
           )
           body = match.group(1).strip() if match else ""
           if not body:
-              body = "Codex-X desktop release."
+              body = "Everything Patch desktop release."
           Path("release-body.md").write_text(body + "\n", encoding="utf-8")
           PY
 
@@ -120,13 +120,13 @@ jobs:
               exit 1
             fi
             gh release edit "$RELEASE_TAG" \
-              --title "Codex-X ${RELEASE_TAG}" \
+              --title "Everything Patch ${RELEASE_TAG}" \
               --notes-file release-body.md \
               --draft
           else
             gh release create "$RELEASE_TAG" \
               --verify-tag \
-              --title "Codex-X ${RELEASE_TAG}" \
+              --title "Everything Patch ${RELEASE_TAG}" \
               --notes-file release-body.md \
               --draft
           fi
@@ -163,22 +163,22 @@ jobs:
             platform: macos-latest
             macos: true
             args: --bundles app,dmg
-            asset_pattern: Codex-X-[version]-macos-apple-silicon[ext]
+            asset_pattern: Everything-Patch-[version]-macos-apple-silicon[ext]
           - name: macOS Intel
             platform: macos-15-intel
             macos: true
             args: --bundles app,dmg
-            asset_pattern: Codex-X-[version]-macos-intel[ext]
+            asset_pattern: Everything-Patch-[version]-macos-intel[ext]
           - name: Linux x64
             platform: ubuntu-22.04
             macos: false
             args: --bundles deb,rpm,appimage
-            asset_pattern: Codex-X-[version]-linux-x64[ext]
+            asset_pattern: Everything-Patch-[version]-linux-x64[ext]
           - name: Windows x64
             platform: windows-latest
             macos: false
             args: --bundles msi
-            asset_pattern: Codex-X-[version]-windows-x64[ext]
+            asset_pattern: Everything-Patch-[version]-windows-x64[ext]
 
     steps:
       - name: Checkout release tag
@@ -224,30 +224,9 @@ jobs:
       - name: Stage pinned Windows skin runtime
         if: matrix.platform == 'windows-latest'
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $version = '22.23.1'
-          $expectedSha256 = '7df0bc9375723f4a86b3aa1b7cc73342423d9677a8df4538aca31a049e309c29'
-          $archive = Join-Path $env:RUNNER_TEMP "node-v$version-win-x64.zip"
-          $extractRoot = Join-Path $env:RUNNER_TEMP "codex-x-node-$version"
-          $targetRoot = 'apps/desktop/src-tauri/runtime/windows/node'
-          Invoke-WebRequest -Uri "https://nodejs.org/dist/v$version/node-v$version-win-x64.zip" -OutFile $archive
-          $actualSha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($actualSha256 -cne $expectedSha256) {
-            throw "Node.js archive checksum mismatch: $actualSha256"
-          }
-          Remove-Item -LiteralPath $extractRoot -Recurse -Force -ErrorAction SilentlyContinue
-          Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot
-          $sourceRoot = Join-Path $extractRoot "node-v$version-win-x64"
-          New-Item -ItemType Directory -Path $targetRoot -Force | Out-Null
-          Copy-Item -LiteralPath (Join-Path $sourceRoot 'node.exe') -Destination $targetRoot -Force
-          Copy-Item -LiteralPath (Join-Path $sourceRoot 'LICENSE') -Destination $targetRoot -Force
-          if (-not (Test-Path -LiteralPath (Join-Path $targetRoot 'node.exe') -PathType Leaf)) {
-            throw 'Pinned Windows Node.js runtime was not staged.'
-          }
+        run: ./apps/desktop/scripts/stage-windows-node.ps1
 
-      - name: Test Windows filesystem compatibility
-        if: matrix.platform == 'windows-latest'
+      - name: Test platform compatibility
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --locked
 
       - name: Import Apple signing certificate and notarization key
@@ -279,9 +258,9 @@ jobs:
               exit 1
             fi
           done
-          certificate_path="$RUNNER_TEMP/codex-x-developer-id.p12"
+          certificate_path="$RUNNER_TEMP/everything-patch-developer-id.p12"
           api_key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
-          keychain_path="$RUNNER_TEMP/codex-x-signing.keychain-db"
+          keychain_path="$RUNNER_TEMP/everything-patch-signing.keychain-db"
 
           printf '%s' "$APPLE_CERTIFICATE" | base64 -D > "$certificate_path"
           printf '%s' "$APPLE_API_KEY_P8_BASE64" | base64 -D > "$api_key_path"
@@ -304,8 +283,8 @@ jobs:
             | grep -F -- "$APPLE_SIGNING_IDENTITY" >/dev/null
 
           echo "APPLE_API_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
-          echo "CODEXX_KEYCHAIN_PATH=$keychain_path" >> "$GITHUB_ENV"
-          echo "CODEXX_CERTIFICATE_PATH=$certificate_path" >> "$GITHUB_ENV"
+          echo "EVERYTHING_PATCH_KEYCHAIN_PATH=$keychain_path" >> "$GITHUB_ENV"
+          echo "EVERYTHING_PATCH_CERTIFICATE_PATH=$certificate_path" >> "$GITHUB_ENV"
 
       - name: Validate updater signing secrets
         env:
@@ -375,22 +354,22 @@ jobs:
         run: |
           set -euo pipefail
           portable_root="apps/desktop/src-tauri/portable"
-          portable_dir="$portable_root/Codex-X-${VERSION}-windows-x64-portable"
-          archive="apps/desktop/src-tauri/Codex-X-${VERSION}-windows-x64-portable.zip"
+          portable_dir="$portable_root/Everything-Patch-${VERSION}-windows-x64-portable"
+          archive="apps/desktop/src-tauri/Everything-Patch-${VERSION}-windows-x64-portable.zip"
           rm -rf "$portable_root"
           mkdir -p "$portable_dir"
-          cp apps/desktop/src-tauri/target/release/codex-x.exe "$portable_dir/Codex-X.exe"
+          cp apps/desktop/src-tauri/target/release/everything-patch.exe "$portable_dir/Everything-Patch.exe"
           mkdir -p "$portable_dir/skin-runtime/node"
           cp apps/desktop/src-tauri/runtime/windows/node/node.exe "$portable_dir/skin-runtime/node/node.exe"
           cp apps/desktop/src-tauri/runtime/windows/node/LICENSE "$portable_dir/skin-runtime/node/LICENSE"
-          touch "$portable_dir/Codex-X.portable"
+          touch "$portable_dir/Everything-Patch.portable"
           cat > "$portable_dir/README-portable.txt" <<'EOF'
-          Codex-X Windows Portable
+          Everything Patch Windows Portable
 
-          Double click Codex-X.exe to run. No MSI installation is required.
+          Double click Everything-Patch.exe to run. No MSI installation is required.
           The portable edition uses manual downloads instead of in-app installation.
-          Keep Codex-X.portable next to Codex-X.exe so the app can identify this edition.
-          Keep the skin-runtime directory beside Codex-X.exe; it contains the verified Windows skin runtime.
+          Keep Everything-Patch.portable next to Everything-Patch.exe so the app can identify this edition.
+          Keep the skin-runtime directory beside Everything-Patch.exe; it contains the verified Windows skin runtime.
           Microsoft Edge WebView2 Runtime is required; Windows 10/11 usually already includes it.
           EOF
           powershell -NoProfile -Command "Compress-Archive -Path '${portable_dir}/*' -DestinationPath '${archive}' -Force"
@@ -399,10 +378,10 @@ jobs:
       - name: Remove temporary Apple credentials
         if: always() && matrix.macos
         run: |
-          if [ -n "${CODEXX_KEYCHAIN_PATH:-}" ]; then
-            security delete-keychain "$CODEXX_KEYCHAIN_PATH" || true
+          if [ -n "${EVERYTHING_PATCH_KEYCHAIN_PATH:-}" ]; then
+            security delete-keychain "$EVERYTHING_PATCH_KEYCHAIN_PATH" || true
           fi
-          rm -f "${CODEXX_CERTIFICATE_PATH:-}" "${APPLE_API_KEY_PATH:-}"
+          rm -f "${EVERYTHING_PATCH_CERTIFICATE_PATH:-}" "${APPLE_API_KEY_PATH:-}"
 
   publish:
     name: Validate and publish release

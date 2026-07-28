@@ -1,5 +1,36 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum PromptInjectionMode {
+    Append,
+    Replace,
+}
+
+impl PromptInjectionMode {
+    pub(crate) fn parse(value: Option<&str>) -> crate::error::Result<Self> {
+        match value
+            .unwrap_or("replace")
+            .trim()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "append" | "agents" => Ok(Self::Append),
+            "replace" | "model" => Ok(Self::Replace),
+            other => Err(crate::error::CodexxError::Config(format!(
+                "未知提示词注入模式: {other}"
+            ))),
+        }
+    }
+
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Append => "append",
+            Self::Replace => "replace",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SavedPrompt {
@@ -28,12 +59,12 @@ pub(crate) struct BuiltinPromptStatus {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct BundledPromptMeta {
-    pub(super) id: &'static str,
-    pub(super) filename: &'static str,
-    pub(super) title: &'static str,
-    pub(super) subtitle: &'static str,
-    pub(super) badge: &'static str,
-    pub(super) content: &'static str,
+    pub(crate) id: &'static str,
+    pub(crate) filename: &'static str,
+    pub(crate) title: &'static str,
+    pub(crate) subtitle: &'static str,
+    pub(crate) badge: &'static str,
+    pub(crate) content: &'static str,
 }
 
 #[derive(Debug, Clone)]

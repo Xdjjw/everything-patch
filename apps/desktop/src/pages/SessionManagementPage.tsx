@@ -10,7 +10,9 @@ import {
   Trash2,
   Zap,
 } from "lucide-react";
+import { ToolTabs, toolLabel } from "../components/ToolTabs";
 import { Button, Checkbox, ModalShell, cx } from "../components/ui";
+import type { ToolId, ToolStatus } from "../types";
 import "../styles/session-management.css";
 
 export type Lang = "zh" | "en";
@@ -50,6 +52,9 @@ export type SessionSyncStatus = {
 type SessionManagementPageProps = {
   active: boolean;
   lang: Lang;
+  activeTool: ToolId;
+  toolStatuses: readonly ToolStatus[];
+  onToolChange: (tool: ToolId) => void;
   sessionStatus: SessionSyncStatus | null;
   sessionHasMismatches: boolean;
   sessionSyncCount: number;
@@ -115,6 +120,9 @@ function shortId(value: string) {
 export function SessionManagementPage({
   active,
   lang,
+  activeTool,
+  toolStatuses,
+  onToolChange,
   sessionStatus,
   sessionHasMismatches,
   sessionSyncCount,
@@ -149,21 +157,25 @@ export function SessionManagementPage({
   onDeleteSafetyConfirmedChange,
 }: SessionManagementPageProps) {
   const isChinese = lang === "zh";
+  const toolName = toolLabel(activeTool);
+  const readOnly = activeTool !== "codex";
   const copy = isChinese
     ? {
-        syncEyebrow: "会话同步",
+        syncEyebrow: readOnly ? `${toolName} 会话` : "会话同步",
         title: "会话管理",
-        description: "检查本地会话是否跟当前供应商一致，需要时一键同步。不会修改聊天内容。",
-        syncTo: "同步到",
-        check: "检查会话",
-        checking: "检查中...",
+        description: readOnly
+          ? `读取 ${toolName} 的原生会话记录。当前仅提供搜索、分组和只读浏览。`
+          : "检查本地会话是否跟当前供应商一致，需要时一键同步。不会修改聊天内容。",
+        syncTo: readOnly ? "会话目录" : "同步到",
+        check: readOnly ? "刷新会话" : "检查会话",
+        checking: readOnly ? "读取中..." : "检查中...",
         sync: "同步会话",
         syncing: "同步中...",
         clickToCheck: "点击检查会话",
         needsSync: (count: number) => `有 ${count} 条会话需要同步`,
         allSynced: "全部会话已同步",
         sessionCount: (count: number) => `${count} 条会话`,
-        local: "本地会话",
+        local: `${toolName} 会话`,
         list: "会话列表",
         shown: (shown: number, total: number) => `展示 ${shown} / ${total} 条`,
         loaded: (count: number) => `当前加载 ${count} 条`,
@@ -183,7 +195,9 @@ export function SessionManagementPage({
         unknownProvider: "未知供应商",
         noModel: "未记录",
         noMatch: "没有匹配的会话。",
-        noSessions: "还没有读取到会话。点击右上角“检查会话”刷新。",
+        noSessions: readOnly
+          ? "还没有读取到会话。点击右上角“刷新会话”重试。"
+          : "还没有读取到会话。点击右上角“检查会话”刷新。",
         diagnostics: "诊断信息",
         diagnosticsCount: (count: number) => `${count} 条 · 点击查看`,
         deleteTitle: (count: number) => `永久删除 ${count} 条会话`,
@@ -201,17 +215,19 @@ export function SessionManagementPage({
     : {
         syncEyebrow: "SESSION SYNC",
         title: "Session management",
-        description: "Check whether local sessions match the current provider and sync them when needed. Chat content is not changed.",
-        syncTo: "Sync to",
-        check: "Check sessions",
-        checking: "Checking...",
+        description: readOnly
+          ? `Read native ${toolName} sessions. Search, grouping, and browsing are available in read-only mode.`
+          : "Check whether local sessions match the current provider and sync them when needed. Chat content is not changed.",
+        syncTo: readOnly ? "Session directory" : "Sync to",
+        check: readOnly ? "Refresh sessions" : "Check sessions",
+        checking: readOnly ? "Reading..." : "Checking...",
         sync: "Sync sessions",
         syncing: "Syncing...",
         clickToCheck: "Check sessions to get started",
         needsSync: (count: number) => `${count} session(s) need syncing`,
         allSynced: "All sessions are synced",
         sessionCount: (count: number) => `${count} sessions`,
-        local: "LOCAL SESSIONS",
+         local: `${toolName.toUpperCase()} SESSIONS`,
         list: "Sessions",
         shown: (shown: number, total: number) => `${shown} / ${total} shown`,
         loaded: (count: number) => `${count} loaded`,
@@ -231,7 +247,9 @@ export function SessionManagementPage({
         unknownProvider: "Unknown provider",
         noModel: "Not recorded",
         noMatch: "No matching sessions.",
-        noSessions: "No sessions loaded. Click Check sessions to refresh.",
+        noSessions: readOnly
+          ? "No sessions loaded. Click Refresh sessions to try again."
+          : "No sessions loaded. Click Check sessions to refresh.",
         diagnostics: "Diagnostics",
         diagnosticsCount: (count: number) => `${count} · click to view`,
         deleteTitle: (count: number) => `Permanently delete ${count} session(s)`,
@@ -247,7 +265,7 @@ export function SessionManagementPage({
         confirmDelete: (count: number) => `Delete ${count} permanently`,
       };
 
-  const dialogOpen = sessionDeleteConfirmOpen && selectedSessions.length > 0;
+  const dialogOpen = !readOnly && sessionDeleteConfirmOpen && selectedSessions.length > 0;
   const selectedVisibleCount = filteredSessions.filter((item) => selectedSessionSet.has(item.id)).length;
   const allVisibleSelected = filteredSessions.length > 0 && selectedVisibleCount === filteredSessions.length;
   const visibleSelectionIsPartial = selectedVisibleCount > 0 && !allVisibleSelected;
@@ -314,7 +332,14 @@ export function SessionManagementPage({
         />
       </ModalShell>
 
-      <section className={cx("cx-session-page", !active && "page-pane-hidden")}>
+      <section className={cx("cx-session-page", readOnly && "cx-session-page--readonly", !active && "page-pane-hidden")}>
+        <ToolTabs
+          active={activeTool}
+          onChange={onToolChange}
+          statuses={toolStatuses}
+          ariaLabel={isChinese ? "会话工具" : "Session tools"}
+          className="cx-session-tool-tabs"
+        />
         <header className="cx-session-header">
           <div className="cx-session-heading">
             <p className="cx-session-eyebrow"><RefreshCw size={13} strokeWidth={2} aria-hidden="true" />{copy.syncEyebrow}</p>
@@ -327,17 +352,19 @@ export function SessionManagementPage({
               {actionBusy === "checkSessions" ? <Loader2 size={16} className="cx-session-spin" aria-hidden="true" /> : <RefreshCw size={16} aria-hidden="true" />}
               {actionBusy === "checkSessions" ? copy.checking : copy.check}
             </button>
-            <button type="button" className="cx-session-button cx-session-button--primary" onClick={onSyncSessions} disabled={loading || !sessionHasMismatches} aria-busy={actionBusy === "syncSessions"}>
-              {actionBusy === "syncSessions" ? <Loader2 size={16} className="cx-session-spin" aria-hidden="true" /> : <Zap size={16} aria-hidden="true" />}
-              {actionBusy === "syncSessions" ? copy.syncing : copy.sync}
-            </button>
+            {!readOnly && (
+              <button type="button" className="cx-session-button cx-session-button--primary" onClick={onSyncSessions} disabled={loading || !sessionHasMismatches} aria-busy={actionBusy === "syncSessions"}>
+                {actionBusy === "syncSessions" ? <Loader2 size={16} className="cx-session-spin" aria-hidden="true" /> : <Zap size={16} aria-hidden="true" />}
+                {actionBusy === "syncSessions" ? copy.syncing : copy.sync}
+              </button>
+            )}
           </div>
         </header>
 
         <div className={cx("cx-session-summary", sessionHasMismatches ? "cx-session-summary--needs-sync" : "cx-session-summary--synced")}>
-          <span className="cx-session-summary-status">
-            {!sessionStatus ? <Info size={15} aria-hidden="true" /> : sessionHasMismatches ? <AlertCircle size={15} aria-hidden="true" /> : <CheckCircle2 size={15} aria-hidden="true" />}
-            {!sessionStatus ? copy.clickToCheck : sessionHasMismatches ? copy.needsSync(sessionSyncCount) : copy.allSynced}
+           <span className="cx-session-summary-status">
+             {readOnly ? <Info size={15} aria-hidden="true" /> : !sessionStatus ? <Info size={15} aria-hidden="true" /> : sessionHasMismatches ? <AlertCircle size={15} aria-hidden="true" /> : <CheckCircle2 size={15} aria-hidden="true" />}
+             {readOnly ? (isChinese ? `${toolName} 会话只读` : `${toolName} sessions are read-only`) : !sessionStatus ? copy.clickToCheck : sessionHasMismatches ? copy.needsSync(sessionSyncCount) : copy.allSynced}
           </span>
           <span className="cx-session-summary-count">{copy.sessionCount(sessionStatus?.topLevelThreads ?? 0)}</span>
         </div>
@@ -380,16 +407,16 @@ export function SessionManagementPage({
                 label={copy.showInternal(sessionStatus?.subagentThreads ?? 0)}
               />
             )}
-            <button
-              type="button"
+             {!readOnly && <button
+               type="button"
               className={cx("cx-session-button cx-session-delete-trigger", selectedSessionIds.length > 0 ? "cx-session-button--danger" : "cx-session-button--secondary")}
               onClick={onOpenDeleteConfirm}
               disabled={loading || sessionDeleteBusy || selectedSessionIds.length === 0}
               title={selectedSessionIds.length > 0 ? undefined : copy.deleteSelected}
-            >
-              <Trash2 size={15} strokeWidth={1.9} aria-hidden="true" />
-              {selectedSessionIds.length > 0 ? copy.deleteMany(selectedSessionIds.length) : copy.deleteSelected}
-            </button>
+             >
+               <Trash2 size={15} strokeWidth={1.9} aria-hidden="true" />
+               {selectedSessionIds.length > 0 ? copy.deleteMany(selectedSessionIds.length) : copy.deleteSelected}
+             </button>}
           </div>
 
           {filteredSessions.length > 0 ? (
@@ -401,7 +428,7 @@ export function SessionManagementPage({
                   indeterminate={visibleSelectionIsPartial}
                   onCheckedChange={(checked) => onSetSessionGroupSelected(filteredSessions, checked)}
                   aria-label={copy.selectAll}
-                  disabled={loading || sessionDeleteBusy}
+                  disabled={readOnly || loading || sessionDeleteBusy}
                 />
                 <span>{isChinese ? "会话" : "Session"}</span>
                 <span>{isChinese ? "更新时间" : "Updated"}</span>
@@ -428,9 +455,10 @@ export function SessionManagementPage({
                             ref={(input) => {
                               if (input) input.indeterminate = projectPartiallySelected;
                             }}
-                            checked={projectSelected}
-                            onChange={(event) => onSetSessionGroupSelected(projectSessions, event.target.checked)}
-                            aria-label={copy.selectProject(group, projectSessions.length)}
+                             checked={projectSelected}
+                             onChange={(event) => onSetSessionGroupSelected(projectSessions, event.target.checked)}
+                             aria-label={copy.selectProject(group, projectSessions.length)}
+                             disabled={readOnly}
                           />
                           <span title={group}>{compactPath(group, 96, isChinese ? "未记录路径" : "No path recorded")}</span>
                           <em>{groupCountLabel}</em>
@@ -442,9 +470,10 @@ export function SessionManagementPage({
                             <input
                               className="cx-session-checkbox"
                               type="checkbox"
-                              checked={selectedSessionSet.has(item.id)}
-                              onChange={() => onToggleSessionSelected(item.id)}
-                              aria-label={`${copy.selectSession}: ${item.title || (isChinese ? "未命名会话" : "Untitled session")} (#${shortId(item.id)})`}
+                               checked={selectedSessionSet.has(item.id)}
+                               onChange={() => onToggleSessionSelected(item.id)}
+                               aria-label={`${copy.selectSession}: ${item.title || (isChinese ? "未命名会话" : "Untitled session")} (#${shortId(item.id)})`}
+                               disabled={readOnly}
                             />
                           </span>
                           <div className="cx-session-row-copy">

@@ -3,11 +3,12 @@ use super::types::{
     BuiltinPromptStatus, BundledPromptMeta, CachedBuiltinPrompt, GithubContentEntry,
 };
 use crate::constants::{
-    GITHUB_EXAMPLES_API, GITHUB_EXAMPLES_BASE, INSTRUCTION_54_CONTENT, INSTRUCTION_54_FILENAME,
+    CLAUDE_BUILTIN_FILENAME, CLAUDE_BUILTIN_ID, GITHUB_EXAMPLES_API, GITHUB_EXAMPLES_BASE,
+    GROK_BUILTIN_FILENAME, GROK_BUILTIN_ID, INSTRUCTION_54_CONTENT, INSTRUCTION_54_FILENAME,
     INSTRUCTION_56_SOL_CONTENT, INSTRUCTION_56_SOL_FILENAME, INSTRUCTION_CONTENT,
     INSTRUCTION_FILENAME, INSTRUCTION_JELI_CONTENT, INSTRUCTION_JELI_FILENAME,
     INSTRUCTION_SEAGULL_CONTENT, INSTRUCTION_SEAGULL_FILENAME, JSDELIVR_EXAMPLES_API,
-    JSDELIVR_EXAMPLES_BASE,
+    JSDELIVR_EXAMPLES_BASE, ZCODE_BUILTIN_FILENAME, ZCODE_BUILTIN_ID,
 };
 use crate::error::{CodexxError, Result};
 #[cfg(test)]
@@ -25,6 +26,12 @@ const CATALOG_CDN_KEY: &str = "模板 CDN";
 const CATALOG_GITHUB_KEY: &str = "GitHub 模板目录";
 const PROMPT_CDN_KEY: &str = "模板 CDN";
 const PROMPT_GITHUB_KEY: &str = "GitHub 模板源";
+const OTHER_TOOL_PROMPT_FILENAMES: [&str; 3] = [
+    CLAUDE_BUILTIN_FILENAME,
+    GROK_BUILTIN_FILENAME,
+    ZCODE_BUILTIN_FILENAME,
+];
+const OTHER_TOOL_PROMPT_IDS: [&str; 3] = [CLAUDE_BUILTIN_ID, GROK_BUILTIN_ID, ZCODE_BUILTIN_ID];
 
 #[derive(Debug, Deserialize)]
 struct JsdelivrPackage {
@@ -137,6 +144,22 @@ pub(crate) fn stable_remote_prompt_id(filename: &str) -> String {
         .map(|byte| format!("{byte:02x}"))
         .collect::<String>();
     format!("github-{slug}-{suffix}")
+}
+
+pub(crate) fn codex_prompt_filename_allowed(filename: &str) -> bool {
+    OTHER_TOOL_PROMPT_FILENAMES
+        .iter()
+        .all(|reserved| !reserved.eq_ignore_ascii_case(filename.trim()))
+}
+
+pub(crate) fn codex_prompt_id_allowed(id: &str) -> bool {
+    let id = id.trim();
+    OTHER_TOOL_PROMPT_IDS
+        .iter()
+        .all(|reserved| !reserved.eq_ignore_ascii_case(id))
+        && OTHER_TOOL_PROMPT_FILENAMES
+            .iter()
+            .all(|filename| stable_remote_prompt_id(filename) != id)
 }
 
 fn prompt_display_meta(filename: &str) -> (String, String, String) {
@@ -347,6 +370,9 @@ fn fetch_remote_prompt(filename: &str, trust: PromptContentTrust<'_>) -> Result<
 }
 
 fn finalize_prompt_catalog(mut prompts: Vec<(String, String)>) -> Result<Vec<(String, String)>> {
+    prompts.retain(|(id, filename)| {
+        codex_prompt_id_allowed(id) && codex_prompt_filename_allowed(filename)
+    });
     prompts.sort_by_key(|prompt| prompt.1.to_ascii_lowercase());
     let mut seen_ids = HashSet::new();
     let mut seen_filenames = HashSet::new();
@@ -582,6 +608,12 @@ fn bundled_prompt_status(meta: BundledPromptMeta, message: &str) -> BuiltinPromp
 pub(crate) fn cached_prompt_fallback_statuses(
     caches: Vec<CachedBuiltinPrompt>,
 ) -> Vec<BuiltinPromptStatus> {
+    let caches = caches
+        .into_iter()
+        .filter(|cache| {
+            codex_prompt_id_allowed(&cache.id) && codex_prompt_filename_allowed(&cache.filename)
+        })
+        .collect::<Vec<_>>();
     let cache_map = caches
         .iter()
         .cloned()
@@ -689,16 +721,18 @@ pub(crate) fn refresh_builtin_prompts_with_active(
     if catalog.authoritative {
         let mut retained_ids = remote_ids.clone();
         if let Some(active_id) = active_remote_builtin_prompt_id() {
-            if !remote_ids.contains(&active_id) {
+            if codex_prompt_id_allowed(&active_id) && !remote_ids.contains(&active_id) {
                 if let Some(cache) = cached_builtin_prompt(&active_id)? {
-                    let mut status = prompt_status_from_cache(
-                        cache,
-                        "该在线模板已下架，当前配置继续使用本地副本",
-                    );
-                    status.content_source = "removed".to_string();
-                    statuses.push(status);
+                    if codex_prompt_filename_allowed(&cache.filename) {
+                        let mut status = prompt_status_from_cache(
+                            cache,
+                            "该在线模板已下架，当前配置继续使用本地副本",
+                        );
+                        status.content_source = "removed".to_string();
+                        statuses.push(status);
+                        retained_ids.insert(active_id);
+                    }
                 }
-                retained_ids.insert(active_id);
             }
         }
         prune_builtin_prompt_cache(&retained_ids)?;
@@ -706,7 +740,9 @@ pub(crate) fn refresh_builtin_prompts_with_active(
         let mut seen_ids = remote_ids.clone();
         let mut seen_filenames = remote_filenames;
         for cache in cached_before {
-            if !seen_ids.insert(cache.id.clone())
+            if !codex_prompt_id_allowed(&cache.id)
+                || !codex_prompt_filename_allowed(&cache.filename)
+                || !seen_ids.insert(cache.id.clone())
                 || !seen_filenames.insert(cache.filename.to_ascii_lowercase())
             {
                 continue;
@@ -745,6 +781,11 @@ pub(crate) fn builtin_prompt_content(
     } else {
         template_id.trim()
     };
+    if !codex_prompt_id_allowed(id) {
+        return Err(CodexxError::Config(
+            "该提示词属于其他工具，不能在 Codex 中启用".to_string(),
+        ));
+    }
     let bundled = bundled_prompt_meta(id);
     let cached = cached_builtin_prompt(id)?;
     let filename = cached
@@ -752,6 +793,11 @@ pub(crate) fn builtin_prompt_content(
         .map(|item| item.filename.clone())
         .or_else(|| bundled.map(|item| item.filename.to_string()))
         .ok_or_else(|| CodexxError::Config(format!("提示词模板不存在或尚未同步: {id}")))?;
+    if !codex_prompt_filename_allowed(&filename) {
+        return Err(CodexxError::Config(
+            "该提示词属于其他工具，不能在 Codex 中启用".to_string(),
+        ));
+    }
     let trust = PromptContentTrust {
         cached: cached.as_ref().map(|item| item.content.as_str()),
         bundled: bundled.map(|item| item.content),
@@ -851,6 +897,39 @@ mod tests {
         assert!(remote.cached);
         drop(conn);
         std::fs::remove_file(database_path).expect("remove prompt cache database");
+    }
+
+    #[test]
+    fn startup_catalog_excludes_other_tool_prompt_caches() {
+        let mut caches = OTHER_TOOL_PROMPT_FILENAMES
+            .iter()
+            .map(|filename| CachedBuiltinPrompt {
+                id: stable_remote_prompt_id(filename),
+                filename: (*filename).to_string(),
+                source_url: format!("https://example.test/{filename}"),
+                content: "other tool".to_string(),
+                checked_at: "2026-07-28T00:00:00+08:00".to_string(),
+            })
+            .collect::<Vec<_>>();
+        caches.push(CachedBuiltinPrompt {
+            id: stable_remote_prompt_id("codex-online.md"),
+            filename: "codex-online.md".to_string(),
+            source_url: "https://example.test/codex-online.md".to_string(),
+            content: "codex".to_string(),
+            checked_at: "2026-07-28T00:00:00+08:00".to_string(),
+        });
+
+        let statuses = cached_prompt_fallback_statuses(caches);
+
+        assert!(statuses
+            .iter()
+            .any(|status| status.filename == "codex-online.md"));
+        assert!(statuses
+            .iter()
+            .all(|status| codex_prompt_filename_allowed(&status.filename)));
+        for filename in OTHER_TOOL_PROMPT_FILENAMES {
+            assert!(!codex_prompt_id_allowed(&stable_remote_prompt_id(filename)));
+        }
     }
 
     #[test]

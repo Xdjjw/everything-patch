@@ -362,7 +362,7 @@ export default {
       return jsonResponse({
         service: "Codex Star History",
         charts: {
-          "codex-x": "/v1/charts/codex-x.svg",
+          "everything-patch": "/v1/charts/everything-patch.svg",
           "codex-5-5": "/v1/charts/codex-5-5.svg",
         },
         refresh: "GitHub Actions every 15 minutes plus GitHub star webhooks",

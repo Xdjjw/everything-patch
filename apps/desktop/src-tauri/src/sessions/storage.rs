@@ -76,6 +76,10 @@ fn is_locked_io_error(error: &std::io::Error) -> bool {
         || matches!(error.raw_os_error(), Some(32 | 33))
 }
 
+fn is_locked_app_error(error: &CodexxError) -> bool {
+    matches!(error, CodexxError::Io { source, .. } if is_locked_io_error(source))
+}
+
 pub(crate) fn scan_rollouts(codex_dir: &Path, target_provider: &str) -> Result<RolloutScan> {
     let mut paths = Vec::new();
     let mut scan = RolloutScan::default();
@@ -189,7 +193,21 @@ fn rollout_file_is_open(path: &Path) -> bool {
         .is_ok_and(|status| status.success())
 }
 
-#[cfg(any(not(target_os = "macos"), test))]
+#[cfg(target_os = "windows")]
+fn rollout_file_is_open(path: &Path) -> bool {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    match fs::OpenOptions::new().read(true).share_mode(0).open(path) {
+        Ok(_) => false,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(_) => true,
+    }
+}
+
+#[cfg(any(
+    all(target_os = "macos", test),
+    not(any(target_os = "macos", target_os = "windows"))
+))]
 fn rollout_file_is_open(_path: &Path) -> bool {
     false
 }
@@ -228,6 +246,10 @@ pub(crate) fn apply_session_changes(
             Ok(()) => {
                 restore_file_mtime(&change.path, change.original_mtime);
                 applied.push(change.clone());
+            }
+            Err(error) if is_locked_app_error(&error) => {
+                skipped.push(change.path.clone());
+                continue;
             }
             Err(error) => {
                 return match restore_session_changes(&applied) {
@@ -949,7 +971,7 @@ mod tests {
             .expect("clock after epoch")
             .as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "codex-x-storage-{label}-{}-{nonce}",
+            "everything-patch-storage-{label}-{}-{nonce}",
             std::process::id()
         ));
         fs::create_dir_all(&path).expect("create test codex dir");
@@ -976,6 +998,29 @@ mod tests {
             (id, provider),
         )
         .expect("insert thread");
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_rollout_open_detection_tracks_an_exclusive_handle() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let root = temp_codex_dir("rollout-lock");
+        let path = root.join("rollout-test.jsonl");
+        fs::write(&path, b"session").expect("write rollout");
+        assert!(!rollout_file_is_open(&path));
+
+        let held = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .share_mode(0)
+            .open(&path)
+            .expect("lock rollout");
+        assert!(rollout_file_is_open(&path));
+
+        drop(held);
+        assert!(!rollout_file_is_open(&path));
+        fs::remove_dir_all(root).expect("remove test directory");
     }
 
     #[test]

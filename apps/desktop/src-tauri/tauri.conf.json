@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Codex-X",
+  "productName": "Everything Patch",
   "version": "0.3.3",
-  "identifier": "com.yynxxxxx.codexx",
+  "identifier": "com.xdjjw.everythingpatch",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://127.0.0.1:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Codex-X",
+        "title": "Everything Patch",
         "width": 1400,
         "height": 750,
         "minWidth": 1320,
@@ -32,7 +32,11 @@
       "csp": "default-src 'self'; img-src 'self' data: asset: http://asset.localhost https://asset.localhost; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost",
       "assetProtocol": {
         "enable": true,
-        "scope": ["$HOME/.codexx/codex-x-skins/**"]
+        "scope": [
+          "$HOME/.everything-patch/everything-patch-skins/**",
+          "$HOME/.codexx/everything-patch-skins/**",
+          "$HOME/.codexx/codex-x-skins/**"
+        ]
       }
     }
   },
@@ -51,7 +55,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/yynxxxxx/Codex-X/releases/latest/download/latest.json"
+        "https://github.com/Xdjjw/everything-patch/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZCQTBEQkRFNTZCQjBBNUUKUldSZUNydFczdHVnYXkzSTM0N0F4UG5oV3BiVVJ0OEZwazdOd3hMRGRMNGJZaThoOEVneG9qb0cK",
       "windows": {

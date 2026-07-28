@@ -3,6 +3,7 @@
 import base64
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,26 +11,26 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR = ROOT / "scripts" / "validate_updater_release.py"
-REPOSITORY = "example/Codex-X"
+REPOSITORY = "example/everything-patch"
 RELEASE_TAG = "v0.3.1"
 VERSION = "0.3.1"
 PLATFORM_ASSETS = {
-    "darwin-aarch64": "Codex-X.app.tar.gz",
-    "darwin-aarch64-app": "Codex-X.app.tar.gz",
-    "darwin-x86_64": "Codex-X-intel.app.tar.gz",
-    "darwin-x86_64-app": "Codex-X-intel.app.tar.gz",
-    "windows-x86_64": "Codex-X.msi",
-    "windows-x86_64-msi": "Codex-X.msi",
-    "linux-x86_64": "Codex-X.AppImage",
-    "linux-x86_64-deb": "Codex-X.deb",
-    "linux-x86_64-rpm": "Codex-X.rpm",
-    "linux-x86_64-appimage": "Codex-X.AppImage",
+    "darwin-aarch64": "Everything-Patch.app.tar.gz",
+    "darwin-aarch64-app": "Everything-Patch.app.tar.gz",
+    "darwin-x86_64": "Everything-Patch-intel.app.tar.gz",
+    "darwin-x86_64-app": "Everything-Patch-intel.app.tar.gz",
+    "windows-x86_64": "Everything-Patch.msi",
+    "windows-x86_64-msi": "Everything-Patch.msi",
+    "linux-x86_64": "Everything-Patch.AppImage",
+    "linux-x86_64-deb": "Everything-Patch.deb",
+    "linux-x86_64-rpm": "Everything-Patch.rpm",
+    "linux-x86_64-appimage": "Everything-Patch.AppImage",
 }
 
 
 def draft_url(asset_name: str) -> str:
     return (
-        "https://github.com/example/Codex-X/releases/download/"
+        "https://github.com/example/everything-patch/releases/download/"
         f"untagged-test/{asset_name}"
     )
 
@@ -75,7 +76,7 @@ class ValidateUpdaterReleaseTests(unittest.TestCase):
     def run_validator(self, *extra_args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [
-                "python3",
+                sys.executable,
                 str(VALIDATOR),
                 "--manifest",
                 str(self.manifest_path),

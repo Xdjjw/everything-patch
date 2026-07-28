@@ -3,7 +3,7 @@
 //! 生成的 Node.js launcher 通过 ZCode 自带的 Electron node 执行，无需 Python。
 
 use crate::constants::{ZCODE_AGENT_ARGS_JSON, ZCODE_LAUNCHER_LOG_NAME, ZCODE_PATCH_NEEDLE};
-use crate::error::Result;
+use crate::prompts::PromptInjectionMode;
 use crate::zcode::ZcodeInstallPlan;
 use serde_json::json;
 
@@ -29,15 +29,26 @@ pub(crate) fn normalize_system_prompt_content(content: &str) -> String {
     }
     let stripped = text.trim_end();
     if stripped.ends_with("<|im_end|>") {
-        text = format!("{}\n", stripped[..stripped.len() - "<|im_end|>".len()].trim_end());
+        text = format!(
+            "{}\n",
+            stripped[..stripped.len() - "<|im_end|>".len()].trim_end()
+        );
     }
     format!("{}{}", leading, text)
 }
 
 /// 生成 config.json 内容（诊断用）。
-pub(crate) fn render_config(plan: &ZcodeInstallPlan) -> String {
+pub(crate) fn render_config(
+    plan: &ZcodeInstallPlan,
+    injection_mode: PromptInjectionMode,
+    template_key: &str,
+    title: &str,
+) -> String {
     let payload = json!({
         "mode": "zcode-app-launcher",
+        "injection_mode": injection_mode.as_str(),
+        "template_key": template_key,
+        "title": title,
         "system_file": plan.paths.system_file.display().to_string(),
         "launcher": plan.paths.launcher.display().to_string(),
         "zcode_runtime": plan.zcode_runtime.display().to_string(),
@@ -54,18 +65,24 @@ pub(crate) fn render_config(plan: &ZcodeInstallPlan) -> String {
 ///
 /// 将 patch 锚点与替换模板存放在独立 .js 文件中，避免在 launcher 内做复杂转义。
 /// replacement 模板中的 {SYSTEM_FILE} 占位符由 launcher 在运行时替换为实际路径。
-pub(crate) fn render_patch_sidecar() -> String {
-    let needle_escaped = ZCODE_PATCH_NEEDLE.replace('\\', '\\\\').replace('`', '\\`');
+pub(crate) fn render_patch_sidecar(injection_mode: PromptInjectionMode) -> String {
+    let needle_escaped = ZCODE_PATCH_NEEDLE.replace('\\', "\\\\").replace('`', "\\`");
+    let replacement = match injection_mode {
+        PromptInjectionMode::Append => PATCH_REPLACEMENT_APPEND,
+        PromptInjectionMode::Replace => PATCH_REPLACEMENT_REPLACE,
+    };
+    let replacement_json =
+        serde_json::to_string(replacement).unwrap_or_else(|_| "\"\"".to_string());
     format!(
         r#""use strict";
-// ZCode runtime patch parameters (generated at install time by Codex-X)
+// ZCode runtime patch parameters (generated at install time by Everything Patch)
 module.exports = {{
   needle: `{needle}`,
-  replacementTemplate: "{template}"
+  replacementTemplate: {replacement}
 }};
 "#,
         needle = needle_escaped,
-        template = PATCH_REPLACEMENT_TEMPLATE,
+        replacement = replacement_json,
     )
 }
 
@@ -78,8 +95,27 @@ pub(crate) fn render_launcher() -> String {
 }
 
 /// patch 替换模板，{SYSTEM_FILE} 为运行时占位符。
-const PATCH_REPLACEMENT_TEMPLATE: &str =
-    "customSystemPrompt:(this.config.systemPrompt&&this.config.systemPrompt.trim()?this.config.systemPrompt:(()=>{try{let e=process.env.ZCODE_KEYSMITH_SYSTEM_FILE||'{SYSTEM_FILE}';let t=require(\"node:fs\");return t.existsSync(e)?t.readFileSync(e,\"utf8\"):void 0}catch{return void 0}})()),language:";
+const PATCH_REPLACEMENT_APPEND: &str = r#"customSystemPrompt:(()=>{let o=this.config.systemPrompt;try{let e=process.env.ZCODE_KEYSMITH_SYSTEM_FILE||'{SYSTEM_FILE}';let t=require("node:fs");let m=t.existsSync(e)?t.readFileSync(e,"utf8"):void 0;return [o,m].filter(e=>e&&e.trim()).join("\n\n")||void 0}catch{return o}})(),language:"#;
+const PATCH_REPLACEMENT_REPLACE: &str = r#"customSystemPrompt:(()=>{let o=this.config.systemPrompt;try{let e=process.env.ZCODE_KEYSMITH_SYSTEM_FILE||'{SYSTEM_FILE}';let t=require("node:fs");let m=t.existsSync(e)?t.readFileSync(e,"utf8"):void 0;return m&&m.trim()?m:o}catch{return o}})(),language:"#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn append_patch_combines_existing_and_managed_prompts() {
+        let sidecar = render_patch_sidecar(PromptInjectionMode::Append);
+        assert!(sidecar.contains("[o,m]"));
+        assert!(sidecar.contains(r#"join(\"\\n\\n\")"#));
+    }
+
+    #[test]
+    fn replace_patch_prefers_managed_prompt() {
+        let sidecar = render_patch_sidecar(PromptInjectionMode::Replace);
+        assert!(sidecar.contains("m&&m.trim()?m:o"));
+        assert!(!sidecar.contains("[o,m]"));
+    }
+}
 
 /// Launcher JavaScript 脚本模板。
 const LAUNCHER_JS: &str = r###"

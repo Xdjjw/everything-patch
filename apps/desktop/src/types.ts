@@ -5,6 +5,59 @@ export type ProviderMode = "list" | "form" | "official";
 export type InstructionMode = "list" | "form";
 export type PromptInjectionMode = "append" | "replace";
 export type PromptEngine = "codex" | "claude" | "zcode" | "grok";
+export type ToolId = "codex" | "claude" | "grok" | "zcode";
+
+export type ToolCapabilitySet = {
+  providers: boolean;
+  sessions: boolean;
+  sessionSync: boolean;
+  sessionDelete: boolean;
+  skills: boolean;
+  mcp: boolean;
+  config: boolean;
+  prompts: boolean;
+};
+
+export type ToolStatus = {
+  id: ToolId;
+  label: string;
+  installed: boolean;
+  version?: string | null;
+  homeDir: string;
+  configPath: string;
+  configFormat: "toml" | "json" | string;
+  configExists: boolean;
+  authPath?: string | null;
+  authExists: boolean;
+  instructionPath: string;
+  nativeInstructionPath: string;
+  diagnosticPath?: string | null;
+  instructionExists: boolean;
+  instructionEnabled: boolean;
+  model?: string | null;
+  provider?: string | null;
+  providerId?: string | null;
+  notice?: string | null;
+  capabilities: ToolCapabilitySet;
+};
+
+export type ToolConfigFile = {
+  id: string;
+  label: string;
+  path: string;
+  format: "toml" | "json" | string;
+  exists: boolean;
+  native: boolean;
+  text: string;
+};
+
+export type ToolConfigBundle = {
+  tool: ToolId;
+  label: string;
+  primaryFileId: string;
+  files: ToolConfigFile[];
+  notice?: string | null;
+};
 
 export type InstructionTemplate = {
   id: string;
@@ -24,11 +77,17 @@ export type ProviderSummary = {
 };
 
 export type SavedProvider = {
+  appType?: ToolId;
   id: string;
+  native?: boolean;
+  available?: boolean;
+  statusMessage?: string | null;
+  models?: string[];
   providerName: string;
   baseUrl: string;
   model: string;
   apiKey?: string;
+  hasApiKey?: boolean;
   tomlConfig?: string;
   wireApi: string;
   requiresOpenaiAuth: boolean;
@@ -66,6 +125,24 @@ export type BackupEntry = {
   hadAgents?: boolean;
 };
 
+export type PromptBackupEntry = {
+  id: string;
+  engine: PromptEngine;
+  action: string;
+  createdAt: string;
+  path: string;
+  scope?: string | null;
+  injectionMode?: PromptInjectionMode | null;
+  fileCount: number;
+};
+
+export type PromptRestoreResult = {
+  ok: boolean;
+  message: string;
+  backupId?: string;
+  engine: PromptEngine;
+};
+
 export type CodexState = {
   codexDir: string;
   configPath: string;
@@ -100,6 +177,7 @@ export type ClaudeState = {
   memoryPath: string;
   memoryExists: boolean;
   instructionEnabled: boolean;
+  instructionInjectionMode?: PromptInjectionMode;
   instructionTemplateKey?: string;
   activeInstructionTitle?: string;
 };
@@ -116,6 +194,8 @@ export type ZcodeState = {
   systemFile: string;
   systemFileExists: boolean;
   instructionEnabled: boolean;
+  instructionInjectionMode?: PromptInjectionMode;
+  instructionTemplateKey?: string;
   zcodeApp?: string | null;
   zcodeRuntimeExists: boolean;
   runtimePatchable: boolean;
@@ -163,6 +243,8 @@ export type GrokState = {
   disabledHooksCount: number;
   manifestExists: boolean;
   instructionEnabled: boolean;
+  instructionInjectionMode?: PromptInjectionMode;
+  instructionTemplateKey?: string;
   activeInstructionTitle?: string;
 };
 
@@ -183,6 +265,14 @@ export type ImportResult = {
   providers: SavedProvider[];
 };
 
+export type ToolProviderActionResult = {
+  ok: boolean;
+  message: string;
+  appType: ToolId;
+  providerId: string;
+  backupPath?: string | null;
+};
+
 export type AboutInfo = {
   appVersion: string;
   codexVersion?: string;
@@ -190,6 +280,7 @@ export type AboutInfo = {
   projectUrl: string;
   githubRepo: string;
   nativeUpdaterSupported: boolean;
+  toolStatuses?: ToolStatus[];
 };
 
 export type ReleaseInfo = {
@@ -267,11 +358,36 @@ export type ManagedMcpServer = {
 };
 
 export type SkillsMcpState = {
+  tool?: ToolId;
+  toolLabel?: string;
+  toolDir?: string;
+  skillsDir?: string;
+  configPath?: string;
   codexDir: string;
   codexSkillsDir: string;
   disabledSkillsDir: string;
   skills: ManagedSkill[];
   mcpServers: ManagedMcpServer[];
+  warnings: string[];
+};
+
+export type ToolSession = {
+  id: string;
+  title: string;
+  summary?: string | null;
+  cwd?: string | null;
+  sourcePath?: string | null;
+  createdAtMs?: number | null;
+  updatedAtMs?: number | null;
+  archived: boolean;
+  resumeCommand?: string | null;
+};
+
+export type ToolSessionList = {
+  tool: ToolId;
+  root: string;
+  readOnly: boolean;
+  sessions: ToolSession[];
   warnings: string[];
 };
 

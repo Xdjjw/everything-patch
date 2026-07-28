@@ -279,7 +279,7 @@ pub(crate) fn sort_managed_skills(skills: &mut [ManagedSkill]) {
     });
 }
 
-fn move_dir_replace(src: &Path, dst: &Path) -> Result<()> {
+pub(super) fn move_dir_replace(src: &Path, dst: &Path) -> Result<()> {
     if !src.exists() {
         return Ok(());
     }
@@ -488,7 +488,7 @@ fn download_repo_skill_hashes(
         .build();
     let response = agent
         .get(&url)
-        .set("User-Agent", "Codex-X")
+        .set("User-Agent", "Everything Patch")
         .call()
         .map_err(|e| format!("下载 {owner}/{repo}@{branch} 失败: {e}"))?;
     let mut bytes = Vec::new();

@@ -26,7 +26,7 @@ fn remove_markdown_path(table: &mut Table, key: &str) -> Option<Item> {
     }
 }
 
-/// Repairs prompt paths appended by older Codex-X versions after a `[tui]`
+/// Repairs prompt paths appended by older Everything Patch versions after a `[tui]`
 /// header. Only the exact legacy keys with Markdown path values are touched.
 pub(crate) fn migrate_legacy_prompt_config(codex_dir: &Path) -> Result<bool> {
     let cfg = config_path(codex_dir);
@@ -91,7 +91,7 @@ mod tests {
     fn temp_codex_dir(name: &str) -> PathBuf {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
         let dir = std::env::temp_dir().join(format!(
-            "codex-x-config-migration-{name}-{}-{}",
+            "everything-patch-config-migration-{name}-{}-{}",
             std::process::id(),
             COUNTER.fetch_add(1, Ordering::Relaxed),
         ));

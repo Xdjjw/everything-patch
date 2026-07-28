@@ -1,12 +1,13 @@
 use super::{
     custom_provider_id, experimental_bearer_token_from_doc, list_saved_providers_on_connection,
-    normalize_saved_provider, open_store, upsert_provider_on_connection, ProviderUpsertKind,
-    ProviderUpsertMode, SavedProvider,
+    list_saved_providers_on_connection_for_app, normalize_saved_provider, open_store,
+    upsert_provider_on_connection, ProviderUpsertKind, ProviderUpsertMode, SavedProvider,
 };
 use crate::ccswitch::{ccswitch_db_candidates, default_ccswitch_db_path};
 use crate::error::{CodexxError, Result};
 use crate::sqlite_utils::table_column_set;
 use crate::string_value;
+use crate::tools::ToolId;
 use rusqlite::{Connection, OpenFlags, TransactionBehavior};
 use serde::Serialize;
 use serde_json::Value;
@@ -241,7 +242,12 @@ pub(crate) fn build_ccswitch_codex_provider(
     let section = select_ccswitch_section_for_row(row, &settings, global_sections)?;
     let api_key = ccswitch_auth_api_key(&settings).or(section.experimental_bearer_token.clone());
     Some(SavedProvider {
+        app_type: "codex".to_string(),
         id: custom_provider_id(&row.id),
+        native: false,
+        available: true,
+        status_message: None,
+        models: Vec::new(),
         provider_name: if row.name.trim().is_empty() {
             section.name.unwrap_or_else(|| row.id.clone())
         } else {
@@ -353,6 +359,241 @@ pub(crate) fn import_ccswitch_codex_providers_inner(path: Option<String>) -> Res
         .map_err(|e| CodexxError::Database(e.to_string()))?;
     let providers = list_saved_providers_on_connection(&local_conn)?;
 
+    Ok(ImportResult {
+        imported,
+        added,
+        updated,
+        merged,
+        skipped,
+        warnings,
+        providers,
+    })
+}
+
+fn ccswitch_rows_for_app(connection: &Connection, tool: ToolId) -> Result<Vec<CcSwitchCodexRow>> {
+    let columns = table_column_set(connection, "providers")?;
+    let category = if columns.contains("category") {
+        "category"
+    } else {
+        "NULL"
+    };
+    let order = if columns.contains("sort_index") && columns.contains("created_at") {
+        "sort_index ASC, created_at ASC"
+    } else if columns.contains("created_at") {
+        "created_at ASC"
+    } else {
+        "id ASC"
+    };
+    let query = format!(
+        "SELECT id, name, settings_config, {category}
+         FROM providers WHERE app_type = ?1 ORDER BY {order}"
+    );
+    let mut statement = connection
+        .prepare(&query)
+        .map_err(|error| CodexxError::Database(error.to_string()))?;
+    let rows = statement
+        .query_map([tool.ccswitch_app_type()], |row| {
+            Ok(CcSwitchCodexRow {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                settings_config: row.get(2)?,
+                category: row.get(3)?,
+            })
+        })
+        .map_err(|error| CodexxError::Database(error.to_string()))?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row.map_err(|error| CodexxError::Database(error.to_string()))?);
+    }
+    Ok(result)
+}
+
+fn ccswitch_claude_provider(row: &CcSwitchCodexRow) -> Option<SavedProvider> {
+    let settings = serde_json::from_str::<Value>(&row.settings_config).ok()?;
+    let env = settings.get("env").and_then(Value::as_object)?;
+    let base_url = env
+        .get("ANTHROPIC_BASE_URL")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?
+        .trim_end_matches('/')
+        .to_string();
+    let model = env
+        .get("ANTHROPIC_MODEL")
+        .or_else(|| env.get("ANTHROPIC_DEFAULT_SONNET_MODEL"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("claude-sonnet-4-5")
+        .to_string();
+    let api_key = env
+        .get("ANTHROPIC_AUTH_TOKEN")
+        .or_else(|| env.get("ANTHROPIC_API_KEY"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string);
+    Some(SavedProvider {
+        app_type: "claude".to_string(),
+        id: custom_provider_id(&row.id),
+        native: false,
+        available: true,
+        status_message: None,
+        models: Vec::new(),
+        provider_name: if row.name.trim().is_empty() {
+            row.id.clone()
+        } else {
+            row.name.trim().to_string()
+        },
+        base_url,
+        model,
+        api_key,
+        toml_config: serde_json::to_string_pretty(&settings).ok(),
+        wire_api: "anthropic".to_string(),
+        requires_openai_auth: false,
+    })
+}
+
+fn ccswitch_grok_provider(row: &CcSwitchCodexRow) -> Option<SavedProvider> {
+    let settings = serde_json::from_str::<Value>(&row.settings_config).ok()?;
+    let config = settings.get("config").and_then(Value::as_str)?;
+    let document = config.parse::<DocumentMut>().ok()?;
+    let model = document
+        .get("models")
+        .and_then(|item| item.as_table())
+        .and_then(|table| table.get("default"))
+        .and_then(|item| item.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?
+        .to_string();
+    let model_table = document
+        .get("model")
+        .and_then(|item| item.as_table())
+        .and_then(|table| table.get(&model))
+        .and_then(|item| item.as_table())?;
+    let base_url = model_table
+        .get("base_url")
+        .and_then(|item| item.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?
+        .trim_end_matches('/')
+        .to_string();
+    let api_key = model_table
+        .get("api_key")
+        .and_then(|item| item.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string);
+    let wire_api = model_table
+        .get("api_backend")
+        .and_then(|item| item.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("responses")
+        .to_string();
+    Some(SavedProvider {
+        app_type: "grok".to_string(),
+        id: custom_provider_id(&row.id),
+        native: false,
+        available: true,
+        status_message: None,
+        models: Vec::new(),
+        provider_name: if row.name.trim().is_empty() {
+            model_table
+                .get("name")
+                .and_then(|item| item.as_str())
+                .unwrap_or(&row.id)
+                .to_string()
+        } else {
+            row.name.trim().to_string()
+        },
+        base_url,
+        model,
+        api_key,
+        toml_config: Some(config.to_string()),
+        wire_api,
+        requires_openai_auth: false,
+    })
+}
+
+pub(crate) fn import_ccswitch_providers_inner(
+    tool: ToolId,
+    path: Option<String>,
+) -> Result<ImportResult> {
+    if tool == ToolId::Codex {
+        return import_ccswitch_codex_providers_inner(path);
+    }
+    if tool == ToolId::Zcode {
+        return Err(CodexxError::Config(
+            "cc-switch 当前没有 ZCode 供应商格式，无法导入".to_string(),
+        ));
+    }
+    let database = path
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or(default_ccswitch_db_path()?);
+    if !database.is_file() {
+        return Err(CodexxError::Config(format!(
+            "cc-switch 数据库不存在: {}",
+            database.display()
+        )));
+    }
+    let connection = Connection::open_with_flags(
+        &database,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(|error| {
+        CodexxError::Database(format!(
+            "打开 cc-switch 数据库失败 {}: {error}",
+            database.display()
+        ))
+    })?;
+    let rows = ccswitch_rows_for_app(&connection, tool)?;
+    let mut imported = 0usize;
+    let mut added = 0usize;
+    let mut updated = 0usize;
+    let mut merged = 0usize;
+    let mut skipped = 0usize;
+    let mut warnings = Vec::new();
+    let mut local = open_store()?;
+    let transaction = local
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| CodexxError::Database(error.to_string()))?;
+    for row in rows {
+        if is_official_ccswitch_row(&row) {
+            skipped += 1;
+            continue;
+        }
+        let provider = match tool {
+            ToolId::Claude => ccswitch_claude_provider(&row),
+            ToolId::Grok => ccswitch_grok_provider(&row),
+            ToolId::Codex | ToolId::Zcode => None,
+        };
+        let Some(provider) = provider else {
+            skipped += 1;
+            warnings.push(format!(
+                "跳过 {} ({})：供应商配置缺少 endpoint/model",
+                row.name, row.id
+            ));
+            continue;
+        };
+        let result = upsert_provider_on_connection(
+            &transaction,
+            normalize_saved_provider(provider)?,
+            ProviderUpsertMode::Imported,
+        )?;
+        match result.kind {
+            ProviderUpsertKind::Added => added += 1,
+            ProviderUpsertKind::Updated => updated += 1,
+            ProviderUpsertKind::Merged => merged += 1,
+        }
+        imported += 1;
+    }
+    transaction
+        .commit()
+        .map_err(|error| CodexxError::Database(error.to_string()))?;
+    let providers = list_saved_providers_on_connection_for_app(&local, tool.as_str())?;
     Ok(ImportResult {
         imported,
         added,

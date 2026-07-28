@@ -19,7 +19,7 @@ function Write-CodexxJson {
 
 function Get-CodexxState {
   if (-not $StatePath -or -not (Test-Path -LiteralPath $StatePath -PathType Leaf)) {
-    throw 'Codex-X skin state file is missing.'
+    throw 'Everything Patch skin state file is missing.'
   }
   return Get-Content -LiteralPath $StatePath -Raw -Encoding UTF8 | ConvertFrom-Json -ErrorAction Stop
 }

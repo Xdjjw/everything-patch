@@ -1,13 +1,14 @@
 {
-  "name": "codex-x-workspace",
+  "name": "everything-patch-workspace",
   "private": true,
   "version": "0.3.3",
+  "description": "Multi-tool desktop configuration and prompt manager",
   "scripts": {
     "dev": "pnpm --dir apps/desktop tauri dev",
-    "build": "pnpm --dir apps/desktop tauri build",
+    "build": "pnpm --dir apps/desktop build",
     "desktop:dev": "pnpm --dir apps/desktop tauri dev",
-    "desktop:build": "pnpm --dir apps/desktop tauri build",
+    "desktop:build": "pnpm --dir apps/desktop build",
     "typecheck": "pnpm --dir apps/desktop typecheck"
   },
-  "author": "yynxxxxx"
+  "author": "Xdjjw"
 }

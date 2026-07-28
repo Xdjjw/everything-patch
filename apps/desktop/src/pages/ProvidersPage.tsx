@@ -15,12 +15,13 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Ref } from "react";
+import { ToolTabs } from "../components/ToolTabs";
 import { PageTransition } from "../components/PageTransition";
 import { Button, Checkbox, ModalShell } from "../components/ui";
-import type { ProviderMode } from "../types";
+import type { ProviderMode, ToolId, ToolStatus } from "../types";
 import "../styles/providers-page.css";
 
-export type ProviderRowSource = "official" | "local" | "detected";
+export type ProviderRowSource = "official" | "local" | "detected" | "native";
 
 export type ProviderRow = {
   id: string;
@@ -28,6 +29,9 @@ export type ProviderRow = {
   providerName: string;
   baseUrl: string;
   model: string;
+  models?: string[];
+  available?: boolean;
+  statusMessage?: string | null;
   apiKey?: string;
   wireApi: string;
   requiresOpenaiAuth: boolean;
@@ -42,6 +46,7 @@ export type ProviderRow = {
 
 export type ProviderFormValue = {
   apiKey: string;
+  hasApiKey?: boolean;
   baseUrl: string;
   providerName: string;
   model: string;
@@ -116,6 +121,10 @@ export type ProviderOfficialInfo = {
 
 export type ProvidersPageProps = {
   lang: "zh" | "en";
+  tool: ToolId;
+  toolStatuses: readonly ToolStatus[];
+  onToolChange: (tool: ToolId) => void;
+  supportsProviders: boolean;
   copy: ProviderCopy;
   mode: ProviderMode;
   providerRows: readonly ProviderRow[];
@@ -134,7 +143,7 @@ export type ProvidersPageProps = {
   fetchingModels: boolean;
   onImportCcSwitch: () => void;
   onAddProvider: () => void;
-  onEnableProvider: (row: ProviderRow) => void;
+  onEnableProvider: (row: ProviderRow, model: string) => void;
   onTestProvider: (row: ProviderRow) => void;
   onEditProvider: (row: ProviderRow) => void;
   onDeleteProvider: (row: ProviderRow) => Promise<boolean>;
@@ -213,6 +222,7 @@ function ActionIconButton({
 }
 
 function ListPage({
+  tool,
   copy,
   providerRows,
   loading,
@@ -224,9 +234,10 @@ function ListPage({
   onTestProvider,
   onEditProvider,
   onDeleteProvider,
-}: Pick<ProvidersPageProps, "copy" | "providerRows" | "loading" | "testingId" | "actionBusy" | "onImportCcSwitch" | "onAddProvider" | "onEnableProvider" | "onTestProvider" | "onEditProvider" | "onDeleteProvider">) {
+}: Pick<ProvidersPageProps, "tool" | "copy" | "providerRows" | "loading" | "testingId" | "actionBusy" | "onImportCcSwitch" | "onAddProvider" | "onEnableProvider" | "onTestProvider" | "onEditProvider" | "onDeleteProvider">) {
   const [providerToDelete, setProviderToDelete] = useState<ProviderRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [selectedModels, setSelectedModels] = useState<Record<string, string>>({});
 
   const closeDeleteDialog = () => {
     if (!deleting) setProviderToDelete(null);
@@ -260,10 +271,12 @@ function ListPage({
             {actionBusy === "importCcSwitch" ? <Loader2 size={15} className="cx-providers-spin" aria-hidden="true" /> : <RefreshCw size={15} aria-hidden="true" />}
             {copy.importLabel}
           </button>
-          <button type="button" className="cx-providers-button cx-providers-button--dark" onClick={onAddProvider} disabled={loading}>
-            <Plus size={15} aria-hidden="true" />
-            {copy.addLabel}
-          </button>
+          {tool !== "zcode" && (
+            <button type="button" className="cx-providers-button cx-providers-button--dark" onClick={onAddProvider} disabled={loading}>
+              <Plus size={15} aria-hidden="true" />
+              {copy.addLabel}
+            </button>
+          )}
         </div>
       </header>
 
@@ -273,6 +286,13 @@ function ListPage({
         ) : providerRows.map((row) => {
           const testingKey = row.testingKey || `${row.source}-${row.id}`;
           const isTesting = testingId === testingKey;
+          const modelOptions = row.models?.length ? row.models : [row.model].filter(Boolean);
+          const rememberedModel = selectedModels[testingKey];
+          const selectedModel = rememberedModel && modelOptions.includes(rememberedModel)
+            ? rememberedModel
+            : row.model || modelOptions[0] || "";
+          const currentSelection = row.isCurrent && selectedModel === row.model;
+          const available = row.available !== false;
           return (
             <article className={`cx-providers-row${row.isCurrent ? " cx-providers-row--current" : ""}`} key={`${row.source}-${row.id}-${row.baseUrl}`} role="listitem">
               <ProviderAvatar row={row} />
@@ -286,6 +306,27 @@ function ListPage({
                   )}
                 </div>
                 <code title={row.baseUrl || copy.noBaseUrlLabel}>{row.baseUrl || copy.noBaseUrlLabel}</code>
+                {row.source === "native" && modelOptions.length > 0 && (
+                  <label className="cx-providers-native-model">
+                    <span>{copy.modelLabel}</span>
+                    <select
+                      value={selectedModel}
+                      onChange={(event) => setSelectedModels((current) => ({
+                        ...current,
+                        [testingKey]: event.target.value,
+                      }))}
+                      disabled={loading || !available}
+                    >
+                      {modelOptions.map((model) => <option value={model} key={model}>{model}</option>)}
+                    </select>
+                  </label>
+                )}
+                {row.statusMessage && (
+                  <div className={`cx-providers-native-status${available ? "" : " cx-providers-native-status--blocked"}`}>
+                    {!available && <AlertTriangle size={13} aria-hidden="true" />}
+                    <span>{row.statusMessage}</span>
+                  </div>
+                )}
                 {row.meta && <div className="cx-providers-row-meta">{row.meta}</div>}
               </div>
               <div className="cx-providers-row-actions">
@@ -293,8 +334,8 @@ function ListPage({
                 <button
                   type="button"
                   className="cx-providers-button cx-providers-button--small cx-providers-button--secondary"
-                  onClick={() => onEnableProvider(row)}
-                  disabled={loading || row.isCurrent}
+                  onClick={() => onEnableProvider(row, selectedModel)}
+                  disabled={loading || !available || currentSelection}
                 >
                   {copy.enableLabel}
                 </button>
@@ -432,7 +473,10 @@ function ProviderForm({
   onSaveProvider,
 }: Pick<ProvidersPageProps, "copy" | "providerForm" | "loading" | "editingProviderId" | "providerAuthPreview" | "providerTomlDraft" | "providerTomlRef" | "apiKeyVisible" | "availableModels" | "fetchingModels" | "onCancelMode" | "onApiKeyChange" | "onBaseUrlChange" | "onProviderNameChange" | "onProviderModelChange" | "onFetchModels" | "onWireApiChange" | "onRequiresAuthChange" | "onToggleApiKeyVisibility" | "onProviderTomlDraftChange" | "onResetProviderToml" | "onSaveProvider">) {
   const modelListId = useId();
-  const canFetchModels = Boolean(providerForm.baseUrl.trim() && providerForm.apiKey.trim());
+  const canFetchModels = Boolean(
+    providerForm.baseUrl.trim()
+    && (providerForm.apiKey.trim() || providerForm.hasApiKey),
+  );
 
   return (
     <>
@@ -544,12 +588,38 @@ function ProviderForm({
 }
 
 export function ProvidersPage(props: ProvidersPageProps) {
+  const status = props.toolStatuses.find((item) => item.id === props.tool);
+  const isChinese = props.lang === "zh";
   return (
-    <PageTransition pageKey={`providers:${props.mode}`}>
+    <PageTransition pageKey={`providers:${props.tool}:${props.mode}`}>
       <section className={`cx-providers cx-page cx-providers--${props.mode}`}>
-        {props.mode === "list" && <ListPage {...props} />}
-        {props.mode === "official" && <OfficialForm {...props} />}
-        {props.mode === "form" && <ProviderForm {...props} />}
+        <ToolTabs
+          active={props.tool}
+          onChange={props.onToolChange}
+          statuses={props.toolStatuses}
+          ariaLabel={isChinese ? "供应商工具" : "Provider tools"}
+          className="cx-providers-tool-tabs"
+        />
+        {!props.supportsProviders ? (
+          <section className="cx-providers-unsupported" role="status">
+            <AlertTriangle size={24} aria-hidden="true" />
+            <div>
+              <h2>{isChinese ? "当前版本暂不支持供应商切换" : "Provider switching is not supported yet"}</h2>
+              <p>
+                {status?.notice
+                  || (isChinese
+                    ? `${status?.label || "该工具"} 暂无可安全写入的供应商配置接口。你仍可以使用会话、配置和提示词功能。`
+                    : `${status?.label || "This tool"} has no safe provider configuration API yet. Sessions, config, and prompts remain available.`)}
+              </p>
+            </div>
+          </section>
+        ) : (
+          <>
+            {props.mode === "list" && <ListPage {...props} />}
+            {props.mode === "official" && <OfficialForm {...props} />}
+            {props.mode === "form" && <ProviderForm {...props} />}
+          </>
+        )}
       </section>
     </PageTransition>
   );

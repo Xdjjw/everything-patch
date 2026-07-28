@@ -100,8 +100,8 @@ fn run_app_server_delete_attempt(
             "method": "initialize",
             "params": {
                 "clientInfo": {
-                    "name": "codex_x",
-                    "title": "Codex-X",
+                    "name": "everything_patch",
+                    "title": "Everything Patch",
                     "version": env!("CARGO_PKG_VERSION")
                 },
                 "capabilities": null

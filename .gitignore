@@ -2,6 +2,9 @@
 .DS_Store
 Thumbs.db
 
+# IDE
+.idea/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -18,6 +21,8 @@ target/
 apps/desktop/src-tauri/target/
 apps/desktop/dist/
 apps/desktop/src-tauri/gen/schemas/
+apps/desktop/src-tauri/runtime/windows/node/node.exe
+apps/desktop/src-tauri/runtime/windows/node/LICENSE
 
 # Local env / secrets
 .env
@@ -29,6 +34,7 @@ apple cert/
 *.pfx
 *.pem
 *.key
+everything-patch-updater.key
 codex-x-updater.key
 codex-new-ui/
 

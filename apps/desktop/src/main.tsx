@@ -8,7 +8,7 @@ import {
   type SessionSyncStatus,
 } from "./pages/SessionManagementPage";
 import { OverviewPage } from "./pages/OverviewPage";
-import { AboutPage, SettingsPage, TomlConfigPage } from "./pages/UtilityPages";
+import { AboutPage, SettingsPage, ToolConfigPage } from "./pages/UtilityPages";
 import { PromptsPage } from "./pages/PromptsPage";
 import { SkillsMcpPage } from "./pages/SkillsMcpPage";
 import { SkinsPage } from "./pages/SkinsPage";
@@ -41,7 +41,9 @@ import type {
   ZcodeActionResult,
   ZcodeState,
   PromptEngine,
+  PromptBackupEntry,
   PromptInjectionMode,
+  PromptRestoreResult,
   ProviderConnectionResult,
   ProviderModel,
   ProviderModelsResult,
@@ -55,7 +57,13 @@ import type {
   SkillsMcpImportPreview,
   SkillsMcpState,
   StartupDiagnostics,
+  ToolConfigBundle,
+  ToolId,
+  ToolProviderActionResult,
+  ToolSessionList,
+  ToolStatus,
 } from "./types";
+import { toolLabel } from "./components/ToolTabs";
 import "./styles/base.css";
 import "./styles/app-shell.css";
 import "./styles/ui-primitives.css";
@@ -70,8 +78,32 @@ const STARTUP_WIZARD_SEEN_KEY = "codexx.startupWizardSeen";
 const ACTIVE_PROVIDER_KEY = "codexx.activeProviderId";
 const PROMPT_INJECTION_MODE_KEY = "codexx.promptInjectionMode";
 const PROMPT_ENGINE_KEY = "codexx.promptEngine";
-const FALLBACK_GITHUB_REPO = "yynxxxxx/Codex-X";
+const ACTIVE_TOOL_KEY = "everything-patch.activeTool";
+const FALLBACK_GITHUB_REPO = "Xdjjw/everything-patch";
 const SKIN_CENTER_ENABLED = false;
+
+const activeProviderKey = (tool: ToolId) => `${ACTIVE_PROVIDER_KEY}.${tool}`;
+
+const promptInjectionModeKey = (engine: PromptEngine) =>
+  `${PROMPT_INJECTION_MODE_KEY}.${engine}`;
+
+function storedPromptInjectionMode(engine: PromptEngine): PromptInjectionMode {
+  const stored = localStorage.getItem(promptInjectionModeKey(engine))
+    || (engine === "codex" ? localStorage.getItem(PROMPT_INJECTION_MODE_KEY) : null);
+  return stored === "replace" ? "replace" : "append";
+}
+
+function storedPromptEngine(): PromptEngine {
+  const stored = localStorage.getItem(PROMPT_ENGINE_KEY);
+  return stored === "claude" || stored === "zcode" || stored === "grok"
+    ? stored
+    : "codex";
+}
+
+function storedTool(): ToolId {
+  const stored = localStorage.getItem(ACTIVE_TOOL_KEY);
+  return stored === "claude" || stored === "grok" || stored === "zcode" ? stored : "codex";
+}
 
 type ThemeTransitionDocument = Document & {
   startViewTransition?: (update: () => void | Promise<void>) => { finished: Promise<void> };
@@ -115,18 +147,8 @@ const bundledInstructionTemplates: InstructionTemplate[] = [
   },
 ];
 
-const defaultProviderForm: SavedProvider = {
-  id: "magicai",
-  providerName: "MagicAI",
-  baseUrl: "https://sky1818.com",
-  model: "gpt-5.5",
-  apiKey: "",
-  tomlConfig: "",
-  wireApi: "responses",
-  requiresOpenaiAuth: false,
-};
-
 const blankProviderForm: SavedProvider = {
+  appType: "codex",
   id: "",
   providerName: "",
   baseUrl: "",
@@ -137,6 +159,15 @@ const blankProviderForm: SavedProvider = {
   requiresOpenaiAuth: false,
 };
 
+function blankProviderForTool(tool: ToolId): SavedProvider {
+  return {
+    ...blankProviderForm,
+    appType: tool,
+    model: tool === "claude" ? "claude-sonnet-4-5" : tool === "grok" ? "grok-4.5" : "gpt-5.5",
+    wireApi: tool === "claude" ? "anthropic" : "responses",
+  };
+}
+
 const blankPromptForm: SavedPrompt = {
   id: "",
   title: "",
@@ -146,8 +177,8 @@ const blankPromptForm: SavedPrompt = {
 
 const dict = {
   zh: {
-    appSubtitle: "切换 · 指令 · 配置",
-    manager: "Codex 配置管理器",
+    appSubtitle: "多工具 · 指令 · 配置",
+    manager: "多工具配置管理器",
     load: "加载",
     refresh: "刷新",
     nav: {
@@ -216,7 +247,7 @@ const dict = {
     },
     instruction: {
       title: "一键管理指令提示词",
-      desc: "启用时写入指令提示词文件并设置 model_instructions_file；禁用时只移除 Codex-X 管理的指令提示词字段并删除 md 文件。每次操作前都会创建备份。",
+      desc: "启用时写入指令提示词文件并设置 model_instructions_file；禁用时只移除 Everything Patch 管理的指令提示词字段并删除 md 文件。每次操作前都会创建备份。",
       enabled: "已启用",
       disabled: "未启用",
       unset: "model_instructions_file 未设置",
@@ -241,15 +272,15 @@ const dict = {
       en: "English",
       languageDesc: "默认中文，可随时切换。设置会保存在浏览器本地存储。",
       productName: "产品名",
-      productDesc: "当前名称为 Codex-X，定位是 Codex Switch & Instruct。",
+      productDesc: "面向 Codex、Claude、ZCode 与 Grok 的多工具配置和提示词管理器。",
     },
     loadingConfig: "正在读取 Codex 配置...",
     noAuth: "无 auth",
     authJson: "auth.json",
   },
   en: {
-    appSubtitle: "Switch · Instruct · Config",
-    manager: "Codex config manager",
+    appSubtitle: "Multi-tool · Prompts · Config",
+    manager: "Multi-tool configuration manager",
     load: "Load",
     refresh: "Refresh",
     nav: {
@@ -318,7 +349,7 @@ const dict = {
     },
     instruction: {
       title: "Manage instruction prompt",
-      desc: "Enable writes the instruction prompt file and sets model_instructions_file; disable removes Codex-X-managed instruction prompt config and deletes the md file. Every write creates a backup first.",
+      desc: "Enable writes the instruction prompt file and sets model_instructions_file; disable removes Everything Patch-managed instruction prompt config and deletes the md file. Every write creates a backup first.",
       enabled: "Enabled",
       disabled: "Disabled",
       unset: "model_instructions_file is not set",
@@ -343,7 +374,7 @@ const dict = {
       en: "English",
       languageDesc: "Chinese is the default. You can switch at any time; the setting is saved locally.",
       productName: "Product name",
-      productDesc: "Current name is Codex-X, positioned as Codex Switch & Instruct.",
+      productDesc: "A multi-tool configuration and prompt manager for Codex, Claude, ZCode, and Grok.",
     },
     loadingConfig: "Reading Codex config...",
     noAuth: "No auth",
@@ -351,18 +382,36 @@ const dict = {
   },
 } as const;
 
-function getProviderPageCopy(lang: Lang): ProviderCopy {
+function getProviderPageCopy(lang: Lang, tool: ToolId): ProviderCopy {
   const t = dict[lang];
   const isChinese = lang === "zh";
+  const activeToolLabel = toolLabel(tool);
+  const configName = tool === "claude"
+    ? "settings.json (JSON)"
+    : tool === "zcode"
+      ? "cli/config.json (JSON)"
+      : "config.toml (TOML)";
   return {
     eyebrow: "Provider",
-    title: t.provider.title,
-    subtitle: t.provider.subtitle,
-    importLabel: t.provider.importCc,
+    title: isChinese ? `${activeToolLabel} 供应商` : `${activeToolLabel} providers`,
+    subtitle: tool === "zcode"
+      ? (isChinese
+        ? "读取 ZCode 原生供应商与模型配置。供应商和密钥仍由 ZCode 管理，Everything Patch 只负责安全切换。"
+        : "Read ZCode's native providers and models. Providers and secrets remain managed by ZCode; Everything Patch only switches them safely.")
+      : (isChinese
+        ? `管理 ${activeToolLabel} 的第三方 API。供应商数据和启用状态按工具隔离。`
+        : `Manage third-party APIs for ${activeToolLabel}. Provider data and activation are isolated by tool.`),
+    importLabel: tool === "zcode"
+      ? (isChinese ? "刷新原生配置" : "Refresh native config")
+      : t.provider.importCc,
     addLabel: t.provider.add,
-    noProviders: t.provider.noProviders,
+    noProviders: tool === "zcode"
+      ? (isChinese ? "未在 ~/.zcode/v2/config.json 中找到原生供应商" : "No native providers found in ~/.zcode/v2/config.json")
+      : t.provider.noProviders,
     currentLabel: isChinese ? "当前使用" : "Current",
-    enableLabel: isChinese ? "启用" : "Enable",
+    enableLabel: tool === "zcode"
+      ? (isChinese ? "切换" : "Switch")
+      : (isChinese ? "启用" : "Enable"),
     testLabel: isChinese ? "测试连接" : "Test connection",
     editLabel: t.provider.edit,
     removeLabel: t.provider.remove,
@@ -391,8 +440,8 @@ function getProviderPageCopy(lang: Lang): ProviderCopy {
     formHint: t.provider.formHint,
     apiConfigTitle: isChinese ? "供应商 API 配置" : "Provider API configuration",
     apiConfigDescription: isChinese
-      ? "在同一个页面管理 API、认证信息和 config.toml。"
-      : "Manage API, authentication, and config.toml in one place.",
+      ? `在同一个页面管理 API、认证信息和 ${configName}。`
+      : `Manage API, authentication, and ${configName} in one place.`,
     apiKeyLabel: t.provider.apiKey,
     apiKeyPlaceholder: t.provider.apiKeyPlaceholder,
     showApiKeyLabel: isChinese ? "显示 API Key" : "Show API key",
@@ -405,14 +454,14 @@ function getProviderPageCopy(lang: Lang): ProviderCopy {
     chooseModelLabel: (count) => isChinese ? `选择已获取的模型（${count}）` : `Choose a fetched model (${count})`,
     wireApiLabel: t.provider.wireApi,
     requiresAuthLabel: t.provider.requiresAuth,
-    authPreviewTitle: "auth.json (JSON)",
+    authPreviewTitle: tool === "claude" ? "env (JSON)" : tool === "grok" ? "api_key" : "auth.json (JSON)",
     authPreviewDescription: isChinese
       ? "预览保存时写入或保留的认证配置；API Key 留空不会覆盖现有认证。"
       : "Preview the authentication data. An empty API key keeps the current auth file.",
-    tomlTitle: "config.toml (TOML)",
+    tomlTitle: configName,
     tomlDescription: isChinese
-      ? "这里保存供应商模板，只有启用供应商时才会写入 Codex 当前配置。"
-      : "This stores the provider template and is written to the live config only when enabled.",
+      ? `这里保存供应商模板，只有启用供应商时才会写入 ${activeToolLabel} 当前配置。`
+      : `This stores the provider template and writes it to ${activeToolLabel}'s live config only when enabled.`,
     resetTomlLabel: isChinese ? "重置生成" : "Reset",
     saveLabel: t.provider.saveAndSwitch,
     savingLabel: isChinese ? "保存中..." : "Saving...",
@@ -557,6 +606,29 @@ function providerIdentityKey(baseUrl?: string | null, apiKey?: string | null, pr
 }
 
 function buildProviderTomlPreview(provider: SavedProvider, state: CodexState | null) {
+  if (provider.appType === "claude") {
+    const env: Record<string, string> = {
+      ANTHROPIC_BASE_URL: provider.baseUrl.trim().replace(/\/+$/, "") || "https://example.com",
+      ANTHROPIC_MODEL: provider.model.trim() || "claude-sonnet-4-5",
+    };
+    if (provider.apiKey?.trim() || provider.hasApiKey) env.ANTHROPIC_AUTH_TOKEN = "[REDACTED]";
+    return JSON.stringify({ env }, null, 2);
+  }
+  if (provider.appType === "grok") {
+    const model = provider.model.trim() || "grok-4.5";
+    const apiKey = provider.apiKey?.trim() || provider.hasApiKey ? 'api_key = "[REDACTED]"\n' : "";
+    return [
+      "[models]",
+      `default = "${tomlEscape(model)}"`,
+      "",
+      `[model.${tomlEscape(model)}]`,
+      `model = "${tomlEscape(model)}"`,
+      `base_url = "${tomlEscape(provider.baseUrl.trim().replace(/\/+$/, "") || "https://example.com/v1")}"`,
+      `name = "${tomlEscape(provider.providerName.trim() || "your-provider")}"`,
+      `${apiKey}api_backend = "${tomlEscape(provider.wireApi || "responses")}"`,
+      "context_window = 500000",
+    ].join("\n");
+  }
   const model = provider.model.trim() || "gpt-5.5";
   const name = provider.providerName.trim() || "your-provider";
   // Codex live config follows cc-switch: all third-party providers are applied as `custom`.
@@ -626,7 +698,15 @@ function buildProviderTomlPreview(provider: SavedProvider, state: CodexState | n
 
 function buildProviderAuthPreview(provider: SavedProvider) {
   const key = provider.apiKey?.trim();
-  return JSON.stringify({ OPENAI_API_KEY: key || null, auth_mode: key ? "apikey" : undefined }, null, 2);
+  if (provider.appType === "claude") {
+    return JSON.stringify({
+      ANTHROPIC_AUTH_TOKEN: key || (provider.hasApiKey ? "[REDACTED]" : null),
+    }, null, 2);
+  }
+  if (provider.appType === "grok") {
+    return JSON.stringify({ api_key: key || (provider.hasApiKey ? "[REDACTED]" : null) }, null, 2);
+  }
+  return JSON.stringify({ OPENAI_API_KEY: key || (provider.hasApiKey ? "[REDACTED]" : null), auth_mode: key ? "apikey" : undefined }, null, 2);
 }
 
 
@@ -638,6 +718,11 @@ function instructionIdFromPath(path: string | undefined, templates: InstructionT
 }
 
 function uniqueBuiltinPromptStatuses(statuses: BuiltinPromptStatus[]) {
+  const otherToolPromptFilenames = new Set([
+    "claude-project-rules.md",
+    "grok-unrestricted.md",
+    "zcode-system-role.md",
+  ]);
   const sourcePriority: Record<string, number> = {
     unavailable: 0,
     bundled: 1,
@@ -649,7 +734,11 @@ function uniqueBuiltinPromptStatuses(statuses: BuiltinPromptStatus[]) {
   const seenFilenames = new Set<string>();
   const selected = statuses
     .map((item, index) => ({ item, index }))
-    .filter(({ item }) => item.id.trim() && item.filename.trim())
+    .filter(({ item }) =>
+      item.id.trim()
+      && item.filename.trim()
+      && !otherToolPromptFilenames.has(item.filename.trim().toLowerCase()),
+    )
     .sort((a, b) =>
       (sourcePriority[b.item.contentSource] ?? -1) - (sourcePriority[a.item.contentSource] ?? -1)
       || a.index - b.index,
@@ -732,6 +821,30 @@ function TomlPreview({ text }: { text: string }) {
   );
 }
 
+function PlainPreview({ text }: { text: string }) {
+  return (
+    <pre className="toml-preview plain-preview" aria-label="Text preview">
+      {text.split("\n").map((line, index) => (
+        <div className="toml-line" key={index}>
+          <span className="toml-line-no">{index + 1}</span>
+          <code>{line}</code>
+        </div>
+      ))}
+    </pre>
+  );
+}
+
+type LoadResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: string };
+
+async function settleLoad<T>(promise: Promise<T>): Promise<LoadResult<T>> {
+  try {
+    return { ok: true, data: await promise };
+  } catch (error) {
+    return { ok: false, error: String(error) };
+  }
+}
 
 function App() {
   const initialLang = (localStorage.getItem(LANG_KEY) as Lang | null) || "zh";
@@ -744,23 +857,36 @@ function App() {
   const isMacRuntime = navigator.userAgent.toLowerCase().includes("mac");
   const skinCenterEnabled = SKIN_CENTER_ENABLED;
   const [tab, setTab] = React.useState<Tab>("dashboard");
+  const [activeTool, setActiveTool] = React.useState<ToolId>(storedTool);
+  const [toolStatuses, setToolStatuses] = React.useState<ToolStatus[]>([]);
+  const [toolConfig, setToolConfig] = React.useState<ToolConfigBundle | null>(null);
+  const [configFileId, setConfigFileId] = React.useState("");
   const [visitedTabs, setVisitedTabs] = React.useState<Set<Tab>>(() => new Set(["dashboard"]));
   const [providerMode, setProviderMode] = React.useState<ProviderMode>("list");
   const [instructionMode, setInstructionMode] = React.useState<InstructionMode>("list");
-  const [promptInjectionMode, setPromptInjectionMode] = React.useState<PromptInjectionMode>(() =>
-    localStorage.getItem(PROMPT_INJECTION_MODE_KEY) === "replace" ? "replace" : "append",
-  );
+  const [promptInjectionModes, setPromptInjectionModes] = React.useState<Record<PromptEngine, PromptInjectionMode>>(() => ({
+    codex: storedPromptInjectionMode("codex"),
+    claude: storedPromptInjectionMode("claude"),
+    zcode: storedPromptInjectionMode("zcode"),
+    grok: storedPromptInjectionMode("grok"),
+  }));
   const [skillsMcpTab, setSkillsMcpTab] = React.useState<"mcp" | "skills">("mcp");
   const [editingProviderId, setEditingProviderId] = React.useState<string | null>(null);
   const [editingPromptId, setEditingPromptId] = React.useState<string | null>(null);
   const [savedProviders, setSavedProviders] = React.useState<SavedProvider[]>([]);
-  const [activeProviderId, setActiveProviderId] = React.useState(() => localStorage.getItem(ACTIVE_PROVIDER_KEY) || "");
+  const [activeProviderId, setActiveProviderId] = React.useState(() => {
+    const tool = storedTool();
+    return localStorage.getItem(activeProviderKey(tool))
+      || (tool === "codex" ? localStorage.getItem(ACTIVE_PROVIDER_KEY) : null)
+      || "";
+  });
   const [savedPrompts, setSavedPrompts] = React.useState<SavedPrompt[]>([]);
   const [builtinPromptStatus, setBuiltinPromptStatus] = React.useState<BuiltinPromptStatus[]>([]);
   const [aboutInfo, setAboutInfo] = React.useState<AboutInfo | null>(null);
   const [releaseInfo, setReleaseInfo] = React.useState<ReleaseInfo>({ status: "idle" });
   const [updatePromptOpen, setUpdatePromptOpen] = React.useState(false);
   const [sessionStatus, setSessionStatus] = React.useState<SessionSyncStatus | null>(null);
+  const [toolSessionList, setToolSessionList] = React.useState<ToolSessionList | null>(null);
   const [skillsMcpState, setSkillsMcpState] = React.useState<SkillsMcpState | null>(null);
   const [skillsMcpImportPreview, setSkillsMcpImportPreview] = React.useState<SkillsMcpImportPreview | null>(null);
   const [skillsMcpImportOpen, setSkillsMcpImportOpen] = React.useState(false);
@@ -780,7 +906,7 @@ function App() {
   const [loading, setLoading] = React.useState(false);
   const [toast, setToast] = React.useState<string>("");
   const [error, setError] = React.useState<string>("");
-  const [providerForm, setProviderForm] = React.useState<SavedProvider>(defaultProviderForm);
+  const [providerForm, setProviderForm] = React.useState<SavedProvider>(() => blankProviderForTool(storedTool()));
   const [providerTomlDraft, setProviderTomlDraft] = React.useState("");
   const [providerTomlDirty, setProviderTomlDirty] = React.useState(false);
   const [providerApiKeyVisible, setProviderApiKeyVisible] = React.useState(false);
@@ -793,9 +919,11 @@ function App() {
   const [promptForm, setPromptForm] = React.useState<SavedPrompt>(blankPromptForm);
   const [officialForm, setOfficialForm] = React.useState({ model: "gpt-5.5", authJson: "" });
   const [promptModeHelpOpen, setPromptModeHelpOpen] = React.useState(false);
-  const [promptEngine, setPromptEngine] = React.useState<PromptEngine>(() =>
-    localStorage.getItem(PROMPT_ENGINE_KEY) === "claude" ? "claude" : "codex",
-  );
+  const [promptEngine, setPromptEngine] = React.useState<PromptEngine>(storedPromptEngine);
+  const [promptBackups, setPromptBackups] = React.useState<PromptBackupEntry[]>([]);
+  const [promptBackupsOpen, setPromptBackupsOpen] = React.useState(false);
+  const [promptBackupsLoading, setPromptBackupsLoading] = React.useState(false);
+  const [promptRestoreBusyId, setPromptRestoreBusyId] = React.useState("");
   const [claudeState, setClaudeState] = React.useState<ClaudeState | null>(null);
   const [claudeSavedPrompts, setClaudeSavedPrompts] = React.useState<SavedPrompt[]>([]);
   const [claudeBuiltinStatus, setClaudeBuiltinStatus] = React.useState<BuiltinPromptStatus[]>([]);
@@ -805,20 +933,30 @@ function App() {
   const [grokState, setGrokState] = React.useState<GrokState | null>(null);
   const [grokSavedPrompts, setGrokSavedPrompts] = React.useState<SavedPrompt[]>([]);
   const [grokBuiltinStatus, setGrokBuiltinStatus] = React.useState<BuiltinPromptStatus[]>([]);
+  const activeToolRef = React.useRef(activeTool);
+  activeToolRef.current = activeTool;
   const autoUpdateCheckedRef = React.useRef(false);
   const promptImportRef = React.useRef<HTMLInputElement | null>(null);
   const skillZipImportRef = React.useRef<HTMLInputElement | null>(null);
   const providerTomlEditorRef = React.useRef<HTMLTextAreaElement | null>(null);
   const providerModelsRequestRef = React.useRef(0);
+  const refreshRequestRef = React.useRef(0);
+  const sessionsRequestRef = React.useRef(0);
+  const skillsMcpRequestRef = React.useRef(0);
+  const toolConfigRequestRef = React.useRef(0);
   const promptModeHelpRef = React.useRef<HTMLDivElement | null>(null);
   const promptRefreshRequestRef = React.useRef(0);
   const promptRefreshInFlightRef = React.useRef<Promise<BuiltinPromptStatus[]> | null>(null);
   const promptAutoRefreshAttemptedRef = React.useRef(false);
   const promptCatalogReadyRef = React.useRef(false);
-  const promptModeSyncedRef = React.useRef("");
+  const promptModeSyncedRef = React.useRef<Partial<Record<PromptEngine, string>>>({});
   const skillsMcpLoadedRef = React.useRef(false);
   const skinShutdownAttemptedRef = React.useRef(false);
   const themeTransitionTimerRef = React.useRef<number | null>(null);
+  const promptInjectionMode = promptInjectionModes[promptEngine];
+  const setPromptInjectionMode = React.useCallback((mode: PromptInjectionMode) => {
+    setPromptInjectionModes((current) => ({ ...current, [promptEngine]: mode }));
+  }, [promptEngine]);
   const {
     state: skinCenterState,
     restartRequest: skinRestartRequest,
@@ -845,6 +983,12 @@ function App() {
   });
   const providerTomlPreview = React.useMemo(() => buildProviderTomlPreview(providerForm, state), [providerForm, state]);
   const providerAuthPreview = React.useMemo(() => buildProviderAuthPreview(providerForm), [providerForm]);
+  const selectedToolConfigFile = React.useMemo(
+    () => toolConfig?.files.find((file) => file.id === configFileId)
+      || toolConfig?.files.find((file) => file.id === toolConfig.primaryFileId)
+      || toolConfig?.files[0],
+    [configFileId, toolConfig],
+  );
   const activeBuiltinTemplateId = state?.instructionTemplateKey?.startsWith("builtin:")
     ? state.instructionTemplateKey.slice("builtin:".length)
     : "";
@@ -924,12 +1068,52 @@ function App() {
   }, [theme]);
 
   React.useEffect(() => {
-    localStorage.setItem(PROMPT_INJECTION_MODE_KEY, promptInjectionMode);
-  }, [promptInjectionMode]);
+    (Object.keys(promptInjectionModes) as PromptEngine[]).forEach((engine) => {
+      localStorage.setItem(promptInjectionModeKey(engine), promptInjectionModes[engine]);
+    });
+    localStorage.setItem(PROMPT_INJECTION_MODE_KEY, promptInjectionModes.codex);
+  }, [promptInjectionModes]);
 
   React.useEffect(() => {
     localStorage.setItem(PROMPT_ENGINE_KEY, promptEngine);
   }, [promptEngine]);
+
+  React.useEffect(() => {
+    localStorage.setItem(ACTIVE_TOOL_KEY, activeTool);
+  }, [activeTool]);
+
+  React.useEffect(() => {
+    sessionsRequestRef.current += 1;
+    skillsMcpRequestRef.current += 1;
+    toolConfigRequestRef.current += 1;
+    setProviderMode("list");
+    setEditingProviderId(null);
+    setProviderForm(blankProviderForTool(activeTool));
+    setProviderTomlDraft("");
+    setProviderTomlDirty(false);
+    setProviderApiKeyVisible(false);
+    setSavedProviders([]);
+    setActiveProviderId(
+      localStorage.getItem(activeProviderKey(activeTool))
+      || (activeTool === "codex" ? localStorage.getItem(ACTIVE_PROVIDER_KEY) : null)
+      || "",
+    );
+    setAvailableProviderModels([]);
+    setProviderModelsLoading(false);
+    setToolConfig(null);
+    setConfigFileId("");
+    setToolSessionList(null);
+    setSessionStatus(null);
+    setSessionQuery("");
+    setSelectedSessionIds([]);
+    setSessionDeleteConfirmOpen(false);
+    setSessionDeleteSafetyConfirmed(false);
+    setSkillsMcpState(null);
+    setSkillsMcpImportPreview(null);
+    setSkillsMcpImportOpen(false);
+    setActionBusy("");
+    skillsMcpLoadedRef.current = false;
+  }, [activeTool]);
 
   React.useEffect(() => {
     if (error) setToast("");
@@ -962,12 +1146,44 @@ function App() {
   }, [providerMode, providerTomlDraft]);
 
   React.useEffect(() => {
-    if (!state || promptModeSyncedRef.current === state.codexDir) return;
-    promptModeSyncedRef.current = state.codexDir;
-    if (state.instructionInjectionMode) {
-      setPromptInjectionMode(state.instructionInjectionMode);
-    }
-  }, [state]);
+    const engines: Array<{
+      engine: PromptEngine;
+      scope?: string;
+      mode?: PromptInjectionMode;
+    }> = [
+      { engine: "codex", scope: state?.codexDir, mode: state?.instructionInjectionMode },
+      { engine: "claude", scope: claudeState?.claudeDir, mode: claudeState?.instructionInjectionMode },
+      { engine: "zcode", scope: zcodeState?.managedDir, mode: zcodeState?.instructionInjectionMode },
+      { engine: "grok", scope: grokState?.grokDir, mode: grokState?.instructionInjectionMode },
+    ];
+    const pending = engines.filter(({ engine, scope }) =>
+      Boolean(scope) && promptModeSyncedRef.current[engine] !== scope,
+    );
+    if (!pending.length) return;
+    pending.forEach(({ engine, scope }) => {
+      promptModeSyncedRef.current[engine] = scope;
+    });
+    setPromptInjectionModes((current) => {
+      let changed = false;
+      const next = { ...current };
+      pending.forEach(({ engine, mode }) => {
+        if (mode && next[engine] !== mode) {
+          next[engine] = mode;
+          changed = true;
+        }
+      });
+      return changed ? next : current;
+    });
+  }, [
+    claudeState?.claudeDir,
+    claudeState?.instructionInjectionMode,
+    grokState?.grokDir,
+    grokState?.instructionInjectionMode,
+    state?.codexDir,
+    state?.instructionInjectionMode,
+    zcodeState?.instructionInjectionMode,
+    zcodeState?.managedDir,
+  ]);
 
   React.useEffect(() => {
     setVisitedTabs((tabs) => {
@@ -995,6 +1211,10 @@ function App() {
   }, [providerMode, providerTomlDirty, providerTomlPreview]);
 
   const currentProvider = state?.providers.find((p) => p.isCurrent);
+  const activeToolStatus = toolStatuses.find((item) => item.id === activeTool);
+  // `state` 只描述 Codex。概览页必须优先读各工具自己的 toolStatus，
+  // 否则 Codex 的模型/供应商会串到 Claude / Grok / ZCode 的概览卡片上。
+  const codexState = activeTool === "codex" ? state : null;
   const liveProviderId = (state?.modelProvider || "openai").trim();
   const liveCustomProvider = React.useMemo(() => (state?.providers || []).find((item) => item.id === "custom"), [state?.providers]);
   const liveProviderApiKey = React.useMemo(() => {
@@ -1003,6 +1223,7 @@ function App() {
     return configKey || authKey;
   }, [liveProviderId, state?.authText, state?.configText]);
   const inferredActiveProviderId = React.useMemo(() => {
+    if (activeTool !== "codex") return "";
     if (liveProviderId !== "custom") return "";
     const liveIdentity = providerIdentityKey(liveCustomProvider?.baseUrl, liveProviderApiKey, liveCustomProvider?.name || liveCustomProvider?.id);
     if (!liveIdentity) return "";
@@ -1013,8 +1234,10 @@ function App() {
     if (remembered) return remembered.id;
     const backendMatch = identityMatches.find((item) => item.id === state?.activeSavedProviderId);
     return backendMatch?.id || identityMatches[0]?.id || "";
-  }, [activeProviderId, liveCustomProvider?.baseUrl, liveCustomProvider?.id, liveCustomProvider?.name, liveProviderApiKey, liveProviderId, savedProviders, state?.activeSavedProviderId]);
-  const effectiveActiveProviderId = liveProviderId === "custom" ? inferredActiveProviderId : liveProviderId;
+  }, [activeProviderId, activeTool, liveCustomProvider?.baseUrl, liveCustomProvider?.id, liveCustomProvider?.name, liveProviderApiKey, liveProviderId, savedProviders, state?.activeSavedProviderId]);
+  const effectiveActiveProviderId = activeTool === "codex"
+    ? (liveProviderId === "custom" ? inferredActiveProviderId : liveProviderId)
+    : activeProviderId;
   const currentInstructionPath = (state?.instructionFile || "").replace(/\\/g, "/");
   const currentInstructionFilename = currentInstructionPath.split("/").pop() || "";
   const activeInstructionTitle = React.useMemo(() => {
@@ -1064,7 +1287,12 @@ function App() {
   }, [zcodeBuiltinStatus]);
   const zcodeActiveInstructionTitle = zcodeState?.activeInstructionTitle
     || (lang === "zh" ? "当前提示词" : "Current prompt");
-  const zcodeManagedSavedPromptId = null; // ZCode 不用 template_key 区分内置/自定义
+  const zcodeActiveBuiltinTemplateId = zcodeState?.instructionTemplateKey?.startsWith("builtin:")
+    ? zcodeState.instructionTemplateKey.slice("builtin:".length)
+    : "";
+  const zcodeManagedSavedPromptId = zcodeState?.instructionTemplateKey?.startsWith("saved:")
+    ? zcodeState.instructionTemplateKey.slice("saved:".length)
+    : null;
 
   // ─── Grok 派生值 ──────────────────────────────────────────────────────
   const grokInstructionTemplates = React.useMemo<InstructionTemplate[]>(() => {
@@ -1074,13 +1302,25 @@ function App() {
   }, [grokBuiltinStatus]);
   const grokActiveInstructionTitle = grokState?.activeInstructionTitle
     || (lang === "zh" ? "当前提示词" : "Current prompt");
-  const grokManagedSavedPromptId = null; // Grok 不用 template_key 区分内置/自定义
+  const grokActiveBuiltinTemplateId = grokState?.instructionTemplateKey?.startsWith("builtin:")
+    ? grokState.instructionTemplateKey.slice("builtin:".length)
+    : "";
+  const grokManagedSavedPromptId = grokState?.instructionTemplateKey?.startsWith("saved:")
+    ? grokState.instructionTemplateKey.slice("saved:".length)
+    : null;
+  const activePromptInjectionMode = promptEngine === "claude"
+    ? claudeState?.instructionInjectionMode
+    : promptEngine === "zcode"
+      ? zcodeState?.instructionInjectionMode
+      : promptEngine === "grok"
+        ? grokState?.instructionInjectionMode
+        : state?.instructionInjectionMode;
 
   const canonicalSavedProviders = React.useMemo(() => {
     const groups = new Map<string, SavedProvider[]>();
     savedProviders.forEach((provider) => {
       const identity = providerIdentityKey(provider.baseUrl, savedProviderApiKey(provider), provider.providerName);
-      const key = identity || `id:${provider.id}`;
+      const key = provider.native ? `native:${provider.id}` : identity || `id:${provider.id}`;
       const group = groups.get(key);
       if (group) group.push(provider);
       else groups.set(key, [provider]);
@@ -1092,33 +1332,40 @@ function App() {
     );
   }, [activeProviderId, effectiveActiveProviderId, savedProviders]);
 
-  const detectedRows = React.useMemo(() => {
+  const detectedRows = React.useMemo<ProviderRow[]>(() => {
+    if (activeTool !== "codex") return [];
     return (state?.providers || []).map((p) => {
-      const configKey = extractTomlProviderApiKey(state?.configText, p.id);
-      const apiKey = p.isCurrent ? liveProviderApiKey || configKey : configKey;
       return {
         id: `detected-${p.id}`,
         source: "detected" as const,
         providerName: p.name || p.id,
         baseUrl: p.baseUrl || "",
         model: state?.model || "gpt-5.5",
-        apiKey,
+        apiKey: undefined,
         wireApi: p.wireApi || "responses",
         requiresOpenaiAuth: p.requiresOpenaiAuth ?? false,
         isCurrent: p.isCurrent,
       };
     });
-  }, [liveProviderApiKey, state?.configText, state?.model, state?.providers]);
+  }, [activeTool, state?.model, state?.providers]);
 
-  const localRows = React.useMemo(() => {
+  const localRows = React.useMemo<ProviderRow[]>(() => {
+    const activeStatus = toolStatuses.find((status) => status.id === activeTool);
     return canonicalSavedProviders.map((p) => ({
       ...p,
-      source: "local" as const,
-      isCurrent: effectiveActiveProviderId === p.id,
+      source: p.native ? "native" as const : "local" as const,
+      isCurrent: p.native
+        ? activeStatus?.providerId === p.id
+        : activeTool === "codex"
+          ? effectiveActiveProviderId === p.id
+          : activeProviderId === p.id
+            || activeStatus?.provider === p.providerName
+            || activeStatus?.provider === p.baseUrl,
     }));
-  }, [canonicalSavedProviders, effectiveActiveProviderId]);
+  }, [activeProviderId, activeTool, canonicalSavedProviders, effectiveActiveProviderId, toolStatuses]);
 
-  const providerRows = React.useMemo(() => {
+  const providerRows = React.useMemo<ProviderRow[]>(() => {
+    if (activeTool !== "codex") return localRows;
     const officialRow = {
       id: "openai-official",
       source: "official" as const,
@@ -1131,7 +1378,7 @@ function App() {
       isCurrent: !state?.modelProvider || state.modelProvider === "openai",
     };
     const seen = new Set<string>();
-    const rows: Array<typeof officialRow | (typeof detectedRows)[number] | (typeof localRows)[number]> = [officialRow];
+    const rows: ProviderRow[] = [officialRow];
     localRows.forEach((row) => {
       const key = providerIdentityKey(row.baseUrl, savedProviderApiKey(row), row.providerName);
       if (key) seen.add(key);
@@ -1145,12 +1392,12 @@ function App() {
       rows.push(row);
     });
     return rows;
-  }, [detectedRows, inferredActiveProviderId, localRows, state?.model, state?.modelProvider]);
+  }, [activeTool, detectedRows, inferredActiveProviderId, localRows, state?.model, state?.modelProvider]);
 
   const findLocalProviderForRow = React.useCallback((row: ProviderRow) => {
     if (row.source === "official") return undefined;
     return canonicalSavedProviders.find((item) =>
-      row.source === "local"
+      row.source === "local" || row.source === "native"
         ? item.id === row.id
         : providerIdentityKey(item.baseUrl, savedProviderApiKey(item), item.providerName)
           === providerIdentityKey(row.baseUrl, row.apiKey, row.providerName),
@@ -1161,7 +1408,7 @@ function App() {
     const local = row.source === "official"
       ? undefined
       : canonicalSavedProviders.find((item) =>
-        row.source === "local"
+        row.source === "local" || row.source === "native"
           ? item.id === row.id
           : providerIdentityKey(item.baseUrl, savedProviderApiKey(item), item.providerName)
             === providerIdentityKey(row.baseUrl, row.apiKey, row.providerName),
@@ -1172,21 +1419,63 @@ function App() {
       providerName: row.providerName,
       baseUrl: row.baseUrl,
       model: row.model,
+      models: row.models,
+      available: row.available,
+      statusMessage: row.statusMessage,
       apiKey: row.apiKey,
       wireApi: row.wireApi,
       requiresOpenaiAuth: row.requiresOpenaiAuth,
       isCurrent: row.isCurrent,
-      sourceLabel: row.source === "official" ? (lang === "zh" ? "Codex 登录" : "Codex login") : undefined,
-      editable: row.source === "official" || Boolean(local) || row.source === "detected",
-      deletable: Boolean(local),
-      testable: row.source !== "official",
+      sourceLabel: row.source === "official"
+        ? (lang === "zh" ? "Codex 登录" : "Codex login")
+        : row.source === "native"
+          ? (lang === "zh" ? "ZCode 原生" : "ZCode native")
+          : undefined,
+      editable: row.source !== "native" && (row.source === "official" || Boolean(local) || row.source === "detected"),
+      deletable: row.source !== "native" && Boolean(local),
+      testable: row.source !== "official" && row.source !== "native",
       testingKey: `${row.source}-${row.id}`,
     };
   }), [canonicalSavedProviders, lang, providerRows]);
 
+  const displayedSessionStatus = React.useMemo<SessionSyncStatus | null>(() => {
+    if (activeTool === "codex") return sessionStatus;
+    if (!toolSessionList) return null;
+    const sessions: SessionPreview[] = toolSessionList.sessions.map((item) => ({
+      id: item.id,
+      title: item.title,
+      modelProvider: toolLabel(activeTool),
+      model: null,
+      cwd: item.cwd,
+      rolloutPath: item.sourcePath,
+      updatedAtMs: item.updatedAtMs ?? item.createdAtMs,
+      archived: item.archived,
+      hasUserEvent: true,
+      isSubagent: false,
+      needsSync: false,
+    }));
+    return {
+      codexDir: toolSessionList.root,
+      targetProvider: toolLabel(activeTool),
+      rolloutFiles: sessions.length,
+      sessionMetaCount: sessions.length,
+      mismatchedRollouts: 0,
+      mismatchedSessionMeta: 0,
+      sqliteDbs: 0,
+      sqliteThreads: sessions.length,
+      topLevelThreads: sessions.length,
+      subagentThreads: 0,
+      mismatchedThreads: 0,
+      needsSync: false,
+      backupDir: null,
+      warnings: toolSessionList.warnings,
+      sessions,
+    };
+  }, [activeTool, sessionStatus, toolSessionList]);
+
   const visibleSessions = React.useMemo(
-    () => (sessionStatus?.sessions || []).filter((item) => showInternalSessions || !item.isSubagent),
-    [sessionStatus?.sessions, showInternalSessions],
+    () => (displayedSessionStatus?.sessions || []).filter((item) => showInternalSessions || !item.isSubagent),
+    [displayedSessionStatus?.sessions, showInternalSessions],
   );
 
   const filteredSessions = React.useMemo(() => {
@@ -1221,32 +1510,34 @@ function App() {
     return Array.from(groups.entries()).sort((a, b) => b[1].length - a[1].length);
   }, [filteredSessions, lang, sessionGroupByCwd]);
 
-  const sessionRolloutMismatchCount = sessionStatus?.mismatchedRollouts ?? 0;
-  const sessionIndexMismatchCount = sessionStatus?.mismatchedThreads ?? 0;
-  const sessionHasMismatches = Boolean(sessionStatus?.needsSync);
-  const sessionTargetProvider = sessionStatus?.targetProvider || state?.modelProvider || "openai";
-  const sessionTargetLabel = canonicalSavedProviders.find((item) => item.id === effectiveActiveProviderId)?.providerName
-    || currentProvider?.name
-    || sessionTargetProvider;
+  const sessionRolloutMismatchCount = displayedSessionStatus?.mismatchedRollouts ?? 0;
+  const sessionIndexMismatchCount = displayedSessionStatus?.mismatchedThreads ?? 0;
+  const sessionHasMismatches = activeTool === "codex" && Boolean(displayedSessionStatus?.needsSync);
+  const sessionTargetProvider = displayedSessionStatus?.targetProvider || state?.modelProvider || "openai";
+  const sessionTargetLabel = activeTool === "codex"
+    ? canonicalSavedProviders.find((item) => item.id === effectiveActiveProviderId)?.providerName
+      || currentProvider?.name
+      || sessionTargetProvider
+    : toolSessionList?.root || activeToolStatus?.homeDir || toolLabel(activeTool);
   const previewSessionSyncCount = new Set(
-    (sessionStatus?.sessions || []).filter((item) => item.needsSync).map((item) => item.id),
+    (displayedSessionStatus?.sessions || []).filter((item) => item.needsSync).map((item) => item.id),
   ).size;
   const sessionSyncCount = sessionHasMismatches
     ? Math.max(1, previewSessionSyncCount, sessionRolloutMismatchCount, sessionIndexMismatchCount)
     : 0;
   const sessionVisibleTotal = showInternalSessions
-    ? (sessionStatus?.topLevelThreads ?? 0) + (sessionStatus?.subagentThreads ?? 0)
-    : (sessionStatus?.topLevelThreads ?? 0);
+    ? (displayedSessionStatus?.topLevelThreads ?? 0) + (displayedSessionStatus?.subagentThreads ?? 0)
+    : (displayedSessionStatus?.topLevelThreads ?? 0);
   const sessionPreviewTruncated = sessionVisibleTotal > visibleSessions.length;
   const selectedSessionSet = React.useMemo(() => new Set(selectedSessionIds), [selectedSessionIds]);
   const selectedSessions = React.useMemo(
-    () => (sessionStatus?.sessions || []).filter((item) => selectedSessionSet.has(item.id)),
-    [selectedSessionSet, sessionStatus?.sessions],
+    () => (displayedSessionStatus?.sessions || []).filter((item) => selectedSessionSet.has(item.id)),
+    [displayedSessionStatus?.sessions, selectedSessionSet],
   );
 
   React.useEffect(() => {
-    setSelectedSessionIds((ids) => ids.filter((id) => (sessionStatus?.sessions || []).some((item) => item.id === id)));
-  }, [sessionStatus?.sessions]);
+    setSelectedSessionIds((ids) => ids.filter((id) => (displayedSessionStatus?.sessions || []).some((item) => item.id === id)));
+  }, [displayedSessionStatus?.sessions]);
 
   React.useEffect(() => {
     if (sessionDeleteConfirmOpen && selectedSessions.length === 0) {
@@ -1267,66 +1558,187 @@ function App() {
     }
   }, []);
 
-  const refresh = React.useCallback(() => {
-    call(
-      async () => {
-        const [next, providerList, promptList, promptStatus, about, claudeNext, claudePromptList, claudeBuiltin, zcodeNext, zcodePromptList, zcodeBuiltin, grokNext, grokPromptList, grokBuiltin] = await Promise.all([
-          invoke<CodexState>("get_codex_state", { configDir: configDir || null }),
-          invoke<SavedProvider[]>("list_saved_providers"),
-          invoke<SavedPrompt[]>("list_saved_prompts"),
-          invoke<BuiltinPromptStatus[]>("get_builtin_prompt_status"),
-          invoke<AboutInfo>("get_about_info", { configDir: configDir || null }),
-          invoke<ClaudeState>("get_claude_state"),
-          invoke<SavedPrompt[]>("list_claude_prompts"),
-          invoke<BuiltinPromptStatus[]>("get_claude_builtin_prompt_status"),
-          invoke<ZcodeState>("get_zcode_state"),
-          invoke<SavedPrompt[]>("list_zcode_prompts"),
-          invoke<BuiltinPromptStatus[]>("get_zcode_builtin_prompt_status"),
-          invoke<GrokState>("get_grok_state"),
-          invoke<SavedPrompt[]>("list_grok_prompts"),
-          invoke<BuiltinPromptStatus[]>("get_grok_builtin_prompt_status"),
-        ]);
-        return { next, providerList, promptList, promptStatus, about, claudeNext, claudePromptList, claudeBuiltin, zcodeNext, zcodePromptList, zcodeBuiltin, grokNext, grokPromptList, grokBuiltin };
-      },
-      ({ next, providerList, promptList, promptStatus, about, claudeNext, claudePromptList, claudeBuiltin, zcodeNext, zcodePromptList, zcodeBuiltin, grokNext, grokPromptList, grokBuiltin }) => {
-        setState(next);
-        setSavedProviders(providerList);
-        setSavedPrompts(promptList);
-        setBuiltinPromptStatus(uniqueBuiltinPromptStatuses(promptStatus));
-        setAboutInfo(about);
-        setClaudeState(claudeNext);
-        setClaudeSavedPrompts(claudePromptList);
-        setClaudeBuiltinStatus(claudeBuiltin);
-        setZcodeState(zcodeNext);
-        setZcodeSavedPrompts(zcodePromptList);
-        setZcodeBuiltinStatus(zcodeBuiltin);
-        setGrokState(grokNext);
-        setGrokSavedPrompts(grokPromptList);
-        setGrokBuiltinStatus(grokBuiltin);
-        const resolvedConfigDir = configDir || null;
-        void Promise.all([
-          invoke<StartupDiagnostics>("get_startup_diagnostics", { configDir: resolvedConfigDir }),
-          invoke<SessionSyncStatus>("get_session_sync_status", { configDir: resolvedConfigDir, targetProvider: null }),
-        ])
-          .then(([diagnostics, sessions]) => {
-            setStartupDiagnostics(diagnostics);
-            setSessionStatus(sessions);
-          })
-          .catch(() => undefined);
-      },
-    );
-  }, [call, configDir]);
+  const refresh = React.useCallback(async () => {
+    const requestId = refreshRequestRef.current + 1;
+    refreshRequestRef.current = requestId;
+    const tool = activeTool;
+    const resolvedConfigDir = configDir || null;
+    setLoading(true);
+    setError("");
+
+    const [
+      next,
+      providerList,
+      promptList,
+      promptStatus,
+      about,
+      claudeNext,
+      claudePromptList,
+      claudeBuiltin,
+      zcodeNext,
+      zcodePromptList,
+      zcodeBuiltin,
+      grokNext,
+      grokPromptList,
+      grokBuiltin,
+      nextToolStatuses,
+    ] = await Promise.all([
+      settleLoad(invoke<CodexState>("get_codex_state", { configDir: resolvedConfigDir })),
+      settleLoad(invoke<SavedProvider[]>("list_saved_providers", { appType: tool })),
+      settleLoad(invoke<SavedPrompt[]>("list_saved_prompts")),
+      settleLoad(invoke<BuiltinPromptStatus[]>("get_builtin_prompt_status")),
+      settleLoad(invoke<AboutInfo>("get_about_info", { configDir: resolvedConfigDir })),
+      settleLoad(invoke<ClaudeState>("get_claude_state")),
+      settleLoad(invoke<SavedPrompt[]>("list_claude_prompts")),
+      settleLoad(invoke<BuiltinPromptStatus[]>("get_claude_builtin_prompt_status")),
+      settleLoad(invoke<ZcodeState>("get_zcode_state")),
+      settleLoad(invoke<SavedPrompt[]>("list_zcode_prompts")),
+      settleLoad(invoke<BuiltinPromptStatus[]>("get_zcode_builtin_prompt_status")),
+      settleLoad(invoke<GrokState>("get_grok_state")),
+      settleLoad(invoke<SavedPrompt[]>("list_grok_prompts")),
+      settleLoad(invoke<BuiltinPromptStatus[]>("get_grok_builtin_prompt_status")),
+      settleLoad(invoke<ToolStatus[]>("get_tool_statuses", { configDir: resolvedConfigDir })),
+    ]);
+
+    if (requestId !== refreshRequestRef.current || tool !== activeToolRef.current) {
+      return;
+    }
+
+    if (next.ok) setState(next.data);
+    if (providerList.ok) setSavedProviders(providerList.data);
+    if (promptList.ok) setSavedPrompts(promptList.data);
+    if (promptStatus.ok) setBuiltinPromptStatus(uniqueBuiltinPromptStatuses(promptStatus.data));
+    if (about.ok) setAboutInfo(about.data);
+    if (claudeNext.ok) setClaudeState(claudeNext.data);
+    if (claudePromptList.ok) setClaudeSavedPrompts(claudePromptList.data);
+    if (claudeBuiltin.ok) setClaudeBuiltinStatus(claudeBuiltin.data);
+    if (zcodeNext.ok) setZcodeState(zcodeNext.data);
+    if (zcodePromptList.ok) setZcodeSavedPrompts(zcodePromptList.data);
+    if (zcodeBuiltin.ok) setZcodeBuiltinStatus(zcodeBuiltin.data);
+    if (grokNext.ok) setGrokState(grokNext.data);
+    if (grokPromptList.ok) setGrokSavedPrompts(grokPromptList.data);
+    if (grokBuiltin.ok) setGrokBuiltinStatus(grokBuiltin.data);
+    if (nextToolStatuses.ok) setToolStatuses(nextToolStatuses.data);
+
+    const failures = [
+      next,
+      providerList,
+      promptList,
+      promptStatus,
+      about,
+      claudeNext,
+      claudePromptList,
+      claudeBuiltin,
+      zcodeNext,
+      zcodePromptList,
+      zcodeBuiltin,
+      grokNext,
+      grokPromptList,
+      grokBuiltin,
+      nextToolStatuses,
+    ].flatMap((result) => result.ok ? [] : [result.error]);
+    if (failures.length) {
+      setError(`${lang === "zh" ? "部分数据读取失败" : "Some data could not be loaded"}: ${failures.join("; ")}`);
+    }
+
+    const sessionRequestId = sessionsRequestRef.current + 1;
+    sessionsRequestRef.current = sessionRequestId;
+    const [diagnostics, sessions] = await Promise.all([
+      settleLoad(invoke<StartupDiagnostics>("get_startup_diagnostics", { configDir: resolvedConfigDir })),
+      tool === "codex"
+        ? settleLoad<SessionSyncStatus | ToolSessionList>(
+          invoke<SessionSyncStatus>("get_session_sync_status", {
+            configDir: resolvedConfigDir,
+            targetProvider: null,
+          }),
+        )
+        : settleLoad<SessionSyncStatus | ToolSessionList>(
+          invoke<ToolSessionList>("get_tool_sessions", { tool, configDir: resolvedConfigDir }),
+        ),
+    ]);
+    if (
+      requestId === refreshRequestRef.current
+      && sessionRequestId === sessionsRequestRef.current
+      && tool === activeToolRef.current
+    ) {
+      if (diagnostics.ok) setStartupDiagnostics(diagnostics.data);
+      if (sessions.ok) {
+        if (tool === "codex") {
+          setSessionStatus(sessions.data as SessionSyncStatus);
+          setToolSessionList(null);
+        } else {
+          setToolSessionList(sessions.data as ToolSessionList);
+          setSessionStatus(null);
+        }
+      }
+    }
+    if (requestId === refreshRequestRef.current) {
+      setLoading(false);
+    }
+  }, [activeTool, configDir, lang]);
+
+  const loadPromptBackups = React.useCallback(async (engine: PromptEngine) => {
+    setPromptBackupsLoading(true);
+    setError("");
+    try {
+      const entries = await invoke<PromptBackupEntry[]>("list_prompt_backups", {
+        engine,
+        configDir: engine === "codex" ? configDir || null : null,
+      });
+      setPromptBackups(entries);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setPromptBackupsLoading(false);
+    }
+  }, [configDir]);
+
+  const openPromptBackups = React.useCallback(() => {
+    setPromptBackupsOpen(true);
+    void loadPromptBackups(promptEngine);
+  }, [loadPromptBackups, promptEngine]);
+
+  const closePromptBackups = React.useCallback(() => {
+    if (promptRestoreBusyId) return;
+    setPromptBackupsOpen(false);
+  }, [promptRestoreBusyId]);
+
+  const restorePromptBackup = React.useCallback(async (backupId: string) => {
+    setPromptRestoreBusyId(backupId);
+    setError("");
+    try {
+      const result = await invoke<PromptRestoreResult>("restore_prompt_backup", {
+        engine: promptEngine,
+        configDir: promptEngine === "codex" ? configDir || null : null,
+        backupId,
+      });
+      setToast(result.message);
+      await refresh();
+      await loadPromptBackups(promptEngine);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setPromptRestoreBusyId("");
+    }
+  }, [configDir, loadPromptBackups, promptEngine, refresh]);
 
   React.useEffect(() => {
-    refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void refresh();
+  }, [refresh]);
 
   React.useEffect(() => {
+    setPromptBackupsOpen(false);
+    setPromptBackups([]);
+    setPromptRestoreBusyId("");
+  }, [promptEngine]);
+
+  React.useEffect(() => {
+    if (activeTool !== "codex") return;
     if (!state) return;
     if (liveProviderId !== "custom") {
       if (activeProviderId) {
         localStorage.removeItem(ACTIVE_PROVIDER_KEY);
+        localStorage.removeItem(activeProviderKey("codex"));
         setActiveProviderId("");
       }
       return;
@@ -1334,14 +1746,16 @@ function App() {
     if (!savedProviders.length) return;
     if (inferredActiveProviderId && inferredActiveProviderId !== activeProviderId) {
       localStorage.setItem(ACTIVE_PROVIDER_KEY, inferredActiveProviderId);
+      localStorage.setItem(activeProviderKey("codex"), inferredActiveProviderId);
       setActiveProviderId(inferredActiveProviderId);
       return;
     }
     if (activeProviderId && !savedProviders.some((item) => item.id === activeProviderId)) {
       localStorage.removeItem(ACTIVE_PROVIDER_KEY);
+      localStorage.removeItem(activeProviderKey("codex"));
       setActiveProviderId("");
     }
-  }, [activeProviderId, inferredActiveProviderId, liveProviderId, savedProviders, state]);
+  }, [activeProviderId, activeTool, inferredActiveProviderId, liveProviderId, savedProviders, state]);
 
   const handleActionResult = (result: ActionResult) => {
     setState(result.state);
@@ -1362,7 +1776,11 @@ function App() {
 
   const switchInstructionTemplate = (templateId: string) =>
     call(
-      () => invoke<ActionResult>("enable_instruction_template", { configDir: configDir || null, templateId, injectionMode: promptInjectionMode }),
+      () => invoke<ActionResult>("enable_instruction_template", {
+        configDir: configDir || null,
+        templateId,
+        injectionMode: promptInjectionModes.codex,
+      }),
       handleActionResult,
     );
 
@@ -1418,7 +1836,11 @@ function App() {
     );
 
   const enableSavedPrompt = (id: string) =>
-    call(() => invoke<ActionResult>("enable_saved_prompt", { configDir: configDir || null, id, injectionMode: promptInjectionMode }), handleActionResult);
+    call(() => invoke<ActionResult>("enable_saved_prompt", {
+      configDir: configDir || null,
+      id,
+      injectionMode: promptInjectionModes.codex,
+    }), handleActionResult);
 
   const removeSavedPrompt = (id: string) =>
     call(
@@ -1533,7 +1955,10 @@ function App() {
 
   const switchClaudeTemplate = (templateId: string) =>
     call(
-      () => invoke<ClaudeActionResult>("enable_claude_instruction", { templateId }),
+      () => invoke<ClaudeActionResult>("enable_claude_instruction", {
+        templateId,
+        injectionMode: promptInjectionModes.claude,
+      }),
       handleClaudeActionResult,
     );
 
@@ -1545,7 +1970,10 @@ function App() {
 
   const enableClaudeSavedPrompt = (id: string) =>
     call(
-      () => invoke<ClaudeActionResult>("enable_claude_saved_prompt", { id }),
+      () => invoke<ClaudeActionResult>("enable_claude_saved_prompt", {
+        id,
+        injectionMode: promptInjectionModes.claude,
+      }),
       handleClaudeActionResult,
     );
 
@@ -1638,7 +2066,10 @@ function App() {
 
   const installZcodeInstruction = (templateId: string) =>
     call(
-      () => invoke<ZcodeActionResult>("install_zcode_instruction", { templateId }),
+      () => invoke<ZcodeActionResult>("install_zcode_instruction", {
+        templateId,
+        injectionMode: promptInjectionModes.zcode,
+      }),
       handleZcodeActionResult,
     );
 
@@ -1650,7 +2081,10 @@ function App() {
 
   const installZcodeSavedPrompt = (id: string) =>
     call(
-      () => invoke<ZcodeActionResult>("install_zcode_saved_prompt", { id }),
+      () => invoke<ZcodeActionResult>("install_zcode_saved_prompt", {
+        id,
+        injectionMode: promptInjectionModes.zcode,
+      }),
       handleZcodeActionResult,
     );
 
@@ -1743,7 +2177,10 @@ function App() {
 
   const installGrokInstruction = (templateId: string) =>
     call(
-      () => invoke<GrokActionResult>("install_grok_instruction", { templateId }),
+      () => invoke<GrokActionResult>("install_grok_instruction", {
+        templateId,
+        injectionMode: promptInjectionModes.grok,
+      }),
       handleGrokActionResult,
     );
 
@@ -1755,7 +2192,10 @@ function App() {
 
   const installGrokSavedPrompt = (id: string) =>
     call(
-      () => invoke<GrokActionResult>("install_grok_saved_prompt", { id }),
+      () => invoke<GrokActionResult>("install_grok_saved_prompt", {
+        id,
+        injectionMode: promptInjectionModes.grok,
+      }),
       handleGrokActionResult,
     );
 
@@ -1833,6 +2273,7 @@ function App() {
 
   const normalizedProviderForm = (): SavedProvider => ({
     ...providerForm,
+    appType: activeTool,
     id: editingProviderId || uniqueId(providerForm.id || customProviderId(providerForm.providerName || providerForm.baseUrl), savedProviders.map((item) => item.id)),
     providerName: providerForm.providerName.trim(),
     baseUrl: providerForm.baseUrl.trim().replace(/\/+$/, ""),
@@ -1847,7 +2288,7 @@ function App() {
     call(
       async () => {
         const saved = await invoke<SavedProvider>("save_provider", { provider: normalizedProviderForm() });
-        const providerList = await invoke<SavedProvider[]>("list_saved_providers");
+        const providerList = await invoke<SavedProvider[]>("list_saved_providers", { appType: activeTool });
         return { saved, providerList };
       },
       ({ providerList }) => {
@@ -1859,36 +2300,39 @@ function App() {
       },
     );
 
-  const switchProvider = (provider: SavedProvider) =>
+  const switchProvider = (provider: SavedProvider, selectedModel?: string) =>
     call(
-      () => {
-        const tomlConfig = provider.tomlConfig?.trim();
-        if (tomlConfig) {
-          return invoke<ActionResult>("save_provider_toml_config", {
-            input: {
-              configDir: configDir || null,
-              configText: tomlConfig,
-              apiKey: provider.apiKey || "",
-            },
+      async () => {
+        let target = provider;
+        const local = savedProviders.find((item) => item.id === provider.id);
+        if (!local && !provider.native) {
+          target = await invoke<SavedProvider>("save_provider", {
+            provider: { ...provider, appType: activeTool },
           });
         }
-        return invoke<ActionResult>("switch_provider", {
-          input: {
-            configDir: configDir || null,
-            providerId: provider.id,
-            providerName: provider.providerName,
-            baseUrl: provider.baseUrl,
-            model: provider.model,
-            apiKey: provider.apiKey || "",
-            wireApi: provider.wireApi,
-            requiresOpenaiAuth: provider.requiresOpenaiAuth,
-          },
+        const result = await invoke<ToolProviderActionResult>("activate_saved_provider", {
+          tool: activeTool,
+          id: target.id,
+          model: selectedModel || target.model || null,
+          configDir: activeTool === "codex" ? configDir || null : null,
         });
+        const [providerList, nextStatuses] = await Promise.all([
+          invoke<SavedProvider[]>("list_saved_providers", { appType: activeTool }),
+          invoke<ToolStatus[]>("get_tool_statuses", { configDir: configDir || null }),
+        ]);
+        const codexState = activeTool === "codex"
+          ? await invoke<CodexState>("get_codex_state", { configDir: configDir || null })
+          : null;
+        return { result, providerList, nextStatuses, codexState };
       },
-      (result) => {
-        localStorage.setItem(ACTIVE_PROVIDER_KEY, provider.id);
-        setActiveProviderId(provider.id);
-        handleActionResult(result);
+      ({ result, providerList, nextStatuses, codexState }) => {
+        localStorage.setItem(activeProviderKey(activeTool), result.providerId);
+        if (activeTool === "codex") localStorage.setItem(ACTIVE_PROVIDER_KEY, result.providerId);
+        setActiveProviderId(result.providerId);
+        setSavedProviders(providerList);
+        setToolStatuses(nextStatuses);
+        if (codexState) setState(codexState);
+        setToast(result.message);
       },
     );
 
@@ -1901,7 +2345,7 @@ function App() {
   const fetchProviderModels = async () => {
     const baseUrl = providerForm.baseUrl.trim();
     const apiKey = (providerForm.apiKey || "").trim();
-    if (!baseUrl || !apiKey) {
+    if (!baseUrl || (!apiKey && !providerForm.hasApiKey)) {
       setError("");
       setToast(lang === "zh" ? "请先填写 API 请求地址和 API Key" : "Enter the API URL and API key first");
       return;
@@ -1913,7 +2357,12 @@ function App() {
     setError("");
     setToast(lang === "zh" ? "正在获取模型列表..." : "Fetching model list...");
     try {
-      const result = await invoke<ProviderModelsResult>("fetch_provider_models", { baseUrl, apiKey });
+      const result = await invoke<ProviderModelsResult>("fetch_provider_models", {
+        baseUrl,
+        apiKey: apiKey || null,
+        tool: activeTool,
+        providerId: editingProviderId,
+      });
       if (providerModelsRequestRef.current !== requestId) return;
       setAvailableProviderModels(result.models);
       setToast(result.models.length > 0
@@ -1928,12 +2377,22 @@ function App() {
     }
   };
 
-  const testProvider = async (id: string, baseUrl: string, apiKey?: string | null) => {
+  const testProvider = async (
+    id: string,
+    baseUrl: string,
+    apiKey?: string | null,
+    savedProviderId?: string | null,
+  ) => {
     setProviderTestingId(id);
     setError("");
     setToast(lang === "zh" ? "正在检测连接..." : "Testing connection...");
     try {
-      const result = await invoke<ProviderConnectionResult>("test_provider_connection", { baseUrl, apiKey: apiKey || null });
+      const result = await invoke<ProviderConnectionResult>("test_provider_connection", {
+        baseUrl,
+        apiKey: apiKey || null,
+        tool: activeTool,
+        providerId: savedProviderId || null,
+      });
       if (result.ok) {
         setToast(lang === "zh" ? `连接成功，响应延迟 ${result.durationMs}ms` : `Connected, ${result.durationMs}ms latency`);
       } else {
@@ -1955,6 +2414,7 @@ function App() {
       () => invoke<ActionResult>("switch_official_provider", { configDir: configDir || null }),
       (result) => {
         localStorage.removeItem(ACTIVE_PROVIDER_KEY);
+        localStorage.removeItem(activeProviderKey("codex"));
         setActiveProviderId("");
         handleActionResult(result);
       },
@@ -1963,8 +2423,25 @@ function App() {
   const importFromCcSwitch = async () => {
     setActionBusy("importCcSwitch");
     try {
+      if (activeTool === "zcode") {
+        await call(
+          async () => {
+            const [providers, statuses] = await Promise.all([
+              invoke<SavedProvider[]>("list_saved_providers", { appType: "zcode" }),
+              invoke<ToolStatus[]>("get_tool_statuses", { configDir: configDir || null }),
+            ]);
+            return { providers, statuses };
+          },
+          ({ providers, statuses }) => {
+            setSavedProviders(providers);
+            setToolStatuses(statuses);
+            setToast(lang === "zh" ? `已刷新 ${providers.length} 个 ZCode 原生供应商` : `Refreshed ${providers.length} native ZCode provider(s)`);
+          },
+        );
+        return;
+      }
       await call(
-        () => invoke<ImportResult>("import_ccswitch_codex_providers", { dbPath: null }),
+        () => invoke<ImportResult>("import_ccswitch_providers", { tool: activeTool, dbPath: null }),
         (result) => {
           setSavedProviders(result.providers);
           const warningText = result.skipped > 0 ? `，跳过 ${result.skipped}` : "";
@@ -2070,19 +2547,33 @@ function App() {
   }, [state]);
 
   const loadSkillsMcp = React.useCallback(async ({ quiet = false }: { quiet?: boolean } = {}) => {
+    const requestId = skillsMcpRequestRef.current + 1;
+    skillsMcpRequestRef.current = requestId;
+    const tool = activeTool;
     if (!quiet) {
       setActionBusy("loadSkillsMcp");
       setError("");
     }
     try {
-      const result = await invoke<SkillsMcpState>("get_skills_mcp_state", { configDir: configDir || null });
-      setSkillsMcpState(result);
+      const result = await invoke<SkillsMcpState>("get_tool_skills_mcp_state", {
+        tool,
+        configDir: tool === "codex" ? configDir || null : null,
+      });
+      if (requestId === skillsMcpRequestRef.current && tool === activeToolRef.current) {
+        setSkillsMcpState(result);
+      }
     } catch (e) {
-      if (!quiet) setError(String(e));
+      if (
+        !quiet
+        && requestId === skillsMcpRequestRef.current
+        && tool === activeToolRef.current
+      ) {
+        setError(String(e));
+      }
     } finally {
-      if (!quiet) setActionBusy("");
+      if (!quiet && requestId === skillsMcpRequestRef.current) setActionBusy("");
     }
-  }, [configDir]);
+  }, [activeTool, configDir]);
 
   React.useEffect(() => {
     if (tab !== "skillsMcp" || skillsMcpLoadedRef.current) return;
@@ -2094,7 +2585,10 @@ function App() {
     setActionBusy("previewExistingSkillsMcp");
     setError("");
     try {
-      const preview = await invoke<SkillsMcpImportPreview>("preview_existing_skills_mcp", { configDir: configDir || null });
+      const preview = await invoke<SkillsMcpImportPreview>("preview_tool_skills_mcp_import", {
+        tool: activeTool,
+        configDir: activeTool === "codex" ? configDir || null : null,
+      });
       if (preview.skills.length + preview.mcpServers.length === 0) {
         setSkillsMcpImportPreview(null);
         setSkillsMcpImportOpen(false);
@@ -2114,7 +2608,10 @@ function App() {
     setActionBusy("importExistingSkillsMcp");
     setError("");
     try {
-      const result = await invoke<SkillsMcpActionResult>("import_existing_skills_mcp", { configDir: configDir || null });
+      const result = await invoke<SkillsMcpActionResult>("import_tool_skills_mcp", {
+        tool: activeTool,
+        configDir: activeTool === "codex" ? configDir || null : null,
+      });
       setSkillsMcpState(result.state);
       setSkillsMcpImportOpen(false);
       setSkillsMcpImportPreview(null);
@@ -2130,7 +2627,10 @@ function App() {
     setActionBusy("checkSkillUpdates");
     setError("");
     try {
-      const result = await invoke<SkillsMcpState>("check_skill_updates", { configDir: configDir || null });
+      const result = await invoke<SkillsMcpState>("check_tool_skill_updates", {
+        tool: activeTool,
+        configDir: activeTool === "codex" ? configDir || null : null,
+      });
       setSkillsMcpState(result);
       setToast(lang === "zh" ? "Skills 更新状态已刷新" : "Skill update status refreshed");
     } catch (e) {
@@ -2144,7 +2644,12 @@ function App() {
     setActionBusy(`skill:${id}`);
     setError("");
     try {
-      const result = await invoke<SkillsMcpState>("toggle_codex_skill", { configDir: configDir || null, id, enabled });
+      const result = await invoke<SkillsMcpState>("toggle_tool_skill", {
+        tool: activeTool,
+        configDir: activeTool === "codex" ? configDir || null : null,
+        id,
+        enabled,
+      });
       setSkillsMcpState(result);
       setToast(enabled ? (lang === "zh" ? "Skill 已启用" : "Skill enabled") : (lang === "zh" ? "Skill 已禁用" : "Skill disabled"));
     } catch (e) {
@@ -2158,7 +2663,12 @@ function App() {
     setActionBusy(`mcp:${id}`);
     setError("");
     try {
-      const result = await invoke<SkillsMcpState>("toggle_codex_mcp", { configDir: configDir || null, id, enabled });
+      const result = await invoke<SkillsMcpState>("toggle_tool_mcp", {
+        tool: activeTool,
+        configDir: activeTool === "codex" ? configDir || null : null,
+        id,
+        enabled,
+      });
       setSkillsMcpState(result);
       setToast(enabled ? (lang === "zh" ? "MCP 已启用" : "MCP enabled") : (lang === "zh" ? "MCP 已禁用" : "MCP disabled"));
     } catch (e) {
@@ -2182,7 +2692,12 @@ function App() {
     setError("");
     try {
       const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
-      const result = await invoke<SkillsMcpActionResult>("install_skill_zip", { configDir: configDir || null, fileName: file.name, bytes });
+      const result = await invoke<SkillsMcpActionResult>("install_tool_skill_zip", {
+        tool: activeTool,
+        configDir: activeTool === "codex" ? configDir || null : null,
+        fileName: file.name,
+        bytes,
+      });
       setSkillsMcpState(result.state);
       setToast(result.message);
     } catch (e) {
@@ -2192,6 +2707,43 @@ function App() {
       if (skillZipImportRef.current) skillZipImportRef.current.value = "";
     }
   };
+
+  const loadToolConfig = React.useCallback(async ({ quiet = false }: { quiet?: boolean } = {}) => {
+    const requestId = toolConfigRequestRef.current + 1;
+    toolConfigRequestRef.current = requestId;
+    const tool = activeTool;
+    if (!quiet) {
+      setActionBusy("loadToolConfig");
+      setError("");
+    }
+    try {
+      const result = await invoke<ToolConfigBundle>("get_tool_config", {
+        tool,
+        configDir: tool === "codex" ? configDir || null : null,
+      });
+      if (requestId === toolConfigRequestRef.current && tool === activeToolRef.current) {
+        setToolConfig(result);
+        setConfigFileId((current) => result.files.some((file) => file.id === current)
+          ? current
+          : result.primaryFileId);
+      }
+    } catch (e) {
+      if (
+        !quiet
+        && requestId === toolConfigRequestRef.current
+        && tool === activeToolRef.current
+      ) {
+        setError(String(e));
+      }
+    } finally {
+      if (!quiet && requestId === toolConfigRequestRef.current) setActionBusy("");
+    }
+  }, [activeTool, configDir]);
+
+  React.useEffect(() => {
+    if (tab !== "toml") return;
+    void loadToolConfig();
+  }, [loadToolConfig, tab]);
 
   const officialAuthPlaceholder = '{\n  "OPENAI_API_KEY": null,\n  "auth_mode": "chatgpt",\n  "tokens": {\n    "access_token": "",\n    "refresh_token": "",\n    "id_token": ""\n  }\n}';
 
@@ -2220,7 +2772,7 @@ function App() {
     );
 
   const openAddProvider = () => {
-    const next = { ...blankProviderForm };
+    const next = blankProviderForTool(activeTool);
     resetAvailableProviderModels();
     setEditingProviderId(null);
     setProviderForm(next);
@@ -2232,8 +2784,9 @@ function App() {
   const openEditProvider = (provider: SavedProvider) => {
     resetAvailableProviderModels();
     setEditingProviderId(provider.id);
-    setProviderForm(provider);
-    setProviderTomlDraft(provider.tomlConfig?.trim() || buildProviderTomlPreview(provider, state));
+    const next = { ...provider, appType: activeTool };
+    setProviderForm(next);
+    setProviderTomlDraft(next.tomlConfig?.trim() || buildProviderTomlPreview(next, state));
     setProviderTomlDirty(false);
     setProviderMode("form");
   };
@@ -2242,6 +2795,7 @@ function App() {
     resetAvailableProviderModels();
     setEditingProviderId(null);
     const next = {
+      appType: activeTool,
       id: customProviderId(provider.providerName || provider.baseUrl),
       providerName: provider.providerName,
       baseUrl: provider.baseUrl,
@@ -2261,8 +2815,8 @@ function App() {
     setLoading(true);
     setError("");
     try {
-      await invoke<void>("delete_saved_provider", { id });
-      const providerList = await invoke<SavedProvider[]>("list_saved_providers");
+      await invoke<void>("delete_saved_provider", { id, appType: activeTool });
+      const providerList = await invoke<SavedProvider[]>("list_saved_providers", { appType: activeTool });
       setSavedProviders(providerList);
       setToast(lang === "zh" ? "供应商已删除" : "Provider deleted");
       return true;
@@ -2275,10 +2829,32 @@ function App() {
   };
 
   const checkSessions = async () => {
+    const requestId = sessionsRequestRef.current + 1;
+    sessionsRequestRef.current = requestId;
+    const tool = activeTool;
+    const resolvedConfigDir = configDir || null;
     setActionBusy("checkSessions");
-    await call(
-      () => invoke<SessionSyncStatus>("get_session_sync_status", { configDir: configDir || null, targetProvider: null }),
-      (status) => {
+    setLoading(true);
+    setError("");
+    try {
+      if (tool !== "codex") {
+        const result = await invoke<ToolSessionList>("get_tool_sessions", {
+          tool,
+          configDir: null,
+        });
+        if (requestId !== sessionsRequestRef.current || tool !== activeToolRef.current) return;
+        setToolSessionList(result);
+        setSelectedSessionIds([]);
+        setToast(lang === "zh"
+          ? `已读取 ${result.sessions.length} 条 ${toolLabel(tool)} 会话`
+          : `Loaded ${result.sessions.length} ${toolLabel(tool)} session(s)`);
+        return;
+      }
+      const status = await invoke<SessionSyncStatus>("get_session_sync_status", {
+        configDir: resolvedConfigDir,
+        targetProvider: null,
+      });
+      if (requestId === sessionsRequestRef.current && tool === activeToolRef.current) {
         setSessionStatus(status);
         const hasMismatches = Boolean(status.needsSync);
         const previewCount = new Set(status.sessions.filter((item) => item.needsSync).map((item) => item.id)).size;
@@ -2288,12 +2864,21 @@ function App() {
         setToast(hasMismatches
           ? (lang === "zh" ? `有 ${syncCount} 条会话需要同步` : `${syncCount} session(s) need syncing`)
           : (lang === "zh" ? "全部会话已同步" : "All sessions are synced"));
-      },
-    );
-    setActionBusy("");
+      }
+    } catch (e) {
+      if (requestId === sessionsRequestRef.current && tool === activeToolRef.current) {
+        setError(String(e));
+      }
+    } finally {
+      if (requestId === sessionsRequestRef.current) {
+        setActionBusy("");
+        setLoading(false);
+      }
+    }
   };
 
   const syncSessions = async () => {
+    if (activeTool !== "codex") return;
     const pendingCount = sessionSyncCount;
     setActionBusy("syncSessions");
     await call(
@@ -2332,7 +2917,7 @@ function App() {
   };
 
   const deleteSelectedSessions = async () => {
-    if (!selectedSessionIds.length || sessionDeleteBusy || !sessionDeleteSafetyConfirmed) return;
+    if (activeTool !== "codex" || !selectedSessionIds.length || sessionDeleteBusy || !sessionDeleteSafetyConfirmed) return;
     setSessionDeleteBusy(true);
     setToast("");
     setError("");
@@ -2379,10 +2964,6 @@ function App() {
       activeTab={tab}
       onTabChange={(nextTab) => {
         if (nextTab === "skins" && !skinCenterEnabled) return;
-        if (!state && nextTab !== "dashboard" && nextTab !== "settings" && nextTab !== "about") {
-          setTab("dashboard");
-          return;
-        }
         setTab(nextTab);
       }}
       lang={lang}
@@ -2390,6 +2971,7 @@ function App() {
       onToggleTheme={toggleTheme}
       codexVersion={aboutInfo?.codexVersion}
       appVersion={aboutInfo?.appVersion}
+      toolStatuses={toolStatuses}
       hasUpdate={Boolean(releaseInfo.hasUpdate)}
       updatePhase={updater.state.phase}
       onOpenUpdate={() => setUpdatePromptOpen(true)}
@@ -2456,26 +3038,27 @@ function App() {
             {tab === "dashboard" && (
               <OverviewPage
                 lang={lang}
-                model={state?.model}
-                configDir={configDir}
-                resolvedCodexDir={state?.codexDir || ""}
-                configExists={Boolean(state?.configExists)}
-                providerLabel={currentProvider?.name || state?.modelProvider}
-                instructionEnabled={Boolean(state?.instructionEnabled)}
-                claudeInstructionEnabled={Boolean(claudeState?.instructionEnabled)}
-                claudeInstructionPath={claudeState?.memoryExists ? claudeState?.memoryPath : null}
-                zcodeInstructionEnabled={Boolean(zcodeState?.instructionEnabled)}
-                zcodeInstructionPath={zcodeState?.systemFileExists ? zcodeState?.systemFile : null}
-                grokInstructionEnabled={Boolean(grokState?.instructionEnabled)}
-                grokInstructionPath={grokState?.agentsMdExists ? `${grokState.grokDir}/AGENTS.md` : null}
-                authExists={Boolean(state?.authExists)}
-                configPath={state?.configPath}
-                modelProvider={state?.modelProvider}
-                instructionPath={state
-                  ? (state.instructionInjectionMode === "append"
-                    ? `${state.agentsPath} (${lang === "zh" ? "追加模式" : "append"})`
-                    : state.instructionFile)
+                tool={activeTool}
+                toolStatuses={toolStatuses}
+                onToolChange={setActiveTool}
+                model={codexState?.model}
+                configDir={activeTool === "codex" ? configDir : ""}
+                resolvedCodexDir={codexState?.codexDir || ""}
+                configExists={Boolean(activeToolStatus?.configExists ?? codexState?.configExists)}
+                providerLabel={activeTool === "codex"
+                  ? (currentProvider?.name || codexState?.modelProvider)
                   : null}
+                instructionEnabled={Boolean(activeToolStatus?.instructionEnabled ?? codexState?.instructionEnabled)}
+                authExists={Boolean(activeToolStatus?.authExists ?? codexState?.authExists)}
+                configPath={activeToolStatus?.configPath || codexState?.configPath}
+                modelProvider={codexState?.modelProvider}
+                instructionPath={activeTool === "codex"
+                  ? (state
+                    ? (state.instructionInjectionMode === "append"
+                      ? `${state.agentsPath} (${lang === "zh" ? "追加模式" : "append"})`
+                      : state.instructionFile)
+                    : null)
+                  : (activeToolStatus?.instructionPath || null)}
                 loading={loading}
                 hasUpdate={Boolean(releaseInfo.status === "ok" && releaseInfo.hasUpdate)}
                 latestVersion={releaseInfo.latestVersion}
@@ -2485,10 +3068,14 @@ function App() {
               />
             )}
 
-            {state && tab === "provider" && (
+            {tab === "provider" && (
               <ProvidersPage
                 lang={lang}
-                copy={getProviderPageCopy(lang)}
+                tool={activeTool}
+                toolStatuses={toolStatuses}
+                onToolChange={setActiveTool}
+                supportsProviders={activeToolStatus?.capabilities.providers ?? true}
+                copy={getProviderPageCopy(lang, activeTool)}
                 mode={providerMode}
                 providerRows={providerPageRows}
                 loading={loading}
@@ -2497,6 +3084,7 @@ function App() {
                 editingProviderId={editingProviderId}
                 providerForm={{
                   apiKey: providerForm.apiKey || "",
+                  hasApiKey: providerForm.hasApiKey,
                   baseUrl: providerForm.baseUrl,
                   providerName: providerForm.providerName,
                   model: providerForm.model,
@@ -2506,8 +3094,8 @@ function App() {
                 officialForm={officialForm}
                 officialInfo={{
                   officialUrl: "https://chatgpt.com/codex",
-                  authPath: state.authPath,
-                  current: (!state.modelProvider || state.modelProvider === "openai") ? "OpenAI Official" : state.modelProvider,
+                  authPath: state?.authPath || activeToolStatus?.authPath || "—",
+                  current: (!state?.modelProvider || state.modelProvider === "openai") ? "OpenAI Official" : state.modelProvider,
                 }}
                 providerAuthPreview={<JsonPreview text={providerAuthPreview} />}
                 providerTomlDraft={providerTomlDraft}
@@ -2517,13 +3105,14 @@ function App() {
                 fetchingModels={providerModelsLoading}
                 onImportCcSwitch={importFromCcSwitch}
                 onAddProvider={openAddProvider}
-                onEnableProvider={(row) => {
+                onEnableProvider={(row, selectedModel) => {
                   if (row.source === "official") {
                     switchOfficialProvider();
                     return;
                   }
                   const local = findLocalProviderForRow(row);
-                  switchProvider(local || {
+                   switchProvider(local || {
+                    appType: activeTool,
                     id: customProviderId(row.providerName),
                     providerName: row.providerName,
                     baseUrl: row.baseUrl,
@@ -2532,11 +3121,16 @@ function App() {
                     tomlConfig: "",
                     wireApi: row.wireApi,
                     requiresOpenaiAuth: row.requiresOpenaiAuth,
-                  });
+                  }, selectedModel);
                 }}
                 onTestProvider={(row) => {
                   const local = findLocalProviderForRow(row);
-                  void testProvider(row.testingKey || `${row.source}-${row.id}`, row.baseUrl, local?.apiKey || row.apiKey || null);
+                  void testProvider(
+                    row.testingKey || `${row.source}-${row.id}`,
+                    row.baseUrl,
+                    local?.apiKey || row.apiKey || null,
+                    local?.id || null,
+                  );
                 }}
                 onEditProvider={(row) => {
                   if (row.source === "official") {
@@ -2585,11 +3179,14 @@ function App() {
               />
             )}
 
-            {state && (tab === "sessions" || visitedTabs.has("sessions")) && (
+            {(tab === "sessions" || visitedTabs.has("sessions")) && (
               <SessionManagementPage
                 active={tab === "sessions"}
                 lang={lang}
-                sessionStatus={sessionStatus}
+                activeTool={activeTool}
+                toolStatuses={toolStatuses}
+                onToolChange={setActiveTool}
+                sessionStatus={displayedSessionStatus}
                 sessionHasMismatches={sessionHasMismatches}
                 sessionSyncCount={sessionSyncCount}
                 sessionTargetLabel={sessionTargetLabel}
@@ -2635,9 +3232,12 @@ function App() {
               />
             )}
 
-            {state && (tab === "skillsMcp" || visitedTabs.has("skillsMcp")) && (
+            {(tab === "skillsMcp" || visitedTabs.has("skillsMcp")) && (
               <SkillsMcpPage
                 lang={lang}
+                activeTool={activeTool}
+                toolStatuses={toolStatuses}
+                onToolChange={setActiveTool}
                 state={skillsMcpState}
                 activeTab={skillsMcpTab}
                 actionBusy={actionBusy}
@@ -2677,7 +3277,7 @@ function App() {
               </div>
             )}
 
-            {state && tab === "instruction" && (
+            {tab === "instruction" && (
               <PromptsPage
                 lang={lang}
                 instructionMode={instructionMode}
@@ -2693,9 +3293,13 @@ function App() {
                 promptModeHelpRef={promptModeHelpRef}
                 promptEngine={promptEngine}
                 onPromptEngineChange={setPromptEngine}
-                instructionEnabled={state.instructionEnabled}
+                instructionEnabled={Boolean(state?.instructionEnabled)}
                 activeInstructionTitle={activeInstructionTitle}
-                activeInjectionMode={state.instructionInjectionMode}
+                activeInjectionMode={activePromptInjectionMode}
+                promptBackups={promptBackups}
+                promptBackupsOpen={promptBackupsOpen}
+                promptBackupsLoading={promptBackupsLoading}
+                promptRestoreBusyId={promptRestoreBusyId}
                 instructionTemplates={instructionTemplates}
                 builtinPromptStatuses={builtinPromptStatus}
                 activeBuiltinTemplateId={activeBuiltinTemplateId}
@@ -2707,23 +3311,23 @@ function App() {
                     : "This template was removed online but is still active.",
                 } : null}
                 savedPrompts={savedPrompts}
-                managedSavedPromptId={state.instructionTemplateKey?.startsWith("saved:")
+                managedSavedPromptId={state?.instructionTemplateKey?.startsWith("saved:")
                   ? state.instructionTemplateKey.slice("saved:".length)
                   : null}
-                preservedSavedPromptFilename={state.instructionInjectionMode === "append" ? currentInstructionFilename : null}
-                externalPrompt={state.instructionFile
+                preservedSavedPromptFilename={state?.instructionInjectionMode === "append" ? currentInstructionFilename : null}
+                externalPrompt={state?.instructionFile
                   && currentInstructionId === "custom"
                   && !savedPrompts.some((prompt) => currentInstructionFilename === prompt.filename)
-                  && !(missingActiveBuiltinTemplateId && state.instructionInjectionMode !== "append")
+                  && !(missingActiveBuiltinTemplateId && state?.instructionInjectionMode !== "append")
                   ? {
                     title: lang === "zh" ? "用户原有指令提示词" : "Existing user prompt",
-                    description: state.instructionInjectionMode === "append"
+                    description: state?.instructionInjectionMode === "append"
                       ? (lang === "zh"
-                        ? "追加模式已保留这份外部提示词，并同时加载 Codex-X 的 AGENTS.md 区块。"
-                        : "Append mode preserves this external prompt alongside the Codex-X AGENTS.md block.")
+                        ? "追加模式已保留这份外部提示词，并同时加载 Everything Patch 的 AGENTS.md 区块。"
+                        : "Append mode preserves this external prompt alongside the Everything Patch AGENTS.md block.")
                       : (lang === "zh"
-                        ? "当前使用的是非 Codex-X 管理的外部提示词。"
-                        : "This external prompt is not managed by Codex-X."),
+                        ? "当前使用的是非 Everything Patch 管理的外部提示词。"
+                        : "This external prompt is not managed by Everything Patch."),
                     filename: currentInstructionFilename,
                   }
                   : null}
@@ -2733,6 +3337,9 @@ function App() {
                 onInstructionModeChange={setInstructionMode}
                 onPromptInjectionModeChange={setPromptInjectionMode}
                 onTogglePromptModeHelp={() => setPromptModeHelpOpen((open) => !open)}
+                onOpenPromptBackups={openPromptBackups}
+                onClosePromptBackups={closePromptBackups}
+                onRestorePromptBackup={restorePromptBackup}
                 onEnableBuiltinPrompt={switchInstructionTemplate}
                 onDisableInstruction={disableInstruction}
                 onEnableSavedPrompt={enableSavedPrompt}
@@ -2763,6 +3370,7 @@ function App() {
                 zcodeActiveInstructionTitle={zcodeActiveInstructionTitle}
                 zcodeInstructionTemplates={zcodeInstructionTemplates}
                 zcodeBuiltinPromptStatuses={zcodeBuiltinStatus}
+                zcodeActiveBuiltinTemplateId={zcodeActiveBuiltinTemplateId}
                 zcodeSavedPrompts={zcodeSavedPrompts}
                 zcodeManagedSavedPromptId={zcodeManagedSavedPromptId}
                 onEnableZcodeBuiltinPrompt={installZcodeInstruction}
@@ -2776,6 +3384,7 @@ function App() {
                 grokActiveInstructionTitle={grokActiveInstructionTitle}
                 grokInstructionTemplates={grokInstructionTemplates}
                 grokBuiltinPromptStatuses={grokBuiltinStatus}
+                grokActiveBuiltinTemplateId={grokActiveBuiltinTemplateId}
                 grokSavedPrompts={grokSavedPrompts}
                 grokManagedSavedPromptId={grokManagedSavedPromptId}
                 onEnableGrokBuiltinPrompt={installGrokInstruction}
@@ -2788,14 +3397,22 @@ function App() {
               />
             )}
 
-            {state && tab === "toml" && (
-              <TomlConfigPage
-                eyebrow="~/.codex/config.toml"
-                title={t.toml.title}
-                description={t.toml.desc}
-                loaded={state.configExists ? t.toml.loaded : t.dashboard.missing}
-                isLoaded={state.configExists}
-                preview={<TomlPreview text={state.configText || t.toml.missingText} />}
+            {tab === "toml" && (
+              <ToolConfigPage
+                lang={lang}
+                tool={activeTool}
+                toolStatuses={toolStatuses}
+                config={toolConfig}
+                selectedFileId={configFileId}
+                loading={actionBusy === "loadToolConfig"}
+                preview={selectedToolConfigFile?.format === "json"
+                  ? <JsonPreview text={selectedToolConfigFile.text || "{\n}"} />
+                  : selectedToolConfigFile && selectedToolConfigFile.format !== "toml"
+                    ? <PlainPreview text={selectedToolConfigFile.text || (lang === "zh" ? "# 未找到配置文件。" : "# Configuration file not found.")} />
+                    : <TomlPreview text={selectedToolConfigFile?.text || "# Configuration file not found."} />}
+                onToolChange={setActiveTool}
+                onFileChange={setConfigFileId}
+                onRefresh={() => void loadToolConfig()}
               />
             )}
 
@@ -2803,11 +3420,15 @@ function App() {
               <AboutPage
                 copy={{
                   eyebrow: "About",
-                  title: lang === "zh" ? "关于 Codex-X" : "About Codex-X",
-                  appVersionLabel: `Codex-X ${lang === "zh" ? "版本" : "Version"}`,
-                  codexVersionLabel: `Codex CLI ${lang === "zh" ? "版本" : "Version"}`,
-                  codexHomeLabel: "CODEX_HOME",
-                  projectLabel: lang === "zh" ? "项目地址" : "Project",
+                   title: lang === "zh" ? "关于 Everything Patch" : "About Everything Patch",
+                   appVersionLabel: `Everything Patch ${lang === "zh" ? "版本" : "Version"}`,
+                   projectLabel: lang === "zh" ? "项目地址" : "Project",
+                  environmentsTitle: lang === "zh" ? "工具环境" : "Tool environments",
+                  installedLabel: lang === "zh" ? "已检测到" : "Detected",
+                  missingLabel: lang === "zh" ? "未检测到" : "Not detected",
+                  versionLabel: lang === "zh" ? "版本" : "Version",
+                  homeLabel: lang === "zh" ? "目录" : "Home",
+                  configLabel: lang === "zh" ? "配置" : "Config",
                   openProjectLabel: lang === "zh" ? "打开项目主页" : "Open project",
                   openIssuesLabel: lang === "zh" ? "反馈问题" : "Issues",
                   releasesEyebrow: "GitHub Releases",
@@ -2816,10 +3437,9 @@ function App() {
                   latestVersionLabel: lang === "zh" ? "最新版本" : "Latest version",
                   checkUpdateLabel: lang === "zh" ? "检查更新" : "Check updates",
                   openReleasesLabel: lang === "zh" ? "打开下载页" : "Open releases",
-                }}
-                appVersion={aboutInfo?.appVersion || "-"}
-                codexVersion={aboutInfo?.codexVersion || (lang === "zh" ? "未检测到" : "Not detected")}
-                codexHome={aboutInfo?.codexDir || state?.codexDir || configDir || "~/.codex"}
+                 }}
+                 appVersion={aboutInfo?.appVersion || "-"}
+                toolStatuses={toolStatuses}
                 projectUrl={aboutInfo?.projectUrl || `https://github.com/${FALLBACK_GITHUB_REPO}`}
                 release={{
                   status: releaseStatusLabel,
@@ -2855,7 +3475,7 @@ function App() {
                   englishLabel: t.settings.en,
                   productTitle: t.settings.productName,
                   productDescription: t.settings.productDesc,
-                  productValue: "Codex-X",
+                  productValue: "Everything Patch",
                   recheckTitle: lang === "zh" ? "首次启动向导" : "First-run wizard",
                   recheckDescription: lang === "zh"
                     ? "重新检测 CODEX_HOME、config.toml、auth.json 和 SQLite 会话库。"

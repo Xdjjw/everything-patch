@@ -21,7 +21,7 @@ function exportFileName(value: string) {
     .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
     .replace(/[. ]+$/g, "")
     .slice(0, 80);
-  return `${normalized || "codex-x-theme"}.zip`;
+  return `${normalized || "everything-patch-theme"}.zip`;
 }
 
 type UseSkinCenterOptions = {

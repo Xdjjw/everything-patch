@@ -56,7 +56,7 @@ pub(super) fn launch_watcher(
         .map_err(|source| io_err(&assets.injector, source))?;
     let pid = child.id();
     thread::Builder::new()
-        .name("codex-x-skin-injector-reaper".to_string())
+        .name("everything-patch-skin-injector-reaper".to_string())
         .spawn(move || {
             let _ = child.wait();
         })

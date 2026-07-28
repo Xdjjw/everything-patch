@@ -5,27 +5,26 @@ import {
   FileText,
   KeyRound,
   RefreshCw,
-  Sparkles,
+  Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { ToolTabs } from "../components/ToolTabs";
+import type { ToolId, ToolStatus } from "../types";
 import "../styles/overview-page.css";
 
 export type OverviewLanguage = "zh" | "en";
 
 export type OverviewPageProps = {
   lang: OverviewLanguage;
+  tool: ToolId;
+  toolStatuses: readonly ToolStatus[];
+  onToolChange: (tool: ToolId) => void;
   model?: string | null;
   configDir: string;
   resolvedCodexDir: string;
   configExists: boolean;
   providerLabel?: string | null;
   instructionEnabled: boolean;
-  claudeInstructionEnabled?: boolean;
-  claudeInstructionPath?: string | null;
-  zcodeInstructionEnabled?: boolean;
-  zcodeInstructionPath?: string | null;
-  grokInstructionEnabled?: boolean;
-  grokInstructionPath?: string | null;
   authExists: boolean;
   configPath?: string | null;
   modelProvider?: string | null;
@@ -59,12 +58,7 @@ function StatusCard({ icon: Icon, label, value, tone }: StatusCardProps) {
   );
 }
 
-type ConfigRowProps = {
-  label: string;
-  value: string;
-};
-
-function ConfigRow({ label, value }: ConfigRowProps) {
+function ConfigRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="cx-overview-config-row">
       <span>{label}</span>
@@ -75,18 +69,15 @@ function ConfigRow({ label, value }: ConfigRowProps) {
 
 export function OverviewPage({
   lang,
+  tool,
+  toolStatuses,
+  onToolChange,
   model,
   configDir,
   resolvedCodexDir,
   configExists,
   providerLabel,
   instructionEnabled,
-  claudeInstructionEnabled,
-  claudeInstructionPath,
-  zcodeInstructionEnabled,
-  zcodeInstructionPath,
-  grokInstructionEnabled,
-  grokInstructionPath,
   authExists,
   configPath,
   modelProvider,
@@ -99,87 +90,87 @@ export function OverviewPage({
   onOpenUpdate,
 }: OverviewPageProps) {
   const isChinese = lang === "zh";
+  const status = toolStatuses.find((item) => item.id === tool);
+  const codexFallback = tool === "codex";
+  const activeModel = status?.model
+    || (codexFallback ? model : null)
+    || (isChinese ? "未配置模型" : "Model not configured");
+  const activeConfigExists = status?.configExists ?? configExists;
+  const activeAuthExists = status?.authExists ?? authExists;
+  const activeInstructionEnabled = status?.instructionEnabled ?? instructionEnabled;
+  const activeProvider = status?.provider
+    || (codexFallback ? (providerLabel || modelProvider) : null)
+    || (codexFallback
+      ? (isChinese ? "官方配置" : "Official")
+      : (isChinese ? "未配置供应商" : "Provider not configured"));
+  const activeHome = status?.homeDir
+    || (codexFallback ? (resolvedCodexDir || configDir) : null)
+    || (isChinese ? "未设置" : "Not set");
+  const activeConfigPath = status?.configPath
+    || (codexFallback ? configPath : null)
+    || (isChinese ? "未设置" : "Not set");
+  const activeInstructionPath = status?.instructionPath
+    || (codexFallback ? instructionPath : null)
+    || (isChinese ? "未设置" : "Not set");
+  const updateVersion = latestVersion?.trim() || "";
+  const editableHome = tool === "codex";
   const text = isChinese
     ? {
-        eyebrow: "CODEX 配置管理器",
-        notConfigured: "未配置",
-        modelMissing: "未配置模型",
-        codexHome: "CODEX_HOME",
+        eyebrow: `${status?.label || "工具"} 环境`,
+        directory: "配置目录",
         directoryPlaceholder: "留空使用默认目录",
         load: "加载",
         config: "配置文件",
         found: "已找到",
         missing: "未找到",
-        provider: "供应商",
-        official: "官方配置",
-        instruction: "Codex 指令",
-        claudeInstruction: "Claude 指令",
-        zcodeInstruction: "ZCode 指令",
-        grokInstruction: "Grok 指令",
+        provider: "供应商 / 后端",
+        instruction: "指令状态",
         enabled: "已启用",
         disabled: "未启用",
         auth: "认证文件",
-        authFile: "auth.json",
-        noAuth: "未找到",
+        authFound: "已找到",
+        authMissing: "未找到",
         updateFound: "发现新版本",
-        updateAvailable: (version: string) => `Codex-X ${version} 已发布`,
+        updateAvailable: (version: string) => `Everything Patch ${version} 已发布`,
         viewUpdate: "查看更新",
-        liveStatus: "实时状态",
-        currentConfig: "当前 Codex 配置",
-        on: "提示词已启用",
-        off: "提示词未启用",
-        directory: "目录",
-        configPath: "配置",
+        liveStatus: "当前状态",
+        currentConfig: `${status?.label || "工具"} 配置`,
         model: "模型",
-        providerName: "供应商标识",
-        instructionFile: "Codex 指令文件",
-        claudeMemoryFile: "Claude 记忆文件",
+        providerName: "供应商",
+        configPath: "主配置",
+        instructionFile: "指令文件",
+        nativeInstruction: "原生指令路径",
+        noValue: "未设置",
+        unavailable: "未检测到",
       }
     : {
-        eyebrow: "CODEX CONFIG MANAGER",
-        notConfigured: "Not configured",
-        modelMissing: "Model not configured",
-        codexHome: "CODEX_HOME",
+        eyebrow: `${status?.label || "Tool"} environment`,
+        directory: "Config directory",
         directoryPlaceholder: "Leave empty for the default directory",
         load: "Load",
         config: "Config file",
         found: "Found",
-        missing: "Not found",
-        provider: "Provider",
-        official: "Official",
-        instruction: "Codex instructions",
-        claudeInstruction: "Claude instructions",
-        zcodeInstruction: "ZCode instructions",
-        grokInstruction: "Grok instructions",
+        missing: "Missing",
+        provider: "Provider / backend",
+        instruction: "Instructions",
         enabled: "Enabled",
         disabled: "Disabled",
         auth: "Auth file",
-        authFile: "auth.json",
-        noAuth: "Not found",
+        authFound: "Found",
+        authMissing: "Missing",
         updateFound: "New version available",
-        updateAvailable: (version: string) => `Codex-X ${version} is available`,
+        updateAvailable: (version: string) => `Everything Patch ${version} is available`,
         viewUpdate: "View update",
-        liveStatus: "LIVE STATUS",
-        currentConfig: "Current Codex configuration",
-        on: "Instructions enabled",
-        off: "Instructions disabled",
-        directory: "Directory",
-        configPath: "Config",
+        liveStatus: "CURRENT STATUS",
+        currentConfig: `${status?.label || "Tool"} configuration`,
         model: "Model",
         providerName: "Provider",
-        instructionFile: "Codex instruction file",
-        claudeMemoryFile: "Claude memory file",
+        configPath: "Primary config",
+        instructionFile: "Instruction file",
+        nativeInstruction: "Native instruction path",
+        noValue: "Not set",
+        unavailable: "Not detected",
       };
-
-  const displayModel = model?.trim() || text.modelMissing;
-  const displayProvider = providerLabel?.trim() || modelProvider?.trim() || text.official;
-  const displayModelProvider = modelProvider?.trim() || text.notConfigured;
-  const displayDirectory = resolvedCodexDir.trim() || configDir.trim() || text.notConfigured;
-  const displayConfigPath = configPath?.trim() || text.notConfigured;
-  const displayInstructionPath = instructionPath?.trim() || text.notConfigured;
-  const displayClaudeInstructionPath = claudeInstructionPath?.trim() || text.notConfigured;
-  const updateVersion = latestVersion?.trim() || "";
-  const homeInputValue = configDir || resolvedCodexDir;
 
   return (
     <section className="cx-overview-page" aria-label={isChinese ? "概览" : "Overview"}>
@@ -189,19 +180,19 @@ export function OverviewPage({
             <span className="cx-overview-live-dot" aria-hidden="true" />
             {text.eyebrow}
           </p>
-          <h2 title={displayModel}>{displayModel}</h2>
+          <h2 title={activeModel}>{activeModel}</h2>
         </div>
-
         <div className="cx-overview-home-control">
-          <label htmlFor="cx-overview-codex-home">{text.codexHome}</label>
+          <label htmlFor="cx-overview-tool-home">{text.directory}</label>
           <input
-            id="cx-overview-codex-home"
+            id="cx-overview-tool-home"
             type="text"
-            value={homeInputValue}
+            value={editableHome ? (configDir || resolvedCodexDir) : activeHome}
             onChange={(event) => onConfigDirChange(event.target.value)}
             placeholder={text.directoryPlaceholder}
             spellCheck={false}
-            aria-label={text.codexHome}
+            readOnly={!editableHome}
+            aria-label={text.directory}
           />
           <button type="button" onClick={onRefresh} disabled={loading}>
             <RefreshCw size={15} strokeWidth={2} className={loading ? "cx-overview-spin" : undefined} aria-hidden="true" />
@@ -209,6 +200,14 @@ export function OverviewPage({
           </button>
         </div>
       </header>
+
+      <ToolTabs
+        active={tool}
+        onChange={onToolChange}
+        statuses={toolStatuses}
+        ariaLabel={isChinese ? "工具" : "Tools"}
+        className="cx-overview-tool-tabs"
+      />
 
       {hasUpdate && (
         <aside className="cx-overview-update-strip" role="status">
@@ -226,48 +225,37 @@ export function OverviewPage({
         </aside>
       )}
 
+      {status?.notice && (
+        <div className="cx-overview-tool-notice">
+          <Wrench size={16} aria-hidden="true" />
+          <span>{status.notice}</span>
+        </div>
+      )}
+
       <div className="cx-overview-status-grid">
         <StatusCard
           icon={FileText}
           label={text.config}
-          value={configExists ? text.found : text.missing}
-          tone={configExists ? "success" : "muted"}
+          value={activeConfigExists ? text.found : text.missing}
+          tone={activeConfigExists ? "success" : "muted"}
         />
         <StatusCard
           icon={Code2}
           label={text.provider}
-          value={displayProvider}
-          tone={modelProvider ? "active" : "muted"}
+          value={activeProvider}
+          tone={activeProvider !== text.noValue ? "active" : "muted"}
         />
         <StatusCard
-          icon={Sparkles}
+          icon={Wrench}
           label={text.instruction}
-          value={instructionEnabled ? text.enabled : text.disabled}
-          tone={instructionEnabled ? "success" : "muted"}
-        />
-        <StatusCard
-          icon={Sparkles}
-          label={text.claudeInstruction}
-          value={claudeInstructionEnabled ? text.enabled : text.disabled}
-          tone={claudeInstructionEnabled ? "success" : "muted"}
-        />
-        <StatusCard
-          icon={Sparkles}
-          label={text.zcodeInstruction}
-          value={zcodeInstructionEnabled ? text.enabled : text.disabled}
-          tone={zcodeInstructionEnabled ? "success" : "muted"}
-        />
-        <StatusCard
-          icon={Sparkles}
-          label={text.grokInstruction}
-          value={grokInstructionEnabled ? text.enabled : text.disabled}
-          tone={grokInstructionEnabled ? "success" : "muted"}
+          value={activeInstructionEnabled ? text.enabled : text.disabled}
+          tone={activeInstructionEnabled ? "success" : "muted"}
         />
         <StatusCard
           icon={KeyRound}
           label={text.auth}
-          value={authExists ? text.authFile : text.noAuth}
-          tone={authExists ? "success" : "muted"}
+          value={activeAuthExists ? text.authFound : text.authMissing}
+          tone={activeAuthExists ? "success" : "muted"}
         />
       </div>
 
@@ -277,19 +265,22 @@ export function OverviewPage({
             <p className="cx-overview-section-label">{text.liveStatus}</p>
             <h3>{text.currentConfig}</h3>
           </div>
-          <span className={`cx-overview-instruction-pill${instructionEnabled ? " cx-overview-instruction-pill--active" : ""}`}>
+          <span className={`cx-overview-instruction-pill${activeInstructionEnabled ? " cx-overview-instruction-pill--active" : ""}`}>
             <CheckCircle2 size={14} strokeWidth={2} aria-hidden="true" />
-            {instructionEnabled ? text.on : text.off}
+            {activeInstructionEnabled ? text.enabled : text.disabled}
           </span>
         </div>
-
         <div className="cx-overview-config-list">
-          <ConfigRow label={text.directory} value={displayDirectory} />
-          <ConfigRow label={text.configPath} value={displayConfigPath} />
-          <ConfigRow label={text.model} value={displayModel} />
-          <ConfigRow label={text.providerName} value={displayModelProvider} />
-          <ConfigRow label={text.instructionFile} value={displayInstructionPath} />
-          <ConfigRow label={text.claudeMemoryFile} value={displayClaudeInstructionPath} />
+          <ConfigRow label={text.directory} value={activeHome} />
+          <ConfigRow label={text.configPath} value={activeConfigPath} />
+          <ConfigRow label={text.model} value={activeModel || text.noValue} />
+          <ConfigRow label={text.providerName} value={activeProvider || text.noValue} />
+          <ConfigRow label={text.instructionFile} value={activeInstructionPath} />
+          {status && status.nativeInstructionPath !== status.instructionPath && (
+            <ConfigRow label={text.nativeInstruction} value={status.nativeInstructionPath} />
+          )}
+          {status?.version && <ConfigRow label="Version" value={status.version} />}
+          {!status && <ConfigRow label={text.providerName} value={text.unavailable} />}
         </div>
       </section>
     </section>

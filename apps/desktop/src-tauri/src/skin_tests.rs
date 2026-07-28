@@ -5,7 +5,7 @@ static FIXTURE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn temp_theme_dir(name: &str) -> PathBuf {
     let path = std::env::temp_dir().join(format!(
-        "codex-x-skin-{name}-{}-{}",
+        "everything-patch-skin-{name}-{}-{}",
         std::process::id(),
         FIXTURE_COUNTER.fetch_add(1, Ordering::Relaxed)
     ));

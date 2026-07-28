@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import type { ChangeEvent, RefObject } from "react";
 import {
   ArrowLeft,
@@ -6,10 +6,12 @@ import {
   CircleHelp,
   CirclePlus,
   FileText,
+  History,
   Loader2,
   PencilLine,
   Plus,
   RefreshCw,
+  RotateCcw,
   Save,
   Settings2,
   Sparkles,
@@ -20,13 +22,14 @@ import {
 import { PageTransition } from "../components/PageTransition";
 import { PromptCategoryManager } from "../components/PromptCategoryManager";
 import type { PromptCategoryItem } from "../components/PromptCategoryManager";
-import { Button, IconButton, StatusBadge, Toggle, cx } from "../components/ui";
+import { Button, IconButton, ModalShell, StatusBadge, Toggle, cx } from "../components/ui";
 import { usePromptCategories } from "../promptCategories";
 import type {
   BuiltinPromptStatus,
   InstructionMode,
   InstructionTemplate,
   Lang,
+  PromptBackupEntry,
   PromptEngine,
   PromptInjectionMode,
   SavedPrompt,
@@ -67,6 +70,10 @@ export type PromptsPageProps = {
   instructionEnabled: boolean;
   activeInstructionTitle: string;
   activeInjectionMode?: PromptInjectionMode;
+  promptBackups: PromptBackupEntry[];
+  promptBackupsOpen: boolean;
+  promptBackupsLoading: boolean;
+  promptRestoreBusyId: string;
   instructionTemplates: InstructionTemplate[];
   builtinPromptStatuses: BuiltinPromptStatus[];
   activeBuiltinTemplateId?: string | null;
@@ -82,6 +89,9 @@ export type PromptsPageProps = {
   onInstructionModeChange: (mode: InstructionMode) => void;
   onPromptInjectionModeChange: (mode: PromptInjectionMode) => void;
   onTogglePromptModeHelp: () => void;
+  onOpenPromptBackups: () => void;
+  onClosePromptBackups: () => void;
+  onRestorePromptBackup: (id: string) => void | Promise<void>;
   onEnableBuiltinPrompt: (id: string) => void | Promise<void>;
   onDisableInstruction: MaybeAsyncAction;
   onEnableSavedPrompt: (id: string) => void | Promise<void>;
@@ -110,6 +120,7 @@ export type PromptsPageProps = {
   zcodeActiveInstructionTitle: string;
   zcodeInstructionTemplates: InstructionTemplate[];
   zcodeBuiltinPromptStatuses: BuiltinPromptStatus[];
+  zcodeActiveBuiltinTemplateId?: string | null;
   zcodeSavedPrompts: SavedPrompt[];
   zcodeManagedSavedPromptId?: string | null;
   onEnableZcodeBuiltinPrompt: (id: string) => void | Promise<void>;
@@ -124,6 +135,7 @@ export type PromptsPageProps = {
   grokActiveInstructionTitle: string;
   grokInstructionTemplates: InstructionTemplate[];
   grokBuiltinPromptStatuses: BuiltinPromptStatus[];
+  grokActiveBuiltinTemplateId?: string | null;
   grokSavedPrompts: SavedPrompt[];
   grokManagedSavedPromptId?: string | null;
   onEnableGrokBuiltinPrompt: (id: string) => void | Promise<void>;
@@ -159,7 +171,7 @@ function getCopy(lang: Lang) {
         inactiveDetail: "先选择启用方式，再打开下方任一模板。",
         enableMethod: "启用方式",
         helpLabel: "查看启用方式说明",
-        appendHelp: "只在 AGENTS.md 中增加 Codex-X 管理区块，不改动原有 model_instructions_file，适合叠加使用。",
+        appendHelp: "只在 AGENTS.md 中增加 Everything Patch 管理区块，不改动原有 model_instructions_file，适合叠加使用。",
         replaceHelp: "当前模板会成为唯一生效的指令入口，原有 model_instructions_file 将被替换。",
         pendingMode: (mode: string) => `当前模式不变，下次启用将使用“${mode}”。`,
         modeHint: "点击模板开关时，使用这里选择的方式。",
@@ -175,9 +187,9 @@ function getCopy(lang: Lang) {
         preservedDescription: "用户原有提示词，追加模式下继续生效。",
         existingPrompt: "用户原有指令提示词",
         engineCodex: "Codex",
-        engineClaude: "Claude",
+        engineClaude: "Claude Code",
         engineZcode: "ZCode",
-        engineGrok: "Grok",
+        engineGrok: "Grok Build",
         engineSwitchLabel: "指令引擎",
         claudeMode: "写入 ~/.claude/CLAUDE.md import 区块",
         claudeModeDetail: "当前模板写入 ~/.claude/keysmith/ 并在 CLAUDE.md 注入受管 import 区块。",
@@ -188,6 +200,18 @@ function getCopy(lang: Lang) {
         grokMode: "写入 ~/.grok/AGENTS.md + compat 隔离",
         grokModeDetail: "当前模板写入 AGENTS.md，注入 compat 隔离块并隔离 hooks。",
         grokActiveMemory: "AGENTS.md",
+        backups: "备份与还原",
+        backupsDescription: "每次启用、停用和还原前都会自动创建当前工具的完整提示词快照。",
+        backupsEmpty: "当前工具还没有提示词备份。",
+        backupFiles: (count: number) => `${count} 个文件`,
+        backupModeAppend: "保留模式",
+        backupModeReplace: "替换模式",
+        restore: "还原",
+        restoring: "还原中...",
+        restoreConfirmTitle: "确认还原这个快照？",
+        restoreConfirmDescription: "当前状态会先自动备份，因此本次还原也可以撤销。",
+        cancel: "取消",
+        close: "关闭",
         edit: "编辑",
         remove: "删除",
         formEyebrow: "CUSTOM PROMPT",
@@ -227,7 +251,7 @@ function getCopy(lang: Lang) {
         inactiveDetail: "Choose an activation method, then turn on a template below.",
         enableMethod: "Enable method",
         helpLabel: "Show activation method help",
-        appendHelp: "Adds a Codex-X managed block to AGENTS.md without changing the existing model_instructions_file.",
+        appendHelp: "Adds a Everything Patch managed block to AGENTS.md without changing the existing model_instructions_file.",
         replaceHelp: "Makes the selected template the only instruction entry and replaces the existing model_instructions_file.",
         pendingMode: (mode: string) => `The current mode is unchanged. The next enable uses “${mode}”.`,
         modeHint: "This method is used when a template is turned on.",
@@ -243,9 +267,9 @@ function getCopy(lang: Lang) {
         preservedDescription: "Existing user prompt preserved by append mode.",
         existingPrompt: "Existing user prompt",
         engineCodex: "Codex",
-        engineClaude: "Claude",
+        engineClaude: "Claude Code",
         engineZcode: "ZCode",
-        engineGrok: "Grok",
+        engineGrok: "Grok Build",
         engineSwitchLabel: "Instruction engine",
         claudeMode: "Write import block to ~/.claude/CLAUDE.md",
         claudeModeDetail: "The current template is written to ~/.claude/keysmith/ and a managed import block is injected into CLAUDE.md.",
@@ -256,6 +280,18 @@ function getCopy(lang: Lang) {
         grokMode: "Write ~/.grok/AGENTS.md + compat isolation",
         grokModeDetail: "The current template is written to AGENTS.md, compat isolation block is injected and hooks are isolated.",
         grokActiveMemory: "AGENTS.md",
+        backups: "Backups & restore",
+        backupsDescription: "A complete prompt snapshot for the current tool is created before every enable, disable, and restore.",
+        backupsEmpty: "No prompt backups for this tool yet.",
+        backupFiles: (count: number) => `${count} file${count === 1 ? "" : "s"}`,
+        backupModeAppend: "Keep mode",
+        backupModeReplace: "Replace mode",
+        restore: "Restore",
+        restoring: "Restoring...",
+        restoreConfirmTitle: "Restore this snapshot?",
+        restoreConfirmDescription: "The current state is backed up first, so this restore can also be undone.",
+        cancel: "Cancel",
+        close: "Close",
         edit: "Edit",
         remove: "Delete",
         formEyebrow: "CUSTOM PROMPT",
@@ -273,6 +309,151 @@ function getCopy(lang: Lang) {
         contentPlaceholder: "Enter prompt content here...",
         save: "Save",
       };
+}
+
+type EngineModeCopy = {
+  label: string;
+  detail: string;
+  help: string;
+  title: string;
+};
+
+function getEngineModeCopy(
+  lang: Lang,
+  engine: PromptEngine,
+  mode: PromptInjectionMode,
+): EngineModeCopy {
+  const isAppend = mode === "append";
+  if (lang === "zh") {
+    if (engine === "claude") {
+      return isAppend
+        ? {
+          label: "保留 CLAUDE.md",
+          detail: "在现有 CLAUDE.md 后加入受管 import 区块，原有内容继续生效。",
+          help: "保留 CLAUDE.md 原内容，只增加 Everything Patch 管理的 import 区块。",
+          title: "保留现有 CLAUDE.md，并追加当前提示词 import",
+        }
+        : {
+          label: "替换 CLAUDE.md",
+          detail: "CLAUDE.md 仅保留当前模板的受管 import，替换前内容已完整备份。",
+          help: "当前模板会成为 CLAUDE.md 的唯一指令入口；替换前会自动创建可还原快照。",
+          title: "用当前提示词 import 替换 CLAUDE.md",
+        };
+    }
+    if (engine === "zcode") {
+      return isAppend
+        ? {
+          label: "合并 system prompt",
+          detail: "运行时依次加载 ZCode 原 system prompt 与当前模板。",
+          help: "保留 ZCode 自带或用户设置的 system prompt，并在其后合并当前模板。",
+          title: "保留 ZCode 原 system prompt，并合并当前模板",
+        }
+        : {
+          label: "替换 system prompt",
+          detail: "运行时优先使用当前模板，ZCode 原 system prompt 不会从其配置中删除。",
+          help: "当前模板会成为运行时 system prompt；原配置保持不动，注入状态可从备份还原。",
+          title: "在 ZCode 运行时使用当前模板替换 system prompt",
+        };
+    }
+    if (engine === "grok") {
+      return isAppend
+        ? {
+          label: "追加到 AGENTS.md",
+          detail: "只在现有 AGENTS.md 中增加受管区块，原有规则继续生效。",
+          help: "保留 Grok 的 AGENTS.md，只追加 Everything Patch 管理的提示词区块。",
+          title: "保留 Grok AGENTS.md，并追加当前提示词",
+        }
+        : {
+          label: "替换 AGENTS.md",
+          detail: "当前模板成为完整 AGENTS.md，替换前文件已完整备份。",
+          help: "用当前模板替换 Grok AGENTS.md；替换前会自动创建可还原快照。",
+          title: "用当前模板替换 Grok AGENTS.md",
+        };
+    }
+    return isAppend
+      ? {
+        label: "追加到 AGENTS.md",
+        detail: "当前模板写入 AGENTS.md，同时保留已有指令文件。",
+        help: "只在 AGENTS.md 中增加 Everything Patch 管理区块，不改动原有 model_instructions_file。",
+        title: "写入 AGENTS.md，并保留现有 model_instructions_file",
+      }
+      : {
+        label: "替换指令文件",
+        detail: "当前模板通过 model_instructions_file 独立加载。",
+        help: "当前模板会成为唯一生效的指令入口，原有 model_instructions_file 将被替换。",
+        title: "使用 model_instructions_file 替换现有指令文件",
+      };
+  }
+
+  if (engine === "claude") {
+    return isAppend
+      ? {
+        label: "Keep CLAUDE.md",
+        detail: "A managed import block is appended while the existing CLAUDE.md remains active.",
+        help: "Keeps the existing CLAUDE.md and adds only the Everything Patch managed import block.",
+        title: "Keep CLAUDE.md and append the current prompt import",
+      }
+      : {
+        label: "Replace CLAUDE.md",
+        detail: "CLAUDE.md contains only the managed import; the previous content is fully backed up.",
+        help: "Makes the current template the only CLAUDE.md instruction entry after creating a restorable snapshot.",
+        title: "Replace CLAUDE.md with the current prompt import",
+      };
+  }
+  if (engine === "zcode") {
+    return isAppend
+      ? {
+        label: "Merge system prompt",
+        detail: "The ZCode system prompt and the current template are loaded in sequence at runtime.",
+        help: "Keeps ZCode's native or user system prompt and merges the current template after it.",
+        title: "Keep the ZCode system prompt and merge the current template",
+      }
+      : {
+        label: "Replace system prompt",
+        detail: "The current template takes priority at runtime without deleting ZCode's stored prompt.",
+        help: "Uses the current template as the runtime system prompt; the injection state can be restored from a backup.",
+        title: "Replace the ZCode runtime system prompt with this template",
+      };
+  }
+  if (engine === "grok") {
+    return isAppend
+      ? {
+        label: "Append to AGENTS.md",
+        detail: "Only a managed block is added to AGENTS.md, so existing rules remain active.",
+        help: "Keeps Grok's AGENTS.md and appends an Everything Patch managed prompt block.",
+        title: "Keep Grok AGENTS.md and append the current prompt",
+      }
+      : {
+        label: "Replace AGENTS.md",
+        detail: "The current template becomes the complete AGENTS.md after the original file is backed up.",
+        help: "Replaces Grok AGENTS.md with this template after creating a restorable snapshot.",
+        title: "Replace Grok AGENTS.md with the current template",
+      };
+  }
+  return isAppend
+    ? {
+      label: "Append to AGENTS.md",
+      detail: "The current template is written to AGENTS.md while the existing instruction file is preserved.",
+      help: "Adds an Everything Patch managed block to AGENTS.md without changing model_instructions_file.",
+      title: "Write AGENTS.md and preserve model_instructions_file",
+    }
+    : {
+      label: "Replace instruction file",
+      detail: "The current template is loaded independently through model_instructions_file.",
+      help: "Makes the current template the only instruction entry by replacing model_instructions_file.",
+      title: "Replace model_instructions_file with the current template",
+    };
+}
+
+function backupActionLabel(action: string, lang: Lang) {
+  if (action === "before-restore") return lang === "zh" ? "还原前自动快照" : "Automatic pre-restore snapshot";
+  if (action.includes("disable") || action.includes("uninstall")) {
+    return lang === "zh" ? "停用前自动快照" : "Automatic pre-disable snapshot";
+  }
+  if (action.includes("restore-grok-hooks")) {
+    return lang === "zh" ? "恢复 Hooks 前快照" : "Pre-hook-restore snapshot";
+  }
+  return lang === "zh" ? "启用前自动快照" : "Automatic pre-enable snapshot";
 }
 
 function run(action: MaybeAsyncAction) {
@@ -439,6 +620,129 @@ function PromptFormView({
   );
 }
 
+type PromptBackupsDialogProps = {
+  lang: Lang;
+  engine: PromptEngine;
+  open: boolean;
+  loading: boolean;
+  restoringId: string;
+  backups: PromptBackupEntry[];
+  onClose: () => void;
+  onRestore: (id: string) => void | Promise<void>;
+};
+
+function PromptBackupsDialog({
+  lang,
+  engine,
+  open,
+  loading,
+  restoringId,
+  backups,
+  onClose,
+  onRestore,
+}: PromptBackupsDialogProps) {
+  const copy = getCopy(lang);
+  const [candidateId, setCandidateId] = useState("");
+  const candidate = backups.find((entry) => entry.id === candidateId);
+  const busy = Boolean(restoringId);
+
+  useEffect(() => {
+    if (!open) setCandidateId("");
+  }, [engine, open]);
+
+  const formatDate = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat(lang === "zh" ? "zh-CN" : "en", {
+      dateStyle: "medium",
+      timeStyle: "medium",
+    }).format(date);
+  };
+
+  const restoreCandidate = async () => {
+    if (!candidate) return;
+    await onRestore(candidate.id);
+    setCandidateId("");
+  };
+
+  return (
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      title={<span className="cx-prompt-backups-title"><History size={19} aria-hidden="true" />{copy.backups}</span>}
+      description={copy.backupsDescription}
+      closeLabel={copy.close}
+      closeOnBackdrop={!busy}
+      closeOnEscape={!busy}
+      showCloseButton={!busy}
+      size="lg"
+      className="cx-prompt-backups-dialog"
+      bodyClassName="cx-prompt-backups-body"
+      footer={candidate ? (
+        <>
+          <Button variant="secondary" onClick={() => setCandidateId("")} disabled={busy}>
+            {copy.cancel}
+          </Button>
+          <Button
+            icon={busy ? <Loader2 className="cx-prompts-spin" /> : <RotateCcw />}
+            onClick={() => void restoreCandidate()}
+            disabled={busy}
+            data-initial-focus
+          >
+            {busy ? copy.restoring : copy.restore}
+          </Button>
+        </>
+      ) : (
+        <Button variant="secondary" onClick={onClose} disabled={busy}>{copy.close}</Button>
+      )}
+    >
+      {candidate && (
+        <div className="cx-prompt-backups-confirm" role="status">
+          <strong>{copy.restoreConfirmTitle}</strong>
+          <span>{copy.restoreConfirmDescription}</span>
+        </div>
+      )}
+      {loading ? (
+        <div className="cx-prompt-backups-empty">
+          <Loader2 className="cx-prompts-spin" aria-hidden="true" />
+        </div>
+      ) : backups.length === 0 ? (
+        <div className="cx-prompt-backups-empty">{copy.backupsEmpty}</div>
+      ) : (
+        <div className="cx-prompt-backups-list">
+          {backups.map((entry) => (
+            <div
+              className={cx("cx-prompt-backup-row", candidateId === entry.id && "cx-prompt-backup-row--selected")}
+              key={entry.id}
+            >
+              <div className="cx-prompt-backup-copy">
+                <div>
+                  <strong>{backupActionLabel(entry.action, lang)}</strong>
+                  {entry.injectionMode && (
+                    <StatusBadge tone="neutral" dot={false}>
+                      {entry.injectionMode === "append" ? copy.backupModeAppend : copy.backupModeReplace}
+                    </StatusBadge>
+                  )}
+                </div>
+                <span>{formatDate(entry.createdAt)} · {copy.backupFiles(entry.fileCount)}</span>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={restoringId === entry.id ? <Loader2 className="cx-prompts-spin" /> : <RotateCcw />}
+                onClick={() => setCandidateId(entry.id)}
+                disabled={busy}
+              >
+                {restoringId === entry.id ? copy.restoring : copy.restore}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </ModalShell>
+  );
+}
+
 export function PromptsPage({
   lang,
   instructionMode,
@@ -457,6 +761,10 @@ export function PromptsPage({
   instructionEnabled,
   activeInstructionTitle,
   activeInjectionMode,
+  promptBackups,
+  promptBackupsOpen,
+  promptBackupsLoading,
+  promptRestoreBusyId,
   instructionTemplates,
   builtinPromptStatuses,
   activeBuiltinTemplateId,
@@ -472,6 +780,9 @@ export function PromptsPage({
   onInstructionModeChange,
   onPromptInjectionModeChange,
   onTogglePromptModeHelp,
+  onOpenPromptBackups,
+  onClosePromptBackups,
+  onRestorePromptBackup,
   onEnableBuiltinPrompt,
   onDisableInstruction,
   onEnableSavedPrompt,
@@ -498,6 +809,7 @@ export function PromptsPage({
   zcodeActiveInstructionTitle,
   zcodeInstructionTemplates,
   zcodeBuiltinPromptStatuses,
+  zcodeActiveBuiltinTemplateId,
   zcodeSavedPrompts,
   zcodeManagedSavedPromptId,
   onEnableZcodeBuiltinPrompt,
@@ -511,6 +823,7 @@ export function PromptsPage({
   grokActiveInstructionTitle,
   grokInstructionTemplates,
   grokBuiltinPromptStatuses,
+  grokActiveBuiltinTemplateId,
   grokSavedPrompts,
   grokManagedSavedPromptId,
   onEnableGrokBuiltinPrompt,
@@ -527,20 +840,33 @@ export function PromptsPage({
   const isZcode = promptEngine === "zcode";
   const isGrok = promptEngine === "grok";
   const isCodex = promptEngine === "codex";
+  const appendModeCopy = getEngineModeCopy(lang, promptEngine, "append");
+  const replaceModeCopy = getEngineModeCopy(lang, promptEngine, "replace");
+  const activeModeCopy = getEngineModeCopy(
+    lang,
+    promptEngine,
+    activeInjectionMode || promptInjectionMode,
+  );
   const selectedModeLabel = promptInjectionMode === "append" ? copy.keepExisting : copy.replaceExisting;
-  const activeModeLabel = activeInjectionMode === "append" ? copy.appendMode : copy.replaceMode;
-  const modePending = Boolean(instructionEnabled && activeInjectionMode && activeInjectionMode !== promptInjectionMode);
+  const activeModeLabel = activeModeCopy.label;
   const importBusy = actionBusy === "importPrompt";
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   const promptCategories = usePromptCategories(lang);
-  // 当前引擎下的派生值：四引擎并行，Codex 有 replace/append 模式，Claude/ZCode/Grok 只有单一注入方式。
+  // 当前引擎下的派生值：四引擎共享列表交互，各自保留后端写入语义。
   const activeTemplates = isGrok ? grokInstructionTemplates : isZcode ? zcodeInstructionTemplates : isClaude ? claudeInstructionTemplates : instructionTemplates;
   const activeBuiltinStatuses = isGrok ? grokBuiltinPromptStatuses : isZcode ? zcodeBuiltinPromptStatuses : isClaude ? claudeBuiltinPromptStatuses : builtinPromptStatuses;
-  const activeBuiltinId = isGrok ? null : isZcode ? null : isClaude ? claudeActiveBuiltinTemplateId : activeBuiltinTemplateId;
+  const activeBuiltinId = isGrok
+    ? grokActiveBuiltinTemplateId
+    : isZcode
+      ? zcodeActiveBuiltinTemplateId
+      : isClaude
+        ? claudeActiveBuiltinTemplateId
+        : activeBuiltinTemplateId;
   const activeSavedPrompts = isGrok ? grokSavedPrompts : isZcode ? zcodeSavedPrompts : isClaude ? claudeSavedPrompts : savedPrompts;
   const activeManagedSavedPromptId = isGrok ? grokManagedSavedPromptId : isZcode ? zcodeManagedSavedPromptId : isClaude ? claudeManagedSavedPromptId : managedSavedPromptId;
   const activeInstructionEnabled = isGrok ? grokInstructionEnabled : isZcode ? zcodeInstructionEnabled : isClaude ? claudeInstructionEnabled : instructionEnabled;
   const activeInstructionTitleResolved = isGrok ? grokActiveInstructionTitle : isZcode ? zcodeActiveInstructionTitle : isClaude ? claudeActiveInstructionTitle : activeInstructionTitle;
+  const modePending = Boolean(activeInstructionEnabled && activeInjectionMode && activeInjectionMode !== promptInjectionMode);
   const categoryItems = useMemo<PromptCategoryItem[]>(() => [
     ...activeTemplates.map((template) => ({
       key: promptCategoryKey(promptEngine, "builtin", template.id),
@@ -592,6 +918,16 @@ export function PromptsPage({
   return (
     <PageTransition pageKey={`prompts:${instructionMode}`}>
       <section className={cx("cx-prompts-page", "cx-prompts-page--list", className)} aria-label={copy.title}>
+      <PromptBackupsDialog
+        lang={lang}
+        engine={promptEngine}
+        open={promptBackupsOpen}
+        loading={promptBackupsLoading}
+        restoringId={promptRestoreBusyId}
+        backups={promptBackups}
+        onClose={onClosePromptBackups}
+        onRestore={onRestorePromptBackup}
+      />
       <PromptCategoryManager
         open={categoryManagerOpen}
         lang={lang}
@@ -684,26 +1020,23 @@ export function PromptsPage({
 
       <section className="cx-prompts-mode-panel">
         <div className="cx-prompts-active-summary">
-          <p>{copy.currentStatus}</p>
+          <div className="cx-prompts-summary-label">
+            <p>{copy.currentStatus}</p>
+            <button type="button" onClick={onOpenPromptBackups} disabled={Boolean(promptRestoreBusyId)}>
+              <History size={14} aria-hidden="true" />
+              {copy.backups}
+            </button>
+          </div>
           <div className="cx-prompts-active-title" aria-live="polite">
             <span className={cx("cx-prompts-state-dot", activeInstructionEnabled && "cx-prompts-state-dot--active")} aria-hidden="true" />
             <strong>{activeInstructionEnabled ? activeInstructionTitleResolved : copy.noActive}</strong>
-            {activeInstructionEnabled && <StatusBadge tone="success" dot={false}>{isGrok ? copy.grokMode : isZcode ? copy.zcodeMode : isClaude ? copy.claudeMode : activeModeLabel}</StatusBadge>}
+            {activeInstructionEnabled && <StatusBadge tone="success" dot={false}>{activeModeLabel}</StatusBadge>}
           </div>
           <span>
-            {isGrok
-              ? (activeInstructionEnabled ? copy.grokModeDetail : copy.inactiveDetail)
-              : isZcode
-                ? (activeInstructionEnabled ? copy.zcodeModeDetail : copy.inactiveDetail)
-                : isClaude
-                  ? (activeInstructionEnabled ? copy.claudeModeDetail : copy.inactiveDetail)
-                  : (activeInstructionEnabled
-                    ? activeInjectionMode === "append" ? copy.appendDetail : copy.replaceDetail
-                    : copy.inactiveDetail)}
+            {activeInstructionEnabled ? activeModeCopy.detail : copy.inactiveDetail}
           </span>
         </div>
 
-        {isCodex && (
         <div className="cx-prompts-mode-choice">
           <div className="cx-prompts-mode-copy" ref={promptModeHelpRef}>
             <div className="cx-prompts-mode-title">
@@ -720,8 +1053,8 @@ export function PromptsPage({
             </div>
             {promptModeHelpOpen && (
               <div id={helpId} className="cx-prompts-mode-help" role="dialog" aria-label={copy.helpLabel}>
-                <div><strong>{copy.keepExisting}</strong><span>{copy.appendHelp}</span></div>
-                <div><strong>{copy.replaceExisting}</strong><span>{copy.replaceHelp}</span></div>
+                <div><strong>{copy.keepExisting}</strong><span>{appendModeCopy.help}</span></div>
+                <div><strong>{copy.replaceExisting}</strong><span>{replaceModeCopy.help}</span></div>
               </div>
             )}
             <span>{modePending ? copy.pendingMode(selectedModeLabel) : copy.modeHint}</span>
@@ -732,7 +1065,7 @@ export function PromptsPage({
               role="radio"
               aria-checked={promptInjectionMode === "append"}
               className={cx("cx-prompts-mode-button", promptInjectionMode === "append" && "cx-prompts-mode-button--active")}
-              title={copy.keepTitle}
+              title={appendModeCopy.title}
               onClick={() => onPromptInjectionModeChange("append")}
             >
               <CirclePlus size={16} aria-hidden="true" />
@@ -743,7 +1076,7 @@ export function PromptsPage({
               role="radio"
               aria-checked={promptInjectionMode === "replace"}
               className={cx("cx-prompts-mode-button", promptInjectionMode === "replace" && "cx-prompts-mode-button--active")}
-              title={copy.replaceTitle}
+              title={replaceModeCopy.title}
               onClick={() => onPromptInjectionModeChange("replace")}
             >
               <ArrowLeftRight size={16} aria-hidden="true" />
@@ -751,7 +1084,6 @@ export function PromptsPage({
             </button>
           </div>
         </div>
-        )}
       </section>
 
       <div className="cx-prompt-category-toolbar">
@@ -794,7 +1126,7 @@ export function PromptsPage({
               >
                 {enabled && (
                   <div className="cx-prompts-row-meta">
-                    <StatusBadge tone="accent" dot={false}>{copy.current} · {isGrok ? copy.grokActiveMemory : isClaude ? copy.claudeActiveMemory : activeModeLabel}</StatusBadge>
+                    <StatusBadge tone="accent" dot={false}>{copy.current} · {activeModeLabel}</StatusBadge>
                   </div>
                 )}
               </PromptRow>
@@ -821,7 +1153,7 @@ export function PromptsPage({
           {activeSavedPrompts.filter((prompt) =>
             promptIsVisible(savedPromptCategoryKey(promptEngine, prompt))).map((prompt) => {
             const managed = prompt.id === activeManagedSavedPromptId;
-            const preserved = !managed && !isClaude && Boolean(preservedSavedPromptFilename) && prompt.filename === preservedSavedPromptFilename;
+            const preserved = isCodex && !managed && Boolean(preservedSavedPromptFilename) && prompt.filename === preservedSavedPromptFilename;
             const enabled = managed || preserved;
             return (
               <PromptRow
@@ -858,7 +1190,7 @@ export function PromptsPage({
               >
                 {managed && (
                   <div className="cx-prompts-row-meta">
-                    <StatusBadge tone="accent" dot={false}>{copy.current} · {isGrok ? copy.grokActiveMemory : isClaude ? copy.claudeActiveMemory : activeModeLabel}</StatusBadge>
+                    <StatusBadge tone="accent" dot={false}>{copy.current} · {activeModeLabel}</StatusBadge>
                   </div>
                 )}
                 {!managed && preserved && (
@@ -870,7 +1202,7 @@ export function PromptsPage({
             );
           })}
 
-          {!isClaude && externalPrompt
+          {isCodex && externalPrompt
             && promptIsVisible(promptCategoryKey(promptEngine, "external", externalPrompt.filename || externalPrompt.title)) && (
             <PromptRow
               title={externalPrompt.title || copy.existingPrompt}

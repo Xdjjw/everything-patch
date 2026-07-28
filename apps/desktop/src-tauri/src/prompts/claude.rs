@@ -8,12 +8,14 @@
 use crate::constants::{
     CLAUDE_BUILTIN_BADGE, CLAUDE_BUILTIN_CONTENT, CLAUDE_BUILTIN_FILENAME, CLAUDE_BUILTIN_ID,
     CLAUDE_BUILTIN_SUBTITLE, CLAUDE_BUILTIN_TITLE, CLAUDE_HOME_DIRNAME, CLAUDE_KEYSMITH_DIRNAME,
-    CLAUDE_MANAGED_BEGIN, CLAUDE_MANAGED_END, CLAUDE_MEMORY_FILENAME, CLAUDE_TEMPLATE_PREFIX,
+    CLAUDE_MANAGED_BEGIN, CLAUDE_MANAGED_END, CLAUDE_MEMORY_FILENAME, CLAUDE_MODE_PREFIX,
+    CLAUDE_TEMPLATE_PREFIX, LEGACY_CLAUDE_MANAGED_BEGIN, LEGACY_CLAUDE_MANAGED_END,
+    LEGACY_CLAUDE_TEMPLATE_PREFIX,
 };
 use crate::error::{CodexxError, Result};
 use crate::file_io::{ensure_directory, io_err, read_to_string_if_exists, write_text};
 use crate::paths::home_dir;
-use crate::prompts::types::{BundledPromptMeta, BuiltinPromptStatus};
+use crate::prompts::types::{BuiltinPromptStatus, BundledPromptMeta, PromptInjectionMode};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -46,13 +48,13 @@ fn import_target_for(md_filename: &str) -> String {
 ///
 /// 要求恰好 1 个 BEGIN 和 1 个 END 且 BEGIN < END，否则报错；
 /// 两者都没有则返回 None。与 `managed_agents_bounds` 一致的健壮性策略。
-pub(crate) fn managed_claude_bounds(content: &str) -> Result<Option<(usize, usize)>> {
+fn marker_bounds(content: &str, begin: &str, end: &str) -> Result<Option<(usize, usize)>> {
     let begins = content
-        .match_indices(CLAUDE_MANAGED_BEGIN)
+        .match_indices(begin)
         .map(|(index, _)| index)
         .collect::<Vec<_>>();
     let ends = content
-        .match_indices(CLAUDE_MANAGED_END)
+        .match_indices(end)
         .map(|(index, _)| index)
         .collect::<Vec<_>>();
 
@@ -61,18 +63,36 @@ pub(crate) fn managed_claude_bounds(content: &str) -> Result<Option<(usize, usiz
     }
     if begins.len() != 1 || ends.len() != 1 || begins[0] >= ends[0] {
         return Err(CodexxError::Config(
-            "CLAUDE.md 中的 Codex-X 受管区块标记不完整或重复，请先修复 BEGIN/END 标记".to_string(),
+            "CLAUDE.md 中的 Everything Patch 受管区块标记不完整或重复，请先修复 BEGIN/END 标记"
+                .to_string(),
         ));
     }
-    Ok(Some((begins[0], ends[0] + CLAUDE_MANAGED_END.len())))
+    Ok(Some((begins[0], ends[0] + end.len())))
 }
 
-/// 从受管区块内容里提取 template_key（`<!-- CODEX-X:CLAUDE:TEMPLATE: KEY -->`）。
+pub(crate) fn managed_claude_bounds(content: &str) -> Result<Option<(usize, usize)>> {
+    let current = marker_bounds(content, CLAUDE_MANAGED_BEGIN, CLAUDE_MANAGED_END)?;
+    let legacy = marker_bounds(
+        content,
+        LEGACY_CLAUDE_MANAGED_BEGIN,
+        LEGACY_CLAUDE_MANAGED_END,
+    )?;
+    match (current, legacy) {
+        (Some(_), Some(_)) => Err(CodexxError::Config(
+            "CLAUDE.md 中存在多个 Everything Patch 受管区块，请只保留一个".to_string(),
+        )),
+        (Some(bounds), None) | (None, Some(bounds)) => Ok(Some(bounds)),
+        (None, None) => Ok(None),
+    }
+}
+
+/// 从受管区块内容里提取 template_key。
 fn managed_claude_template_key_from_content(content: &str) -> Option<String> {
     let (start, end) = managed_claude_bounds(content).ok().flatten()?;
     content[start..end].lines().find_map(|line| {
-        line.trim()
-            .strip_prefix(CLAUDE_TEMPLATE_PREFIX)
+        [CLAUDE_TEMPLATE_PREFIX, LEGACY_CLAUDE_TEMPLATE_PREFIX]
+            .iter()
+            .find_map(|prefix| line.trim().strip_prefix(prefix))
             .and_then(|value| value.strip_suffix("-->"))
             .map(str::trim)
             .filter(|value| !value.is_empty())
@@ -87,17 +107,48 @@ pub(crate) fn managed_claude_template_key() -> Result<Option<String>> {
     Ok(managed_claude_template_key_from_content(&content))
 }
 
+fn managed_claude_injection_mode_from_content(content: &str) -> Option<PromptInjectionMode> {
+    let (start, end) = managed_claude_bounds(content).ok().flatten()?;
+    let mode = content[start..end].lines().find_map(|line| {
+        line.trim()
+            .strip_prefix(CLAUDE_MODE_PREFIX)
+            .and_then(|value| value.strip_suffix("-->"))
+            .map(str::trim)
+            .and_then(|value| PromptInjectionMode::parse(Some(value)).ok())
+    });
+    // Older managed blocks were always additive import blocks.
+    Some(mode.unwrap_or(PromptInjectionMode::Append))
+}
+
+pub(crate) fn managed_claude_injection_mode() -> Result<Option<PromptInjectionMode>> {
+    let path = claude_memory_path()?;
+    let content = read_to_string_if_exists(&path)?;
+    Ok(managed_claude_injection_mode_from_content(&content))
+}
+
 /// 从受管区块内容里提取 import target（`@keysmith/<name>.md` 行）。
 fn managed_claude_import_target_from_content(content: &str) -> Option<String> {
     let (start, end) = managed_claude_bounds(content).ok().flatten()?;
-    content[start..end]
-        .lines()
-        .find_map(|line| line.trim().strip_prefix('@').map(str::trim).filter(|s| !s.is_empty()).map(ToString::to_string))
+    content[start..end].lines().find_map(|line| {
+        line.trim()
+            .strip_prefix('@')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(ToString::to_string)
+    })
 }
 
 /// 从 import target 反解出 md 文件名（如 `keysmith/foo.md` -> `foo.md`）。
 fn md_filename_from_import_target(import_target: &str) -> Option<String> {
     import_target.rsplit('/').next().map(ToString::to_string)
+}
+
+pub(crate) fn managed_claude_instruction_filename() -> Result<Option<String>> {
+    let path = claude_memory_path()?;
+    let content = read_to_string_if_exists(&path)?;
+    Ok(managed_claude_import_target_from_content(&content)
+        .as_deref()
+        .and_then(md_filename_from_import_target))
 }
 
 /// 移除受管区块，返回 (剩余内容, 是否移除)。
@@ -116,6 +167,14 @@ fn remove_managed_claude_block(content: &str) -> Result<(String, bool)> {
     Ok((merged, true))
 }
 
+fn compose_claude_memory(base: &str, managed: &str, injection_mode: PromptInjectionMode) -> String {
+    match injection_mode {
+        PromptInjectionMode::Replace => format!("{managed}\n"),
+        PromptInjectionMode::Append if base.trim().is_empty() => format!("{managed}\n"),
+        PromptInjectionMode::Append => format!("{}\n\n{managed}\n", base.trim_end()),
+    }
+}
+
 /// 写入/替换受管区块：先 remove 旧区块，再写入 keysmith 指令文件，最后拼接新区块。
 ///
 /// `template_key` 形如 `builtin:claude-project-rules` 或 `saved:<id>`，
@@ -125,9 +184,13 @@ pub(crate) fn install_managed_claude_block(
     template_key: &str,
     md_filename: &str,
     content: &str,
+    injection_mode: PromptInjectionMode,
 ) -> Result<()> {
     let memory_path = claude_memory_path()?;
     let existing = read_to_string_if_exists(&memory_path)?;
+    let previous_filename = managed_claude_import_target_from_content(&existing)
+        .as_deref()
+        .and_then(md_filename_from_import_target);
     let (base, _) = remove_managed_claude_block(&existing)?;
 
     // 写入 keysmith 指令文件
@@ -138,15 +201,22 @@ pub(crate) fn install_managed_claude_block(
 
     let import_target = import_target_for(md_filename);
     let managed = format!(
-        "{CLAUDE_MANAGED_BEGIN}\n{CLAUDE_TEMPLATE_PREFIX} {template_key} -->\n{import_target}\n{CLAUDE_MANAGED_END}",
+        "{CLAUDE_MANAGED_BEGIN}\n{CLAUDE_TEMPLATE_PREFIX} {template_key} -->\n{CLAUDE_MODE_PREFIX} {} -->\n{import_target}\n{CLAUDE_MANAGED_END}",
+        injection_mode.as_str(),
     );
-    let next = if base.trim().is_empty() {
-        format!("{managed}\n")
-    } else {
-        format!("{}\n\n{managed}\n", base.trim_end())
-    };
+    let next = compose_claude_memory(&base, &managed, injection_mode);
     ensure_directory(memory_path.parent().unwrap_or(Path::new(".")))?;
-    write_text(&memory_path, &next)
+    write_text(&memory_path, &next)?;
+
+    if let Some(previous) = previous_filename {
+        if previous != md_filename {
+            let previous_path = claude_instruction_file(&previous)?;
+            if previous_path.exists() {
+                fs::remove_file(&previous_path).map_err(|e| io_err(&previous_path, e))?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// 移除 CLAUDE.md 受管区块，并删除对应的 keysmith 指令文件。
@@ -158,7 +228,9 @@ pub(crate) fn uninstall_managed_claude_block() -> Result<bool> {
 
     // 先取出 import target，用于清理 keysmith 指令文件
     let import_target = managed_claude_import_target_from_content(&existing);
-    let md_filename = import_target.as_deref().and_then(md_filename_from_import_target);
+    let md_filename = import_target
+        .as_deref()
+        .and_then(md_filename_from_import_target);
 
     let (next, removed) = remove_managed_claude_block(&existing)?;
     if !removed {
@@ -177,8 +249,7 @@ pub(crate) fn uninstall_managed_claude_block() -> Result<bool> {
     if let Some(filename) = md_filename {
         let instruction_path = claude_instruction_file(&filename)?;
         if instruction_path.exists() {
-            fs::remove_file(&instruction_path)
-                .map_err(|e| io_err(&instruction_path, e))?;
+            fs::remove_file(&instruction_path).map_err(|e| io_err(&instruction_path, e))?;
         }
     }
     Ok(true)
@@ -245,4 +316,81 @@ pub(crate) fn claude_builtin_prompt_status_inner(
             "未启用".to_string()
         },
     }])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_managed_block_remains_readable() {
+        let content = format!(
+            "{LEGACY_CLAUDE_MANAGED_BEGIN}\n{LEGACY_CLAUDE_TEMPLATE_PREFIX} builtin:legacy -->\n@keysmith/legacy.md\n{LEGACY_CLAUDE_MANAGED_END}\n"
+        );
+
+        assert!(managed_claude_bounds(&content)
+            .expect("parse legacy managed block")
+            .is_some());
+        assert_eq!(
+            managed_claude_template_key_from_content(&content).as_deref(),
+            Some("builtin:legacy")
+        );
+    }
+
+    #[test]
+    fn mixed_current_and_legacy_blocks_are_rejected() {
+        let content = format!(
+            "{CLAUDE_MANAGED_BEGIN}\n{CLAUDE_MANAGED_END}\n{LEGACY_CLAUDE_MANAGED_BEGIN}\n{LEGACY_CLAUDE_MANAGED_END}\n"
+        );
+
+        assert!(managed_claude_bounds(&content).is_err());
+    }
+
+    #[test]
+    fn legacy_block_defaults_to_append_mode() {
+        let content = format!(
+            "{LEGACY_CLAUDE_MANAGED_BEGIN}\n{LEGACY_CLAUDE_TEMPLATE_PREFIX} builtin:legacy -->\n@keysmith/legacy.md\n{LEGACY_CLAUDE_MANAGED_END}\n"
+        );
+
+        assert_eq!(
+            managed_claude_injection_mode_from_content(&content),
+            Some(PromptInjectionMode::Append)
+        );
+    }
+
+    #[test]
+    fn current_block_reads_replace_mode() {
+        let content = format!(
+            "{CLAUDE_MANAGED_BEGIN}\n{CLAUDE_TEMPLATE_PREFIX} builtin:test -->\n{CLAUDE_MODE_PREFIX} replace -->\n@keysmith/test.md\n{CLAUDE_MANAGED_END}\n"
+        );
+
+        assert_eq!(
+            managed_claude_injection_mode_from_content(&content),
+            Some(PromptInjectionMode::Replace)
+        );
+    }
+
+    #[test]
+    fn append_mode_preserves_existing_memory() {
+        assert_eq!(
+            compose_claude_memory(
+                "# Existing",
+                "<!-- managed -->",
+                PromptInjectionMode::Append,
+            ),
+            "# Existing\n\n<!-- managed -->\n"
+        );
+    }
+
+    #[test]
+    fn replace_mode_discards_existing_memory_from_live_file() {
+        assert_eq!(
+            compose_claude_memory(
+                "# Existing",
+                "<!-- managed -->",
+                PromptInjectionMode::Replace,
+            ),
+            "<!-- managed -->\n"
+        );
+    }
 }

@@ -4,16 +4,16 @@
 </p>
 
 <div align="center">
-  <img src="apps/desktop/src-tauri/icons/icon.png" alt="Codex-X Logo" width="150" />
+  <img src="apps/desktop/src-tauri/icons/icon.png" alt="Everything Patch Logo" width="150" />
 
-  # Codex-X
+  # Everything Patch
 
-  **Codex Prompts · API / Providers · Sessions · Skills / MCP in One Place**
+  **Visual prompt and configuration management for Codex · Claude · ZCode · Grok**
 
-  A cross-platform desktop tool for **OpenAI Codex Desktop / Codex CLI**. Manage prompt templates, switch third-party APIs, organize / repair / permanently delete local sessions, manage Skills / MCP, apply macOS / Windows skins, and inspect TOML and login credentials without repeatedly editing configuration files by hand.
+  A cross-platform desktop manager for multiple AI coding tools. It brings prompt templates, third-party API providers, Codex sessions, Skills / MCP, Claude instructions, ZCode system roles, Grok AGENTS.md, skins, and TOML configuration into one interface.
 
   <p>
-    <img src="https://img.shields.io/github/v/release/yynxxxxx/Codex-X?label=version&color=blue" alt="version" />
+    <img src="https://img.shields.io/github/v/release/Xdjjw/everything-patch?label=version&color=blue" alt="version" />
     <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-555" alt="platform" />
     <img src="https://img.shields.io/badge/built%20with-Tauri%202-24C8DB" alt="tauri" />
     <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
@@ -30,9 +30,9 @@
 
 ---
 
-## What is Codex-X?
+## What is Everything Patch?
 
-When you use Codex Desktop, the CLI, third-party APIs, and multiple prompts together, settings quickly become scattered across different files. Codex-X brings these frequent tasks into one desktop interface, so you can see the current state and complete common actions with a click.
+When you use Codex, Claude, ZCode, Grok, third-party APIs, and multiple prompts together, settings quickly become scattered across different directories. Everything Patch brings these frequent tasks into one desktop interface, so you can see the current state and complete common actions with a click.
 
 You can use it to:
 
@@ -47,7 +47,7 @@ You can use it to:
 <summary><b>App preview</b>: Home / Provider / TOML / Auth</summary>
 
 <p align="center">
-  <img src="docs/screenshots/app/preview.png" alt="Codex-X app preview: Home, Provider, TOML, Auth" width="920" />
+  <img src="docs/screenshots/app/preview.png" alt="Everything Patch app preview: Home, Provider, TOML, Auth" width="920" />
 </p>
 
 </details>
@@ -109,7 +109,7 @@ You can use it to:
 <table>
   <tr>
     <th align="center" width="190">What you want to do</th>
-    <th align="center">How Codex-X helps</th>
+    <th align="center">How Everything Patch helps</th>
   </tr>
   <tr>
     <td align="center">🧩 <b>Use prompt templates</b></td>
@@ -133,7 +133,7 @@ You can use it to:
   </tr>
   <tr>
     <td align="center">🎨 <b>Apply macOS / Windows skins</b></td>
-    <td align="left">Use the bundled Shiina Mashiro art-studio theme with real-wallpaper, full-interface previews. Import or export packs, hot-switch themes, and turn the skin off directly. The runtime is built into Codex-X; the separate Codex Dream Skin engine is not required.</td>
+    <td align="left">Use the bundled Shiina Mashiro art-studio theme with real-wallpaper, full-interface previews. Import or export packs, hot-switch themes, and turn the skin off directly. The runtime is built into Everything Patch; the separate Codex Dream Skin engine is not required.</td>
   </tr>
   <tr>
     <td align="center">📦 <b>Use it across platforms</b></td>
@@ -196,7 +196,7 @@ You can use it to:
   <tr>
     <td width="50%" valign="top">
       <b>Keep existing prompt</b><br />
-      Best for users who already have personal rules. Codex-X only appends its managed content and removes only that content when disabled, leaving the original prompt untouched.
+      Best for users who already have personal rules. Everything Patch only appends its managed content and removes only that content when disabled, leaving the original prompt untouched.
     </td>
     <td width="50%" valign="top">
       <b>Replace existing prompt</b><br />
@@ -268,7 +268,7 @@ Manage Codex capability extensions from the **Skills & MCP** page instead of sea
     </td>
     <td width="50%" valign="top">
       <b>MCP</b><br />
-      Preview existing MCP servers before importing them, then choose what Codex-X should manage. Codex-X maintains the Codex configuration when a server is enabled or disabled.
+      Preview existing MCP servers before importing them, then choose what Everything Patch should manage. Everything Patch maintains the Codex configuration when a server is enabled or disabled.
     </td>
   </tr>
 </table>
@@ -276,8 +276,8 @@ Manage Codex capability extensions from the **Skills & MCP** page instead of sea
 ### 7. Reverse Skills Navigation
 
 <div align="center">
-  <a href="https://yynxxxxx.github.io/Codex-X/">
-    <img src="https://img.shields.io/badge/Codex--X-Online%20Reverse%20Skills%20Guide-0ea5e9?style=for-the-badge&logo=githubpages&logoColor=white" alt="Codex-X Online Reverse Skills Guide" />
+  <a href="https://xdjjw.github.io/everything-patch/">
+    <img src="https://img.shields.io/badge/Everything--Patch-Online%20Reverse%20Skills%20Guide-0ea5e9?style=for-the-badge&logo=githubpages&logoColor=white" alt="Everything Patch Online Reverse Skills Guide" />
   </a>
 </div>
 
@@ -286,7 +286,7 @@ Manage Codex capability extensions from the **Skills & MCP** page instead of sea
 <table>
   <tr>
     <td width="55%">
-      <b>Online guide</b>: explains the “armor breaking” workflow, how to enable GPT-5.5 / unrestricted jeli in Codex-X, and how to combine it with reverse-engineering Skills.
+      <b>Online guide</b>: explains the “armor breaking” workflow, how to enable GPT-5.5 / unrestricted jeli in Everything Patch, and how to combine it with reverse-engineering Skills.
       <br /><br />
       <b>Categories</b>: Android APK / Windows EXE / Web protocol reverse engineering.
       <br /><br />
@@ -305,8 +305,8 @@ Manage Codex capability extensions from the **Skills & MCP** page instead of sea
 </table>
 
 <p align="center">
-  <a href="https://yynxxxxx.github.io/Codex-X/">
-    <b>🚀 Open Codex-X Reverse Skills Guide</b>
+  <a href="https://xdjjw.github.io/everything-patch/">
+    <b>🚀 Open Everything Patch Reverse Skills Guide</b>
   </a>
 </p>
 
@@ -333,7 +333,7 @@ Manage Codex capability extensions from the **Skills & MCP** page instead of sea
 
 ## Configuration Paths
 
-Codex-X reads the Codex configuration directory by default:
+Everything Patch reads the Codex configuration directory by default:
 
 ```text
 ~/.codex/config.toml
@@ -344,21 +344,23 @@ Environment variables are also supported:
 
 ```text
 CODEX_HOME=/path/to/.codex
-CODEXX_HOME=/path/to/codex-x-data
+EVERYTHING_PATCH_HOME=/path/to/everything-patch-data
 CC_SWITCH_HOME=/path/to/.cc-switch
 ```
 
-Codex-X's own database is stored by default at:
+Everything Patch's own database is stored by default at:
 
 ```text
-~/.codexx/codexx.db
+~/.everything-patch/everything-patch.db
 ```
+
+Legacy `CODEXX_HOME`, `~/.codexx/codexx.db`, and `codex-x-skins` locations remain supported automatically.
 
 ## Download
 
 Download from the Releases page:
 
-https://github.com/yynxxxxx/Codex-X/releases
+https://github.com/Xdjjw/everything-patch/releases
 
 ## Development
 
@@ -370,16 +372,18 @@ pnpm dev
 Build desktop bundles:
 
 ```bash
-pnpm --dir apps/desktop tauri build
+npm run build
 ```
+
+When `TAURI_SIGNING_PRIVATE_KEY` is not configured locally, the build script skips updater artifacts that require the release key while still producing installers such as MSI and NSIS. CI releases continue to invoke Tauri directly with repository secrets to generate signed updater artifacts.
 
 ## Desktop Installation Notes
 
 ### Skin Center security boundary
 
 - Live skin application supports macOS and Windows. Linux can still manage, import, and export packs but is never reported as applied.
-- macOS uses only the signed Node.js bundled with the official Codex app and validates its bundle and process identity. Windows dynamically validates the current user's registered `OpenAI.Codex` Store package and uses the pinned Node.js 22 runtime shipped with Codex-X releases.
-- CDP binds only to `127.0.0.1`; Codex-X does not modify the official `.app`, `WindowsApps`, `app.asar`, code signature, directory permissions, or `config.toml`.
+- macOS uses only the signed Node.js bundled with the official Codex app and validates its bundle and process identity. Windows dynamically validates the current user's registered `OpenAI.Codex` Store package and uses the pinned Node.js 22 runtime shipped with Everything Patch releases.
+- CDP binds only to `127.0.0.1`; Everything Patch does not modify the official `.app`, `WindowsApps`, `app.asar`, code signature, directory permissions, or `config.toml`.
 - First application usually asks to restart Codex. Turn off skin removes the live interface skin immediately, and any theme can be applied again later.
 - Themes adapt cropping from image dimensions and content. Subject-focused artwork can use `art.focusX`, `art.focusY` (`0` to `1`), and `art.safeArea` in `theme.json` for precise framing without generating duplicate images for the same theme.
 - Injection is based on the MIT-licensed [Fei-Away/Codex-Dream-Skin](https://github.com/Fei-Away/Codex-Dream-Skin) source. The pinned source and license notice are in `apps/desktop/src-tauri/resources/skin-runtime/NOTICE.md`.
@@ -390,12 +394,12 @@ If you see “app is damaged” when opening an unsigned / unnotarized DMG, this
 - Local testing only: remove the quarantine attribute manually
 
 ```bash
-xattr -dr com.apple.quarantine /Applications/Codex-X.app
+xattr -dr com.apple.quarantine "/Applications/Everything Patch.app"
 ```
 
 ## License
 
-This project is open-sourced under the [MIT License](https://github.com/yynxxxxx/Codex-X/blob/main/LICENSE).
+This project is open-sourced under the [MIT License](https://github.com/Xdjjw/everything-patch/blob/main/LICENSE).
 
 ## Thanks
 
@@ -404,11 +408,11 @@ Thanks to the [LINUX DO forum](https://linux.do/) community for attention, feedb
 ## Star History
 
 <p align="center">
-  <a href="https://github.com/yynxxxxx/Codex-X/stargazers">
+  <a href="https://github.com/Xdjjw/everything-patch/stargazers">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://codex-star-history.zhihack0728.workers.dev/v1/charts/codex-x.svg?theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://codex-star-history.zhihack0728.workers.dev/v1/charts/codex-x.svg?theme=light" />
-      <img alt="Codex-X Star History" src="https://codex-star-history.zhihack0728.workers.dev/v1/charts/codex-x.svg?theme=light" width="900" />
+      <source media="(prefers-color-scheme: dark)" srcset="https://codex-star-history.zhihack0728.workers.dev/v1/charts/everything-patch.svg?theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://codex-star-history.zhihack0728.workers.dev/v1/charts/everything-patch.svg?theme=light" />
+      <img alt="Everything Patch Star History" src="https://codex-star-history.zhihack0728.workers.dev/v1/charts/everything-patch.svg?theme=light" width="900" />
     </picture>
   </a>
 </p>

@@ -25,6 +25,7 @@ use crate::constants::*;
 use crate::error::{CodexxError, Result};
 use crate::file_io::{ensure_directory, io_err, read_to_string_if_exists, write_text};
 use crate::paths::home_dir;
+use crate::prompts::PromptInjectionMode;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -93,6 +94,21 @@ pub(crate) fn discover_zcode_app() -> Result<PathBuf> {
     }
 }
 
+pub(crate) fn detect_zcode_version() -> Option<String> {
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    {
+        discover_zcode_app()
+            .ok()
+            .and_then(|app_root| platform::detect_zcode_version(&app_root))
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        discover_zcode_app()
+            .ok()
+            .and_then(|app_root| unsupported::detect_zcode_version(&app_root))
+    }
+}
+
 /// 从 app 根目录解析 runtime 与 node 命令路径（平台分发）。
 pub(crate) fn resolve_runtime_and_node(app_root: &Path) -> (PathBuf, PathBuf) {
     #[cfg(target_os = "macos")]
@@ -141,6 +157,74 @@ pub(crate) fn is_zcode_running() -> bool {
     {
         false
     }
+}
+
+/// 流式判断文件是否包含某段字节，避免把 app.asar（常见 100MB+）整个读进内存。
+///
+/// 两个平台的 `app_supports_agent_override` 共用；块间保留 needle-1 字节重叠，
+/// 保证跨块边界的匹配不会漏掉。
+pub(crate) fn file_contains_needle(path: &Path, needle: &str) -> bool {
+    use std::io::Read;
+
+    let needle = needle.as_bytes();
+    if needle.is_empty() {
+        return true;
+    }
+    let Ok(file) = fs::File::open(path) else {
+        return false;
+    };
+    let mut reader = std::io::BufReader::new(file);
+    let overlap = needle.len() - 1;
+    let chunk_size = (1024 * 1024).max(needle.len() * 2);
+    let mut buffer = vec![0_u8; overlap + chunk_size];
+    let mut filled = 0_usize;
+    loop {
+        let read = match reader.read(&mut buffer[filled..]) {
+            Ok(0) => 0,
+            Ok(count) => count,
+            Err(_) => return false,
+        };
+        if read == 0 {
+            return buffer[..filled].windows(needle.len()).any(|w| w == needle);
+        }
+        filled += read;
+        if filled < buffer.len() {
+            continue;
+        }
+        if buffer[..filled].windows(needle.len()).any(|w| w == needle) {
+            return true;
+        }
+        buffer.copy_within(filled - overlap..filled, 0);
+        filled = overlap;
+    }
+}
+
+/// 递归搜索目录内是否有文件包含某段字节（用于 asar 被解包成目录的安装）。
+pub(crate) fn dir_contains_needle(dir: &Path, needle: &str, max_depth: usize) -> bool {
+    if max_depth == 0 {
+        return false;
+    }
+    let Ok(entries) = fs::read_dir(dir) else {
+        return false;
+    };
+    let mut directories = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_symlink() {
+            continue;
+        }
+        if file_type.is_dir() {
+            directories.push(path);
+        } else if file_type.is_file() && file_contains_needle(&path, needle) {
+            return true;
+        }
+    }
+    directories
+        .into_iter()
+        .any(|child| dir_contains_needle(&child, needle, max_depth - 1))
 }
 
 /// 检查 runtime 是否包含 patch 锚点。
@@ -229,7 +313,12 @@ pub(crate) fn unset_current_session_env() -> Result<Vec<String>> {
 }
 
 /// 安装受管入口：写 system-role.md + config.json + wrapper + 激活环境变量。
-pub(crate) fn install_zcode(system_content: &str) -> Result<()> {
+pub(crate) fn install_zcode(
+    system_content: &str,
+    injection_mode: PromptInjectionMode,
+    template_key: &str,
+    title: &str,
+) -> Result<()> {
     let plan = build_install_plan()?;
     let normalized = wrapper::normalize_system_prompt_content(system_content);
     if normalized.trim().is_empty() {
@@ -243,21 +332,30 @@ pub(crate) fn install_zcode(system_content: &str) -> Result<()> {
     }
 
     let paths = &plan.paths;
-    let launcher_parent = paths.launcher.parent().unwrap_or(Path::new(".")).to_path_buf();
-    for dir in [&paths.managed_dir, &launcher_parent, &paths.log_dir, &paths.cache_dir] {
+    let launcher_parent = paths
+        .launcher
+        .parent()
+        .unwrap_or(Path::new("."))
+        .to_path_buf();
+    for dir in [
+        &paths.managed_dir,
+        &launcher_parent,
+        &paths.log_dir,
+        &paths.cache_dir,
+    ] {
         ensure_directory(dir)?;
     }
 
     // 写 system-role.md
     write_text(&paths.system_file, &normalized)?;
     // 写 config.json
-    let config = wrapper::render_config(&plan);
+    let config = wrapper::render_config(&plan, injection_mode, template_key, title);
     write_text(&paths.config_file, &config)?;
     // 写 launcher.js（Node.js 脚本，无需 Python）
     let launcher_content = wrapper::render_launcher();
     write_text(&paths.launcher, &launcher_content)?;
     // 写 patch.js sidecar（patch 参数）
-    let sidecar_content = wrapper::render_patch_sidecar();
+    let sidecar_content = wrapper::render_patch_sidecar(injection_mode);
     write_text(&paths.patch_sidecar, &sidecar_content)?;
 
     // 激活环境变量
@@ -267,10 +365,7 @@ pub(crate) fn install_zcode(system_content: &str) -> Result<()> {
     // macOS：额外写 env 脚本与 LaunchAgent
     #[cfg(target_os = "macos")]
     {
-        let (env_script_path, env_script, launch_agent) = platform::render_env_artifacts(&plan)?;
-        write_text(&env_script_path, &env_script)?;
-        let launch_agent_path = platform::launch_agent_path();
-        write_text(&launch_agent_path, &launch_agent)?;
+        platform::write_env_artifacts(&plan)?;
     }
 
     Ok(())
@@ -280,7 +375,12 @@ pub(crate) fn install_zcode(system_content: &str) -> Result<()> {
 pub(crate) fn uninstall_zcode() -> Result<bool> {
     let paths = build_paths()?;
     let mut removed = false;
-    for path in [&paths.system_file, &paths.config_file, &paths.launcher, &paths.patch_sidecar] {
+    for path in [
+        &paths.system_file,
+        &paths.config_file,
+        &paths.launcher,
+        &paths.patch_sidecar,
+    ] {
         if path.exists() {
             backup_zcode_file(path)?;
             removed = true;
@@ -289,7 +389,11 @@ pub(crate) fn uninstall_zcode() -> Result<bool> {
     // macOS：移除 env 脚本与 LaunchAgent
     #[cfg(target_os = "macos")]
     {
-        let env_script = paths.launcher.parent().unwrap_or(Path::new(".")).join(ZCODE_ENV_SCRIPT_NAME);
+        let env_script = paths
+            .launcher
+            .parent()
+            .unwrap_or(Path::new("."))
+            .join(ZCODE_ENV_SCRIPT_NAME);
         if env_script.exists() {
             backup_zcode_file(&env_script)?;
             removed = true;
@@ -304,11 +408,44 @@ pub(crate) fn uninstall_zcode() -> Result<bool> {
     Ok(removed)
 }
 
+pub(crate) fn sync_restored_environment() -> Result<()> {
+    let paths = build_paths()?;
+    let active = paths.system_file.is_file()
+        && paths.config_file.is_file()
+        && paths.launcher.is_file()
+        && paths.patch_sidecar.is_file();
+    if active {
+        let plan = build_install_plan()?;
+        let vars = env_values(&plan)?;
+        activate_current_session(&vars)?;
+        #[cfg(target_os = "macos")]
+        {
+            platform::write_env_artifacts(&plan)?;
+        }
+    } else {
+        unset_current_session_env()?;
+        #[cfg(target_os = "macos")]
+        {
+            let env_script = paths
+                .launcher
+                .parent()
+                .unwrap_or(Path::new("."))
+                .join(ZCODE_ENV_SCRIPT_NAME);
+            for artifact in [env_script, platform::launch_agent_path()] {
+                if artifact.exists() {
+                    fs::remove_file(&artifact).map_err(|e| io_err(&artifact, e))?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// 备份文件（改名为 .bak_时间戳）。
 fn backup_zcode_file(path: &Path) -> Result<()> {
     use chrono::Local;
     let ts = Local::now().format("%Y%m%d_%H%M%S");
-    let backup = path.with_name(format!(
+    let backup = path.with_file_name(format!(
         "{}.bak_{}",
         path.file_name().and_then(|e| e.to_str()).unwrap_or("file"),
         ts
@@ -331,6 +468,34 @@ pub(crate) fn current_system_role_content() -> Result<Option<String>> {
     }
 }
 
+pub(crate) fn current_install_metadata(
+) -> Result<(Option<PromptInjectionMode>, Option<String>, Option<String>)> {
+    let paths = build_paths()?;
+    if !paths.config_file.is_file() {
+        return Ok((None, None, None));
+    }
+    let text = read_to_string_if_exists(&paths.config_file)?;
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {
+        // A damaged diagnostic config must not block backup, uninstall, or repair.
+        return Ok((Some(PromptInjectionMode::Append), None, None));
+    };
+    let mode = value
+        .get("injection_mode")
+        .and_then(|item| item.as_str())
+        .and_then(|item| PromptInjectionMode::parse(Some(item)).ok())
+        // Older managed installs preserved an existing native system prompt.
+        .or(Some(PromptInjectionMode::Append));
+    let template_key = value
+        .get("template_key")
+        .and_then(|item| item.as_str())
+        .map(ToString::to_string);
+    let title = value
+        .get("title")
+        .and_then(|item| item.as_str())
+        .map(ToString::to_string);
+    Ok((mode, template_key, title))
+}
+
 /// 内置模板元数据。
 pub(crate) fn zcode_builtin_content(template_id: &str) -> Result<(String, String, String, String)> {
     let id = if template_id.trim().is_empty() {
@@ -347,4 +512,58 @@ pub(crate) fn zcode_builtin_content(template_id: &str) -> Result<(String, String
         ZCODE_BUILTIN_CONTENT.to_string(),
         "打包内置".to_string(),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_dir(label: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock after epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "everything-patch-zcode-{label}-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&path).expect("create test directory");
+        path
+    }
+
+    #[test]
+    fn file_search_matches_across_streaming_chunk_boundaries() {
+        let root = temp_dir("stream-boundary");
+        let path = root.join("app.asar");
+        let needle = ZCODE_AGENT_OVERRIDE_NEEDLE;
+        let overlap = needle.len() - 1;
+        let buffer_len = 1024 * 1024 + overlap;
+        let mut bytes = vec![b'x'; buffer_len - 5];
+        bytes.extend_from_slice(needle.as_bytes());
+        bytes.extend_from_slice(b"tail");
+        fs::write(&path, bytes).expect("write asar fixture");
+
+        assert!(file_contains_needle(&path, needle));
+        assert!(!file_contains_needle(&path, "missing-agent-override"));
+
+        fs::remove_dir_all(root).expect("remove test directory");
+    }
+
+    #[test]
+    fn directory_search_handles_unpacked_asar_layout() {
+        let root = temp_dir("unpacked-asar");
+        let host = root.join("out/host");
+        fs::create_dir_all(&host).expect("create unpacked asar directories");
+        fs::write(
+            host.join("index.js"),
+            format!("const override = '{ZCODE_AGENT_OVERRIDE_NEEDLE}';"),
+        )
+        .expect("write unpacked asar fixture");
+
+        assert!(dir_contains_needle(&root, ZCODE_AGENT_OVERRIDE_NEEDLE, 3));
+        assert!(!dir_contains_needle(&root, ZCODE_AGENT_OVERRIDE_NEEDLE, 2));
+
+        fs::remove_dir_all(root).expect("remove test directory");
+    }
 }

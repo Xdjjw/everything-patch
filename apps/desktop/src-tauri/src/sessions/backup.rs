@@ -7,6 +7,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+const PROVIDER_SYNC_MANAGER: &str = "Everything Patch provider sync v2";
+const LEGACY_PROVIDER_SYNC_MANAGER: &str = "Codex-X provider sync v2";
+
 #[derive(Debug, Clone)]
 pub(super) struct BackupSnapshot {
     live_path: PathBuf,
@@ -161,8 +164,12 @@ pub(crate) fn prune_provider_sync_backups(codex_dir: &Path) -> Result<()> {
             .ok()
             .and_then(|text| serde_json::from_str::<Value>(&text).ok())
             .is_some_and(|metadata| {
-                metadata.get("managedBy").and_then(Value::as_str)
-                    == Some("Codex-X provider sync v2")
+                metadata
+                    .get("managedBy")
+                    .and_then(Value::as_str)
+                    .is_some_and(|value| {
+                        value == PROVIDER_SYNC_MANAGER || value == LEGACY_PROVIDER_SYNC_MANAGER
+                    })
             });
         if is_v2_provider_sync_backup {
             dirs.push(path);
@@ -219,7 +226,7 @@ pub(super) fn create_provider_sync_backup(
         &json!({
             "version": 1,
             "namespace": "provider-sync",
-            "managedBy": "Codex-X provider sync v2",
+            "managedBy": PROVIDER_SYNC_MANAGER,
             "codexHome": codex_dir.display().to_string(),
             "targetProvider": target_provider,
             "createdAt": Local::now().to_rfc3339(),

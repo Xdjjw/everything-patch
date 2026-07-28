@@ -134,7 +134,10 @@ pub(crate) fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
         file.write_all(bytes).map_err(|e| io_err(&tmp, e))?;
         file.sync_all().map_err(|e| io_err(&tmp, e))?;
     }
-    fs::rename(&tmp, path).map_err(|e| io_err(path, e))?;
+    if let Err(error) = fs::rename(&tmp, path) {
+        let _ = fs::remove_file(&tmp);
+        return Err(io_err(path, error));
+    }
     Ok(())
 }
 
@@ -155,7 +158,7 @@ mod tests {
     fn temp_dir(name: &str) -> std::path::PathBuf {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
         let path = std::env::temp_dir().join(format!(
-            "codex-x-file-io-{name}-{}-{}",
+            "everything-patch-file-io-{name}-{}-{}",
             std::process::id(),
             COUNTER.fetch_add(1, Ordering::Relaxed),
         ));
@@ -179,6 +182,32 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(entries, vec![path.file_name().unwrap().to_os_string()]);
 
+        fs::remove_dir_all(dir).expect("remove test directory");
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn atomic_write_removes_temp_file_when_destination_is_locked() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let dir = temp_dir("locked-replace");
+        let path = dir.join("state.json");
+        fs::write(&path, b"old").expect("write original file");
+        let held = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .share_mode(0)
+            .open(&path)
+            .expect("lock destination");
+
+        atomic_write(&path, b"new").expect_err("locked destination must reject replacement");
+        let entries = fs::read_dir(&dir)
+            .expect("read test directory")
+            .map(|entry| entry.expect("read directory entry").file_name())
+            .collect::<Vec<_>>();
+        assert_eq!(entries, vec![path.file_name().unwrap().to_os_string()]);
+
+        drop(held);
         fs::remove_dir_all(dir).expect("remove test directory");
     }
 
