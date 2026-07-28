@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useState } from "react";
 import type { ChangeEvent, RefObject } from "react";
 import {
   AlertCircle,
@@ -11,8 +11,10 @@ import {
   RefreshCw,
   Sparkles,
   Upload,
+  Wrench,
 } from "lucide-react";
 
+import { McpInstallCatalog } from "../components/McpInstallCatalog";
 import { PageTransition } from "../components/PageTransition";
 import { ToolTabs, toolLabel } from "../components/ToolTabs";
 import { Button, ModalShell, StatusBadge, Toggle, cx } from "../components/ui";
@@ -20,6 +22,8 @@ import type {
   Lang,
   ManagedMcpServer,
   ManagedSkill,
+  McpIntegrationInstallInput,
+  McpIntegrationInstallResult,
   SkillsMcpImportPreview,
   SkillsMcpState,
   ToolId,
@@ -52,6 +56,8 @@ export type SkillsMcpPageProps = {
   onCheckUpdates: MaybeAsyncAction;
   onToggleSkill: (id: string, enabled: boolean) => void | Promise<void>;
   onToggleMcp: (id: string, enabled: boolean) => void | Promise<void>;
+  onInstallMcpIntegration: (input: McpIntegrationInstallInput) => Promise<McpIntegrationInstallResult>;
+  onOpenExternalUrl: (url: string) => void;
 };
 
 type SkillsMcpCopy = ReturnType<typeof getCopy>;
@@ -64,6 +70,7 @@ function getCopy(lang: Lang, toolName: string) {
         description: `管理 ${toolName} 当前可用的 Skills 与 MCP，导入已有内容、安装技能包并控制启用状态。`,
         refresh: "刷新",
         importExisting: "导入已有",
+        installMcp: "手动接入 MCP",
         installZip: "从 ZIP 安装",
         checkUpdates: "检查更新",
         loading: "正在读取本地 Skills / MCP...",
@@ -93,6 +100,7 @@ function getCopy(lang: Lang, toolName: string) {
         description: `Manage Skills and MCP servers for ${toolName}, import existing items, install packages, and control their state.`,
         refresh: "Refresh",
         importExisting: "Import existing",
+        installMcp: "Add MCP manually",
         installZip: "Install ZIP",
         checkUpdates: "Check updates",
         loading: "Loading local Skills / MCP...",
@@ -283,11 +291,15 @@ export function SkillsMcpPage({
   onCheckUpdates,
   onToggleSkill,
   onToggleMcp,
+  onInstallMcpIntegration,
+  onOpenExternalUrl,
 }: SkillsMcpPageProps) {
   const copy = getCopy(lang, toolLabel(activeTool));
   const tabId = useId();
   const anyBusy = Boolean(actionBusy);
   const importBusy = actionBusy === "importExistingSkillsMcp";
+  const mcpInstallBusy = actionBusy.startsWith("installMcpIntegration:");
+  const [mcpCatalogOpen, setMcpCatalogOpen] = useState(false);
   const activeItems = activeTab === "mcp" ? state?.mcpServers ?? [] : state?.skills ?? [];
   const handleZipChange = (event: ChangeEvent<HTMLInputElement>) => {
     void onInstallZip(event.currentTarget.files?.[0]);
@@ -335,6 +347,16 @@ export function SkillsMcpPage({
           >
             {copy.importExisting}
           </Button>
+          {activeTab === "mcp" && (
+            <Button
+              variant="secondary"
+              icon={mcpInstallBusy ? <Loader2 className="cx-skills-spin" /> : <Wrench />}
+              onClick={() => setMcpCatalogOpen(true)}
+              disabled={anyBusy}
+            >
+              {copy.installMcp}
+            </Button>
+          )}
           <Button
             variant="secondary"
             icon={actionBusy === "installSkillZip" ? <Loader2 className="cx-skills-spin" /> : <Upload />}
@@ -483,6 +505,17 @@ export function SkillsMcpPage({
       >
         <ImportPreviewContent preview={importPreview} copy={copy} />
       </ModalShell>
+
+      <McpInstallCatalog
+        lang={lang}
+        tool={activeTool}
+        servers={state?.mcpServers ?? []}
+        open={mcpCatalogOpen}
+        busy={mcpInstallBusy}
+        onClose={() => setMcpCatalogOpen(false)}
+        onInstall={onInstallMcpIntegration}
+        onOpenExternalUrl={onOpenExternalUrl}
+      />
     </section>
   );
 }

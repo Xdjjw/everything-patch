@@ -157,6 +157,7 @@ fn set_resource_target(table: &str, tool: ToolId, id: &str, enabled: bool) -> Re
 }
 
 fn save_mcp_resource(id: &str, name: &str, config: &Value) -> Result<()> {
+    let config = normalize_mcp_config_for_storage(config);
     let connection = open_db()?;
     connection
         .execute(
@@ -169,12 +170,39 @@ fn save_mcp_resource(id: &str, name: &str, config: &Value) -> Result<()> {
             params![
                 id,
                 name,
-                serde_json::to_string(config).unwrap_or_else(|_| "{}".to_string()),
+                serde_json::to_string(&config).unwrap_or_else(|_| "{}".to_string()),
                 now_rfc3339(),
             ],
         )
         .map_err(|error| CodexxError::Database(error.to_string()))?;
     Ok(())
+}
+
+fn normalize_mcp_config_for_storage(config: &Value) -> Value {
+    let mut normalized = config.clone();
+    let Some(server) = normalized.as_object_mut() else {
+        return normalized;
+    };
+    if server.contains_key("type") || server.contains_key("command") {
+        return normalized;
+    }
+    let Some(url) = server.get("url").and_then(Value::as_str) else {
+        return normalized;
+    };
+    let transport = reqwest::Url::parse(url)
+        .ok()
+        .filter(|url| matches!(url.scheme(), "http" | "https"))
+        .map(|url| {
+            if url.path().trim_end_matches('/').ends_with("/sse") {
+                "sse"
+            } else {
+                "http"
+            }
+        });
+    if let Some(transport) = transport {
+        server.insert("type".to_string(), Value::String(transport.to_string()));
+    }
+    normalized
 }
 
 fn db_mcp_for_tool(tool: ToolId) -> Result<Vec<(String, String, Value, bool)>> {
@@ -391,6 +419,7 @@ fn toml_mcp_item_for_tool(tool: ToolId, config: &Value) -> Item {
     if let Some(server) = normalized.as_object_mut() {
         match tool {
             ToolId::Codex => {
+                server.remove("type");
                 if !server.contains_key("http_headers") {
                     if let Some(headers) = server.remove("headers") {
                         server.insert("http_headers".to_string(), headers);
@@ -459,6 +488,27 @@ fn write_tool_mcp(
             write_json(&path, &Value::Object(root))
         }
     }
+}
+
+pub(super) fn install_tool_mcp_config_inner(
+    tool: ToolId,
+    config_dir: Option<String>,
+    id: &str,
+    name: &str,
+    config: Value,
+) -> Result<SkillsMcpState> {
+    let previous = list_tool_mcp(tool, config_dir.clone())?
+        .into_iter()
+        .find(|server| server.id == id)
+        .map(|server| server.config_json);
+    write_tool_mcp(tool, config_dir.clone(), id, Some(config.clone()))?;
+    if let Err(error) = save_mcp_resource(id, name, &config)
+        .and_then(|_| set_resource_target("managed_mcp_targets", tool, id, true))
+    {
+        let _ = write_tool_mcp(tool, config_dir, id, previous);
+        return Err(error);
+    }
+    build_tool_state_inner(tool, config_dir)
 }
 
 pub(crate) fn toggle_tool_mcp_inner(
@@ -844,7 +894,7 @@ mod tests {
     }
 
     #[test]
-    fn codex_mcp_uses_http_headers() {
+    fn codex_mcp_omits_type_and_uses_http_headers() {
         let item = toml_mcp_item_for_tool(
             ToolId::Codex,
             &json!({
@@ -854,8 +904,21 @@ mod tests {
             }),
         );
         let table = item.as_table().expect("Codex MCP should be a TOML table");
-        assert!(table.contains_key("type"));
+        assert!(!table.contains_key("type"));
         assert!(!table.contains_key("headers"));
         assert!(table.contains_key("http_headers"));
+    }
+
+    #[test]
+    fn storage_normalization_restores_remote_transport_metadata() {
+        let sse = normalize_mcp_config_for_storage(&json!({
+            "url": "http://127.0.0.1:9876/sse"
+        }));
+        let http = normalize_mcp_config_for_storage(&json!({
+            "url": "https://example.com/mcp"
+        }));
+
+        assert_eq!(sse["type"], "sse");
+        assert_eq!(http["type"], "http");
     }
 }

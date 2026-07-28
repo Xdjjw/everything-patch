@@ -1,7 +1,10 @@
+mod catalog;
 mod mcp;
 mod skills;
 mod tool;
 mod types;
+
+pub(crate) use catalog::{install_mcp_integration_inner, McpIntegrationInstallInput};
 
 pub(crate) use mcp::{sort_managed_mcp_servers, toggle_codex_mcp_inner};
 pub(crate) use skills::{

@@ -881,6 +881,106 @@
   border-color: var(--cx-dark-border);
 }
 
+:root[data-theme="dark"] .cx-mcp-catalog-modal {
+  --cx-mcp-text: #eceef1;
+  --cx-mcp-muted: #aeb3bc;
+  --cx-mcp-line: var(--cx-dark-border);
+  --cx-mcp-surface: var(--cx-dark-surface);
+  --cx-mcp-soft: var(--cx-dark-surface-raised);
+}
+
+:root[data-theme="dark"] .cx-mcp-catalog-card {
+  background: var(--cx-dark-surface);
+  border-color: var(--cx-dark-border);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.16);
+}
+
+:root[data-theme="dark"] .cx-mcp-catalog-card:hover {
+  background: var(--cx-dark-surface-hover);
+  border-color: var(--cx-dark-border-strong);
+  box-shadow: 0 9px 20px rgba(0, 0, 0, 0.24);
+}
+
+:root[data-theme="dark"] .cx-mcp-catalog-icon {
+  background: color-mix(in srgb, var(--cx-mcp-accent) 16%, #202329);
+  border-color: color-mix(in srgb, var(--cx-mcp-accent) 38%, #343840);
+}
+
+:root[data-theme="dark"] .cx-mcp-catalog-card-copy strong,
+:root[data-theme="dark"] .cx-mcp-installer-head strong {
+  color: var(--cx-mcp-text);
+}
+
+:root[data-theme="dark"] .cx-mcp-catalog-card-copy > span,
+:root[data-theme="dark"] .cx-mcp-installer-head > div > span,
+:root[data-theme="dark"] .cx-mcp-catalog-card-meta {
+  color: #a0a5ae;
+}
+
+:root[data-theme="dark"] .cx-mcp-catalog-card-actions,
+:root[data-theme="dark"] .cx-mcp-installer-head,
+:root[data-theme="dark"] .cx-mcp-installer-review {
+  border-color: var(--cx-dark-border);
+}
+
+:root[data-theme="dark"] .cx-mcp-installer-field > span,
+:root[data-theme="dark"] .cx-mcp-requirements > strong,
+:root[data-theme="dark"] .cx-mcp-install-confirm .ui-checkbox__label {
+  color: #c8ccd3;
+}
+
+:root[data-theme="dark"] .cx-mcp-installer-field > input,
+:root[data-theme="dark"] .cx-mcp-path-control > input {
+  color: #e1e3e7;
+  background: var(--cx-dark-surface-recessed);
+  border-color: var(--cx-dark-border);
+}
+
+:root[data-theme="dark"] .cx-mcp-installer-field > input:focus,
+:root[data-theme="dark"] .cx-mcp-path-control > input:focus {
+  background: #1f2228;
+  border-color: #4d7fdc;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.13);
+}
+
+:root[data-theme="dark"] .cx-mcp-picker-error {
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.18);
+  border-color: rgba(248, 113, 113, 0.34);
+}
+
+:root[data-theme="dark"] .cx-mcp-mode-switch {
+  background: var(--cx-dark-surface-raised);
+  border-color: var(--cx-dark-border);
+}
+
+:root[data-theme="dark"] .cx-mcp-mode-option {
+  color: #aeb3bc;
+}
+
+:root[data-theme="dark"] .cx-mcp-mode-option:hover:not(:disabled) {
+  color: #eef0f3;
+  background: var(--cx-dark-surface-hover);
+}
+
+:root[data-theme="dark"] .cx-mcp-mode-option--active {
+  color: #9fc0ff;
+  background: var(--cx-dark-surface);
+  border-color: var(--cx-dark-border-strong);
+}
+
+:root[data-theme="dark"] .cx-mcp-requirements span {
+  color: #b9bdc5;
+  background: var(--cx-dark-surface-raised);
+  border-color: var(--cx-dark-border);
+}
+
+:root[data-theme="dark"] .cx-mcp-no-download {
+  color: #9ed7c1;
+  background: #183129;
+  border-color: #2f5b4c;
+}
+
 :root[data-theme="dark"] .cx-prompts-active-summary {
   border-right-color: var(--cx-dark-border);
 }
