@@ -38,6 +38,8 @@ import type {
   InstructionMode,
   InstructionTemplate,
   Lang,
+  McpIntegrationInstallInput,
+  McpIntegrationInstallResult,
   ZcodeActionResult,
   ZcodeState,
   PromptEngine,
@@ -2678,6 +2680,30 @@ function App() {
     }
   };
 
+  const installMcpIntegration = async (
+    input: McpIntegrationInstallInput,
+  ): Promise<McpIntegrationInstallResult> => {
+    const tool = activeTool;
+    setActionBusy(`installMcpIntegration:${input.integrationId}`);
+    setError("");
+    try {
+      const result = await invoke<SkillsMcpActionResult>("install_mcp_integration", {
+        tool,
+        configDir: tool === "codex" ? configDir || null : null,
+        input,
+      });
+      if (tool === activeToolRef.current) setSkillsMcpState(result.state);
+      setToast(result.message);
+      return { ok: true };
+    } catch (e) {
+      const message = String(e);
+      setError(message);
+      return { ok: false, error: message };
+    } finally {
+      setActionBusy("");
+    }
+  };
+
   const installSkillZipFile = async (file?: File | null) => {
     if (!file) return;
     if (!file.name.toLowerCase().endsWith(".zip")) {
@@ -3254,6 +3280,8 @@ function App() {
                 onCheckUpdates={checkSkillUpdatesAction}
                 onToggleSkill={toggleSkillEnabled}
                 onToggleMcp={toggleMcpEnabled}
+                onInstallMcpIntegration={installMcpIntegration}
+                onOpenExternalUrl={openExternalUrl}
               />
             )}
 

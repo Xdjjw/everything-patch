@@ -79,12 +79,12 @@ use providers::{
     activate_saved_provider_inner, delete_provider_for_app_inner, fetch_provider_models_inner,
     import_ccswitch_codex_providers_inner, import_ccswitch_providers_inner,
     list_saved_providers_for_app_inner, list_zcode_providers_inner,
-    provider_by_id_on_connection_for_app,
-    read_ccswitch_official_auth_inner, save_official_config_inner, save_provider_inner,
-    save_provider_toml_config_inner, switch_official_provider_inner, switch_provider_inner,
-    test_provider_connection_inner, ImportResult, OfficialAuthCandidate, OfficialConfigInput,
-    ProviderConnectionResult, ProviderInput, ProviderModelsResult, ProviderTomlInput,
-    SavedProvider, ToolProviderActionResult,
+    provider_by_id_on_connection_for_app, read_ccswitch_official_auth_inner,
+    save_official_config_inner, save_provider_inner, save_provider_toml_config_inner,
+    switch_official_provider_inner, switch_provider_inner, test_provider_connection_inner,
+    ImportResult, OfficialAuthCandidate, OfficialConfigInput, ProviderConnectionResult,
+    ProviderInput, ProviderModelsResult, ProviderTomlInput, SavedProvider,
+    ToolProviderActionResult,
 };
 #[cfg(test)]
 use providers::{
@@ -111,10 +111,10 @@ use sessions::{
 use skills_mcp::{
     build_skills_mcp_state_inner, build_tool_state_inner, check_skill_updates_inner,
     check_tool_skill_updates_inner, import_existing_skills_mcp_inner, import_tool_resources_inner,
-    install_skill_zip_inner, install_tool_skill_zip_inner, preview_existing_skills_mcp_inner,
-    preview_tool_import_inner, toggle_codex_mcp_inner, toggle_codex_skill_inner,
-    toggle_tool_mcp_inner, toggle_tool_skill_inner, SkillsMcpActionResult, SkillsMcpImportPreview,
-    SkillsMcpState,
+    install_mcp_integration_inner, install_skill_zip_inner, install_tool_skill_zip_inner,
+    preview_existing_skills_mcp_inner, preview_tool_import_inner, toggle_codex_mcp_inner,
+    toggle_codex_skill_inner, toggle_tool_mcp_inner, toggle_tool_skill_inner,
+    McpIntegrationInstallInput, SkillsMcpActionResult, SkillsMcpImportPreview, SkillsMcpState,
 };
 #[cfg(test)]
 use skills_mcp::{
@@ -534,6 +534,19 @@ async fn install_tool_skill_zip(
     })
     .await
     .map_err(|e| CodexxError::Config(format!("安装工具 Skill ZIP 失败: {e}")))?
+}
+
+#[tauri::command]
+async fn install_mcp_integration(
+    tool: ToolId,
+    config_dir: Option<String>,
+    input: McpIntegrationInstallInput,
+) -> Result<SkillsMcpActionResult> {
+    tauri::async_runtime::spawn_blocking(move || {
+        install_mcp_integration_inner(tool, config_dir, input)
+    })
+    .await
+    .map_err(|e| CodexxError::Config(format!("手动配置 MCP 集成失败: {e}")))?
 }
 
 #[tauri::command]
@@ -978,8 +991,7 @@ async fn list_saved_providers(app_type: Option<String>) -> Result<Vec<SavedProvi
 fn save_provider_command_inner(provider: SavedProvider) -> Result<SavedProvider> {
     if ToolId::parse(&provider.app_type)? == ToolId::Zcode {
         return Err(CodexxError::Config(
-            "ZCode 原生供应商请在 ZCode 中增删改；Everything Patch 只负责读取和切换"
-                .to_string(),
+            "ZCode 原生供应商请在 ZCode 中增删改；Everything Patch 只负责读取和切换".to_string(),
         ));
     }
     save_provider_inner(provider)
@@ -2075,6 +2087,7 @@ pub fn run() {
             toggle_tool_skill,
             toggle_tool_mcp,
             install_tool_skill_zip,
+            install_mcp_integration,
             check_tool_skill_updates,
             preview_existing_skills_mcp,
             import_existing_skills_mcp,

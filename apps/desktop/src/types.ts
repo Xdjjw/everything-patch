@@ -404,6 +404,24 @@ export type SkillsMcpImportPreview = {
   warnings: string[];
 };
 
+export type McpIntegrationId =
+  | "ida-pro-mcp"
+  | "cheatengine-mcp"
+  | "x64dbg-mcp"
+  | "burp-suite-mcp";
+
+export type McpIntegrationInstallInput = {
+  integrationId: McpIntegrationId;
+  sourcePath?: string | null;
+  command?: string | null;
+  endpoint?: string | null;
+  mode?: "local" | "remote" | "direct" | "proxy" | null;
+};
+
+export type McpIntegrationInstallResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
 export type DiagnosticItem = {
   key: string;
   label: string;
