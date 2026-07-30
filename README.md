@@ -95,9 +95,9 @@ Everything Patch 是一个本地桌面工具，用于集中管理多种 AI 编�
 
 | 平台 | 格式 | Release 安装包 |
 | --- | --- | --- |
-| Windows x64 | `.msi` | `Everything Patch_<version>_x64_en-US.msi` |
-| macOS Apple Silicon | `.dmg` | `Everything Patch_<version>_aarch64.dmg` |
-| macOS Intel | `.dmg` | `Everything Patch_<version>_x64.dmg` |
+| Windows x64 | `.msi` | `Everything.Patch_<version>_x64_en-US.msi` |
+| macOS Apple Silicon | `.dmg` | `Everything.Patch_<version>_aarch64.dmg` |
+| macOS Intel | `.dmg` | `Everything.Patch_<version>_x64.dmg` |
 
 `Build Package` 工作流仍会在推送到 `main` 时生成 Actions 验证产物。当前发布包没有配置 Apple Developer 签名或公证，因此 macOS 首次打开会由系统提示确认；Windows 也可能显示 SmartScreen 提示。
 

@@ -95,9 +95,9 @@ Use [GitHub Releases](https://github.com/Xdjjw/everything-patch/releases) for pu
 
 | Platform | Format | Release installer |
 | --- | --- | --- |
-| Windows x64 | `.msi` | `Everything Patch_<version>_x64_en-US.msi` |
-| macOS Apple Silicon | `.dmg` | `Everything Patch_<version>_aarch64.dmg` |
-| macOS Intel | `.dmg` | `Everything Patch_<version>_x64.dmg` |
+| Windows x64 | `.msi` | `Everything.Patch_<version>_x64_en-US.msi` |
+| macOS Apple Silicon | `.dmg` | `Everything.Patch_<version>_aarch64.dmg` |
+| macOS Intel | `.dmg` | `Everything.Patch_<version>_x64.dmg` |
 
 The `Build Package` workflow still produces verification artifacts on pushes to `main`. Apple Developer signing and notarization are not configured for the current release packages, so macOS will ask for confirmation on first open; Windows may also show a SmartScreen prompt.
 
