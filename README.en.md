@@ -1,346 +1,158 @@
 <p align="center">
-  <a href="README.md"><img src="https://img.shields.io/badge/中文-切换-lightgrey" alt="中文" /></a>
-  <a href="README.en.md"><img src="https://img.shields.io/badge/English-Current-blue" alt="English" /></a>
+  <a href="README.md"><img src="https://img.shields.io/badge/中文-Switch-64748b" alt="Chinese" /></a>
+  <a href="README.en.md"><img src="https://img.shields.io/badge/English-Current-2563eb" alt="English" /></a>
 </p>
 
 <div align="center">
-  <img src="apps/desktop/src-tauri/icons/icon.png" alt="Everything Patch Logo" width="150" />
+  <img src="apps/desktop/src-tauri/icons/icon.png" alt="Everything Patch Logo" width="132" />
 
-  # Everything Patch
+  <h1>Everything Patch</h1>
 
-  **Visual prompt and configuration management for Codex · Claude · ZCode · Grok**
-
-  A cross-platform desktop manager for multiple AI coding tools. It brings prompt templates, third-party API providers, Codex sessions, Skills / MCP, Claude instructions, ZCode system roles, Grok AGENTS.md, skins, and TOML configuration into one interface.
+  <p><strong>A local configuration and workflow console for Codex, Claude Code, Grok Build, and ZCode</strong></p>
 
   <p>
-    <img src="https://img.shields.io/github/v/release/Xdjjw/everything-patch?label=version&color=blue" alt="version" />
-    <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-555" alt="platform" />
-    <img src="https://img.shields.io/badge/built%20with-Tauri%202-24C8DB" alt="tauri" />
-    <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
-  </p>
-
-  <p>
-    <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white" />
-    <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" />
-    <img src="https://img.shields.io/badge/Rust-stable-000000?logo=rust&logoColor=white" />
-    <img src="https://img.shields.io/badge/SQLite-Ready-003B57?logo=sqlite&logoColor=white" />
-    <img src="https://img.shields.io/badge/Vite-Ready-646CFF?logo=vite&logoColor=white" />
+    <a href="https://github.com/Xdjjw/everything-patch/actions/workflows/main.yml"><img src="https://github.com/Xdjjw/everything-patch/actions/workflows/main.yml/badge.svg" alt="Build Package" /></a>
+    <img src="https://img.shields.io/badge/desktop-Tauri%202-24C8DB" alt="Tauri 2" />
+    <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-475569" alt="Windows and macOS" />
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-16a34a" alt="MIT License" /></a>
   </p>
 </div>
 
----
+## Overview
 
-## What is Everything Patch?
+Everything Patch is a local desktop application for managing instructions, providers, configuration files, Skills, and MCP servers across several AI coding tools. It works with tools and configuration directories already present on your machine, making their current state visible and applying deliberate, traceable configuration changes after confirmation.
 
-When you use Codex, Claude, ZCode, Grok, third-party APIs, and multiple prompts together, settings quickly become scattered across different directories. Everything Patch brings these frequent tasks into one desktop interface, so you can see the current state and complete common actions with a click.
+It is not a model service, account service, or third-party installer. In particular, its MCP catalog validates files that you select yourself and writes configuration only. It never downloads, installs, or runs third-party installers automatically.
 
-You can use it to:
-
-- Choose from the prompt library or import your own `.md`, then keep the existing prompt or replace it
-- Save, test, and switch between OpenAI Official and third-party APIs, including Providers imported from cc-switch
-- Search and organize local sessions by project, check / automatically repair problems, and precisely delete sessions you no longer need
-- Manage Skills and MCP in one place, and inspect the current `config.toml`, `auth.json`, and operation backups
+The project was formerly named Codex-X. Remaining `codexx`, `codex-x`, and legacy data-directory references exist only for backward compatibility; the product name and future releases are **Everything Patch**.
 
 ## Preview
 
-<details open>
-<summary><b>App preview</b>: Home / Provider / TOML / Auth</summary>
-
 <p align="center">
-  <img src="docs/screenshots/app/preview.png" alt="Everything Patch app preview: Home, Provider, TOML, Auth" width="920" />
+  <img src="docs/screenshots/app/new-ui/prompts.png" alt="Everything Patch instruction and prompt management" width="900" />
 </p>
 
-</details>
-
-<details>
-<summary><b>Prompt injection results: security testing scenarios</b></summary>
-
-<div align="center">
-<table>
-  <tr>
-    <td align="center" width="50%">
-      <b>SQL Injection Testing</b><br />
-      <sub>Post-deployment test: how to perform SQL injection testing against a target?</sub><br />
-      <img src="docs/screenshots/prompt-effects/security/sql-injection.png" alt="SQL injection testing result" width="420" />
-    </td>
-    <td align="center" width="50%">
-      <b>NSFW Response Test</b><br />
-      <sub>Observe boundary response changes after prompt injection</sub><br />
-      <img src="docs/screenshots/prompt-effects/security/nsfw.png" alt="NSFW response test result" width="420" />
-    </td>
-  </tr>
-</table>
-</div>
-
-</details>
-
-<details>
-<summary><b>Prompt injection results: reverse engineering scenarios</b></summary>
-
-<div align="center">
-<table>
-  <tr>
-    <td align="center" width="50%">
-      <b>APK Reverse Engineering</b><br />
-      <sub>Static / dynamic analysis workflow for Android APKs</sub><br />
-      <img src="docs/screenshots/prompt-effects/reverse/apk-reverse-1.png" alt="APK reverse engineering result" width="420" />
-    </td>
-    <td align="center" width="50%">
-      <b>APK Reverse Engineering 2</b><br />
-      <sub>Additional APK reverse workflow and locating methods</sub><br />
-      <img src="docs/screenshots/prompt-effects/reverse/apk-reverse-2.png" alt="APK reverse engineering result 2" width="420" />
-    </td>
-  </tr>
-  <tr>
-    <td align="center" colspan="2">
-      <b>EXE Reverse Engineering</b><br />
-      <sub>Windows executable analysis and debugging directions</sub><br />
-      <img src="docs/screenshots/prompt-effects/reverse/exe-reverse.png" alt="EXE reverse engineering result" width="620" />
-    </td>
-  </tr>
-</table>
-</div>
-
-</details>
-
-## Features
-
-<div align="center">
-<table>
-  <tr>
-    <th align="center" width="190">What you want to do</th>
-    <th align="center">How Everything Patch helps</th>
-  </tr>
-  <tr>
-    <td align="center">🧩 <b>Use prompt templates</b></td>
-    <td align="left">The current library contains <b>5 templates</b>. Enable / disable one with a click and choose “Keep existing” or “Replace existing”; GitHub sync, local caching, and importing or editing your own <code>.md</code> files are supported.</td>
-  </tr>
-  <tr>
-    <td align="center">⚡ <b>Switch APIs / relays</b></td>
-    <td align="left">Save, test, and enable multiple third-party Providers, or import them from cc-switch; entries with the same endpoint and Key are merged automatically. Create or reopen a session after switching to apply the change without restarting the entire Codex client.</td>
-  </tr>
-  <tr>
-    <td align="center">💬 <b>Organize local sessions</b></td>
-    <td align="left">Search sessions, group them by project path, and check or automatically repair inconsistent data. Select one, several, or an entire project to permanently delete specific sessions from Codex storage.</td>
-  </tr>
-  <tr>
-    <td align="center">🧠 <b>Manage Skills / MCP</b></td>
-    <td align="left">View available Skills and MCP servers, preview existing items before import, install a Skill from ZIP, enable / disable individual entries, and check Skill update status.</td>
-  </tr>
-  <tr>
-    <td align="center">📝 <b>Manage config and login</b></td>
-    <td align="left">Inspect the active Codex <code>config.toml</code> and <code>auth.json</code> in one place, with a clear distinction between official login credentials and third-party API Keys. Important writes are backed up automatically and can be restored when needed.</td>
-  </tr>
-  <tr>
-    <td align="center">🎨 <b>Apply macOS / Windows skins</b></td>
-    <td align="left">Use the bundled Shiina Mashiro art-studio theme with real-wallpaper, full-interface previews. Import or export packs, hot-switch themes, and turn the skin off directly. The runtime is built into Everything Patch; the separate Codex Dream Skin engine is not required.</td>
-  </tr>
-  <tr>
-    <td align="center">📦 <b>Use it across platforms</b></td>
-    <td align="left">Available for macOS Apple Silicon / Intel, Windows MSI / portable, and Linux packages. Installed editions can download, verify, and install updates in the app; the portable edition keeps manual downloads.</td>
-  </tr>
-</table>
-</div>
-
-## Highlights
-
-### 1. Prompt Template Center
-
 <p align="center">
-  <img src="https://img.shields.io/badge/Template_library-5_total-2563eb?style=flat-square" alt="5 templates in the current library" />
-  <img src="https://img.shields.io/badge/Bundled_offline-5_templates-16a34a?style=flat-square" alt="5 templates bundled for offline use" />
-  <img src="https://img.shields.io/badge/GitHub_sync-Automatic_updates-f59e0b?style=flat-square" alt="Automatic GitHub template sync" />
+  <img src="docs/screenshots/app/new-ui/skills-mcp.png" alt="Everything Patch Skills and MCP management" width="900" />
 </p>
 
-> [!TIP]
-> **Ready after installation, automatically expanded when online.**
->
-> The app bundle includes all 5 current templates for offline use. After launch, it synchronizes updates and newly added templates from GitHub `examples/` in the background, without waiting for the **Prompt** page to open. Successfully synchronized online versions are cached locally and remain available during temporary network outages.
+## Supported Tools
 
-<div align="center">
-<table>
-  <tr>
-    <th align="center">Template</th>
-    <th align="center">Best for</th>
-    <th align="center">Availability</th>
-  </tr>
-  <tr>
-    <td><a href="examples/gpt5.5-unrestricted.md"><code>gpt5.5-unrestricted.md</code></a></td>
-    <td align="left">Compact and general-purpose for everyday coding and technical work</td>
-    <td align="center">Bundled offline<br />GitHub updates</td>
-  </tr>
-  <tr>
-    <td><a href="examples/gpt5.4-unrestricted.md"><code>gpt5.4-unrestricted.md</code></a></td>
-    <td align="left">GPT-5.4 / Codex CLI workflows with a CTF and security-research focus</td>
-    <td align="center">Bundled offline<br />GitHub updates</td>
-  </tr>
-  <tr>
-    <td><a href="examples/gpt5.5-jeli.md"><code>gpt5.5-jeli.md</code></a></td>
-    <td align="left">A plain-language general version with a fuller engineering and reverse-engineering workflow</td>
-    <td align="center">Bundled offline<br />GitHub updates</td>
-  </tr>
-  <tr>
-    <td><a href="examples/gpt-5.6-sol-unrestricted.md"><code>gpt-5.6-sol-unrestricted.md</code></a></td>
-    <td align="left">A GPT-5.6 SOL prompt focused on direct execution and bilingual tasks</td>
-    <td align="center">Bundled offline<br />GitHub updates</td>
-  </tr>
-  <tr>
-    <td><a href="examples/%E6%B5%B7%E9%B8%A53.0%E7%A0%B4%E7%94%B2.md"><code>海鸥3.0破甲.md</code></a></td>
-    <td align="left">A Chinese technical-operator persona with routing for coding, CTF, reverse engineering, memory, and protocol work</td>
-    <td align="center">Bundled offline<br />GitHub updates</td>
-  </tr>
-</table>
-</div>
+| Tool | Configuration and instructions | Skills / MCP | Tool-specific capability |
+| --- | --- | --- | --- |
+| Codex | `config.toml`, authentication, providers, and instructions | Supported | Local session management and Skin Center |
+| Claude Code | `CLAUDE.md`, settings, and providers | Supported | Burp MCP SSE connection |
+| Grok Build | `AGENTS.md`, TOML configuration, and providers | Supported | Burp MCP stdio proxy configuration |
+| ZCode | System role, JSON configuration, and providers | Supported | Burp MCP SSE connection |
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <b>Keep existing prompt</b><br />
-      Best for users who already have personal rules. Everything Patch only appends its managed content and removes only that content when disabled, leaving the original prompt untouched.
-    </td>
-    <td width="50%" valign="top">
-      <b>Replace existing prompt</b><br />
-      Makes the selected template the primary instruction entry point, which is useful when you want to switch completely to a specific template.
-    </td>
-  </tr>
-</table>
+Features are shown according to what is installed locally. Session synchronization, inspection, and deletion are Codex-only. Skin Center is also for Codex only.
 
-A backup is created automatically before every enable or disable action. In addition to the template library, you can import, edit, and delete your own `.md` prompts.
+## Main Capabilities
 
-### 2. Provider Switching: Ready in a New Session
+### Instructions and Prompts
 
-> [!NOTE]
-> After enabling a new third-party Provider, create or reopen a Codex session to use the new relay. You do not need to restart the entire Codex client.
+- Manage bundled and custom Markdown instructions with categories, import, editing, enablement, and disablement.
+- Choose whether to preserve existing instructions or replace them, without overwriting content that Everything Patch does not manage.
+- Create a backup before a managed write so changes can be reviewed or restored.
 
-- Save multiple third-party Providers and always see which one is currently active
-- Test an API endpoint before switching, and save or enable a configuration separately
-- Edit the Base URL, API Key, Model, Wire API, and complete TOML on the same page
-- cc-switch imports report added, updated, merged, and skipped entries; the same URL + Key is no longer shown more than once
-- Switching back to OpenAI Official preserves the current official login, and third-party configurations no longer disappear unexpectedly
+### Providers and Configuration
 
-### 3. Official Auth management
+- View, edit, test, and switch providers from one place.
+- Manage Codex `config.toml` and `auth.json`, including importing existing providers from cc-switch.
+- Read the TOML or JSON configuration used by each tool and handle sensitive values appropriately in previews.
 
-- Automatically read Codex official `auth.json`
-- View / edit ChatGPT login-state Auth
-- Distinguish official Auth from third-party API Keys
-- Manage official Auth and third-party Providers in one UI
+### Codex Session Management
 
-### 4. Visual TOML editing
+- Search local sessions by project path, title, and ID.
+- Inspect session relationships to the active provider and model, then synchronize configuration where appropriate.
+- Select individual sessions or entire projects for deletion. Deletion is irreversible and requires confirmation.
 
-- View the current Codex `config.toml`
-- Dark code preview with syntax highlighting
-- Edit full TOML directly from the Provider editor
-- Save changes back to the Codex configuration directory
+### Skills and MCP
 
-### 5. Session Management: Inspect, Repair, and Permanently Delete
+- View and import existing Skills and MCP configuration, install ZIP Skills, and enable or disable entries individually.
+- Review managed configuration and action results in one place. Failed configuration writes are shown in the dialog and the previous configuration is restored.
+- Use the manual MCP catalog for common reverse-engineering and security tooling, described below.
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <b>Find and organize</b><br />
-      Search sessions by title or project path and group them by project. Internal subagent sessions created automatically by Codex stay out of the normal session list by default.
-    </td>
-    <td width="50%" valign="top">
-      <b>Inspect and repair</b><br />
-      Check whether local sessions match the current Provider, repair all mismatches manually, or enable automatic inspection and repair at startup.
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2" valign="top">
-      <b>Precise deletion</b><br />
-      Select one session, several sessions, or one or more projects to select all sessions under them. After confirmation, the matching sessions and their derived child sessions are removed from Codex storage itself.
-    </td>
-  </tr>
-</table>
+### Codex Skin Center
 
-> [!CAUTION]
-> **Permanent deletion cannot be undone.** Close any Codex windows or CLI processes still using those sessions, then review the deletion list again in the confirmation dialog.
+- Import, export, and switch Codex theme packs; live application is supported on macOS and Windows.
+- The skin runtime binds only to the local loopback interface and does not modify the official Codex app, `app.asar`, code signature, or configuration-directory permissions.
+- Applying a theme may require restarting Codex. Save unsent input and in-progress work first.
 
-### 6. Skills / MCP Management
+## Manual MCP Catalog
 
-Manage Codex capability extensions from the **Skills & MCP** page instead of searching through multiple directories and configuration files.
+From the **Skills & MCP** screen, select a target tool, choose a local project directory, script, or JAR yourself, then confirm before writing the MCP configuration. You must install and prepare third-party software and dependencies independently.
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <b>Skills</b><br />
-      View current Skills, import existing content, or install from ZIP. Enable / disable entries individually and check whether installed Skills have updates.
-    </td>
-    <td width="50%" valign="top">
-      <b>MCP</b><br />
-      Preview existing MCP servers before importing them, then choose what Everything Patch should manage. Everything Patch maintains the Codex configuration when a server is enabled or disabled.
-    </td>
-  </tr>
-</table>
+| Integration | Local prerequisites | Windows | macOS |
+| --- | --- | --- | --- |
+| [IDA Pro MCP](https://github.com/mrexodia/ida-pro-mcp) | IDA Pro 8.3+, Python 3.11+, `uv`, manually activated idalib, and a completed `uv sync` | Local | Local |
+| [Cheat Engine MCP](https://github.com/miscusi-peek/cheatengine-mcp-bridge) | Cheat Engine, Python, and the MCP bridge project | Local Named Pipe mode | Remote Windows TCP bridge |
+| [x64dbg MCP](https://github.com/Wasdubya/x64dbgMCP) | x64dbg/x32dbg plugin and Python bridge script | Local mode | Remote Windows HTTP bridge |
+| [Burp Suite MCP](https://github.com/PortSwigger/mcp-server) | Burp MCP Server extension; Java is also required for stdio proxy mode | SSE or proxy by target tool | SSE or proxy by target tool |
 
-### 7. Reverse Skills Navigation
+Integration rules:
 
-<div align="center">
-  <a href="https://xdjjw.github.io/everything-patch/">
-    <img src="https://img.shields.io/badge/Everything--Patch-Online%20Reverse%20Skills%20Guide-0ea5e9?style=for-the-badge&logo=githubpages&logoColor=white" alt="Everything Patch Online Reverse Skills Guide" />
-  </a>
-</div>
+- **IDA Pro MCP** uses `uv run --offline --no-sync`; it will not synchronize or download dependencies while configuring the integration.
+- **Cheat Engine and x64dbg** local modes are Windows-only. On macOS, connect to a Windows bridge that you operate.
+- **Burp Suite MCP** supports direct SSE only for Claude Code and ZCode. Codex and Grok Build use the official `mcp-proxy-all.jar` emitted by the Burp extension as a stdio proxy to avoid transport incompatibilities.
+- The application validates selected paths and expected file names. It does not download projects, install extensions, create Python environments, or run third-party installers for you.
 
-<br />
+Connect only to MCP servers and remote bridges that you trust. For HTTP bridges, prefer a trusted network or `127.0.0.1`.
 
-<table>
-  <tr>
-    <td width="55%">
-      <b>Online guide</b>: explains the “armor breaking” workflow, how to enable GPT-5.5 / unrestricted jeli in Everything Patch, and how to combine it with reverse-engineering Skills.
-      <br /><br />
-      <b>Categories</b>: Android APK / Windows EXE / Web protocol reverse engineering.
-      <br /><br />
-      <b>Includes</b>: Skill purpose, install commands, source links, and recommended workflow.
-    </td>
-    <td width="45%">
-      <ul>
-        <li>🧩 GPT-5.5 / unrestricted jeli workflow</li>
-        <li>📱 Android APK reverse Skills</li>
-        <li>🪟 Windows EXE / DLL reverse Skills</li>
-        <li>🌐 Web / API / protocol reverse Skills</li>
-        <li>📋 One-click copy install commands</li>
-      </ul>
-    </td>
-  </tr>
-</table>
+## Downloads and Packages
 
-<p align="center">
-  <a href="https://xdjjw.github.io/everything-patch/">
-    <b>🚀 Open Everything Patch Reverse Skills Guide</b>
-  </a>
-</p>
+Use [GitHub Releases](https://github.com/Xdjjw/everything-patch/releases) for published versions. The `Build Package` workflow runs on pushes to `main` and manual dispatch, producing these artifacts:
 
-### 8. Cross-platform desktop app
+| Platform | Format | Actions artifact name |
+| --- | --- | --- |
+| Windows x64 | `.msi` | `Everything-Patch-package-windows-latest-x86_64-pc-windows-msvc` |
+| macOS Apple Silicon | `.dmg` | `Everything-Patch-package-macos-latest-aarch64-apple-darwin` |
+| macOS Intel | `.dmg` | `Everything-Patch-package-macos-latest-x86_64-apple-darwin` |
 
-- macOS Apple Silicon `.dmg`
-- macOS Intel `.dmg`
-- Windows `.msi`
-- Windows Portable `.zip`
-- Linux `.deb` / `.rpm` / `.AppImage`
-- Automatic GitHub Releases builds
-- In-app updates for installed editions; manual updates for Windows Portable
+Verification packages are available from [Actions](https://github.com/Xdjjw/everything-patch/actions/workflows/main.yml). They are build artifacts, not necessarily signed, notarized, or published installers. Use them only when you trust the source commit.
 
-## Tech Stack
+## Run From Source
 
-| Category | Technology |
-| --- | --- |
-| Desktop framework | Tauri 2 |
-| Frontend | React 18 / TypeScript / Vite |
-| Backend | Rust |
-| Local data | SQLite / rusqlite |
-| Config editing | TOML / JSON |
-| Release | GitHub Actions / GitHub Releases |
+Prerequisites: Node.js 22, pnpm 9, and Rust stable. macOS also needs working Xcode Command Line Tools.
 
-## Configuration Paths
+```bash
+pnpm install --frozen-lockfile
+pnpm dev
+```
 
-Everything Patch reads the Codex configuration directory by default:
+Common validation and packaging commands:
+
+```bash
+pnpm typecheck
+pnpm build
+```
+
+Build for a specific target:
+
+```bash
+pnpm --dir apps/desktop build -- --target x86_64-pc-windows-msvc
+pnpm --dir apps/desktop build -- --target aarch64-apple-darwin
+pnpm --dir apps/desktop build -- --target x86_64-apple-darwin
+```
+
+When `TAURI_SIGNING_PRIVATE_KEY` is not set locally, the build wrapper disables updater artifacts that require the release key while still producing regular installers. Release signing and notarization belong to the controlled Release workflow.
+
+## Configuration and Migration
+
+Default Codex paths:
 
 ```text
 ~/.codex/config.toml
 ~/.codex/auth.json
 ```
 
-Environment variables are also supported:
+Everything Patch local data defaults to:
+
+```text
+~/.everything-patch/everything-patch.db
+```
+
+Supported environment variables:
 
 ```text
 CODEX_HOME=/path/to/.codex
@@ -348,71 +160,14 @@ EVERYTHING_PATCH_HOME=/path/to/everything-patch-data
 CC_SWITCH_HOME=/path/to/.cc-switch
 ```
 
-Everything Patch's own database is stored by default at:
+Legacy `CODEXX_HOME`, `~/.codexx/codexx.db`, and `codex-x-skins` locations are detected automatically, so existing users do not need to migrate manually.
 
-```text
-~/.everything-patch/everything-patch.db
-```
+## Boundaries
 
-Legacy `CODEXX_HOME`, `~/.codexx/codexx.db`, and `codex-x-skins` locations remain supported automatically.
+- Review the target tool, configuration directory, file path, and remote endpoint before writing.
+- Third-party MCP servers, debuggers, proxies, and theme packs are maintained by their respective authors. Review their licenses, safety guidance, and compatibility requirements before using them.
+- Use this project and connected tools only in legal, authorized environments.
 
-## Download
+## Contributing and License
 
-Download from the Releases page:
-
-https://github.com/Xdjjw/everything-patch/releases
-
-## Development
-
-```bash
-pnpm install
-pnpm dev
-```
-
-Build desktop bundles:
-
-```bash
-npm run build
-```
-
-When `TAURI_SIGNING_PRIVATE_KEY` is not configured locally, the build script skips updater artifacts that require the release key while still producing installers such as MSI and NSIS. CI releases continue to invoke Tauri directly with repository secrets to generate signed updater artifacts.
-
-## Desktop Installation Notes
-
-### Skin Center security boundary
-
-- Live skin application supports macOS and Windows. Linux can still manage, import, and export packs but is never reported as applied.
-- macOS uses only the signed Node.js bundled with the official Codex app and validates its bundle and process identity. Windows dynamically validates the current user's registered `OpenAI.Codex` Store package and uses the pinned Node.js 22 runtime shipped with Everything Patch releases.
-- CDP binds only to `127.0.0.1`; Everything Patch does not modify the official `.app`, `WindowsApps`, `app.asar`, code signature, directory permissions, or `config.toml`.
-- First application usually asks to restart Codex. Turn off skin removes the live interface skin immediately, and any theme can be applied again later.
-- Themes adapt cropping from image dimensions and content. Subject-focused artwork can use `art.focusX`, `art.focusY` (`0` to `1`), and `art.safeArea` in `theme.json` for precise framing without generating duplicate images for the same theme.
-- Injection is based on the MIT-licensed [Fei-Away/Codex-Dream-Skin](https://github.com/Fei-Away/Codex-Dream-Skin) source. The pinned source and license notice are in `apps/desktop/src-tauri/resources/skin-runtime/NOTICE.md`.
-
-If you see “app is damaged” when opening an unsigned / unnotarized DMG, this is normal macOS Gatekeeper behavior.
-
-- Best option: sign and notarize with an Apple Developer ID
-- Local testing only: remove the quarantine attribute manually
-
-```bash
-xattr -dr com.apple.quarantine "/Applications/Everything Patch.app"
-```
-
-## License
-
-This project is open-sourced under the [MIT License](https://github.com/Xdjjw/everything-patch/blob/main/LICENSE).
-
-## Thanks
-
-Thanks to the [LINUX DO forum](https://linux.do/) community for attention, feedback, and support.
-
-## Star History
-
-<p align="center">
-  <a href="https://github.com/Xdjjw/everything-patch/stargazers">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://codex-star-history.zhihack0728.workers.dev/v1/charts/everything-patch.svg?theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://codex-star-history.zhihack0728.workers.dev/v1/charts/everything-patch.svg?theme=light" />
-      <img alt="Everything Patch Star History" src="https://codex-star-history.zhihack0728.workers.dev/v1/charts/everything-patch.svg?theme=light" width="900" />
-    </picture>
-  </a>
-</p>
+Please use [Issues](https://github.com/Xdjjw/everything-patch/issues) for bugs, feature requests, and feedback. The project is available under the [MIT License](LICENSE).

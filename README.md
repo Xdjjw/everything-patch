@@ -1,335 +1,158 @@
 <p align="center">
-  <a href="README.md"><img src="https://img.shields.io/badge/中文-当前-blue" alt="中文" /></a>
-  <a href="README.en.md"><img src="https://img.shields.io/badge/English-Switch-lightgrey" alt="English" /></a>
+  <a href="README.md"><img src="https://img.shields.io/badge/中文-当前-2563eb" alt="中文" /></a>
+  <a href="README.en.md"><img src="https://img.shields.io/badge/English-Switch-64748b" alt="English" /></a>
 </p>
 
 <div align="center">
-  <img src="apps/desktop/src-tauri/icons/icon.png" alt="Everything Patch Logo" width="150" />
+  <img src="apps/desktop/src-tauri/icons/icon.png" alt="Everything Patch Logo" width="132" />
 
-  # Everything Patch
+  <h1>Everything Patch</h1>
 
-  **Codex · Claude · ZCode · Grok 的可视化提示词与配置管理工具**
-
-  一款面向多种 AI 编程工具的跨平台桌面管理器。把提示词模板、自定义 Prompt、第三方 API 供应商、Codex 会话、Skills / MCP、Claude 指令、ZCode system role、Grok AGENTS.md、皮肤和 TOML 配置集中到一个界面里。
+  <p><strong>Codex、Claude Code、Grok Build 与 ZCode 的本地配置与工作流控制台</strong></p>
 
   <p>
-    <img src="https://img.shields.io/github/v/release/Xdjjw/everything-patch?label=version&color=blue" alt="version" />
-    <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-555" alt="platform" />
-    <img src="https://img.shields.io/badge/built%20with-Tauri%202-24C8DB" alt="tauri" />
-    <img src="https://img.shields.io/badge/license-MIT-green" alt="license" />
-  </p>
-
-  <p>
-    <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white" />
-    <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" />
-    <img src="https://img.shields.io/badge/Rust-stable-000000?logo=rust&logoColor=white" />
-    <img src="https://img.shields.io/badge/SQLite-Ready-003B57?logo=sqlite&logoColor=white" />
-    <img src="https://img.shields.io/badge/Vite-Ready-646CFF?logo=vite&logoColor=white" />
+    <a href="https://github.com/Xdjjw/everything-patch/actions/workflows/main.yml"><img src="https://github.com/Xdjjw/everything-patch/actions/workflows/main.yml/badge.svg" alt="Build Package" /></a>
+    <img src="https://img.shields.io/badge/desktop-Tauri%202-24C8DB" alt="Tauri 2" />
+    <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-475569" alt="Windows and macOS" />
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-16a34a" alt="MIT License" /></a>
   </p>
 </div>
 
----
+## 概览
 
-## Everything Patch 是什么？
+Everything Patch 是一个本地桌面工具，用于集中管理多种 AI 编程工具的指令、Provider、配置文件、Skills 与 MCP。它直接对接你已经安装在本机的工具和配置目录，帮助你看清当前状态，并在确认后完成可追溯的配置写入。
 
-当你同时使用 Codex、Claude、ZCode、Grok、第三方 API 和多套提示词时，配置很容易散落在不同目录。Everything Patch 把这些高频操作集中到一个桌面界面中，让当前状态看得见、常用操作点一下就能完成。
+它不是模型服务、账号服务或第三方工具安装器。尤其是在 MCP 集成中，Everything Patch 只校验你手动选择的本地文件并写入配置，不会自动下载、安装或执行第三方安装程序。
 
-你可以用它：
+原项目名为 Codex-X。仓库中仍可见的 `codexx`、`codex-x` 和旧数据目录仅用于兼容已有配置，产品名称与后续发布均以 **Everything Patch** 为准。
 
-- 像管理插件一样管理提示词：分类、导入 Markdown、自定义编辑、一键启用 / 禁用
-- 内置 5 套提示词模板，同时支持用户把自己的提示词变成可视化模板库
-- 保存、测试并切换 OpenAI Official 与第三方 API，还能从 cc-switch 导入现有供应商
-- 同步、检查、搜索和删除本地会话，按项目路径整理 Codex 历史记录
-- 集中管理 Skills 与 MCP，查看当前 `config.toml`、`auth.json` 和操作备份
-
-## 软件预览
-
-<details open>
-<summary><b>新版 UI：指令提示词管理中心</b></summary>
+## 界面预览
 
 <p align="center">
-  <img src="docs/screenshots/app/new-ui/prompts.png" alt="Everything Patch 新版指令提示词管理界面" width="920" />
+  <img src="docs/screenshots/app/new-ui/prompts.png" alt="Everything Patch 指令与提示词管理界面" width="900" />
 </p>
-
-</details>
-
-<div align="center">
-<table>
-  <tr>
-    <td align="center" width="50%">
-      <b>分类管理</b><br />
-      <sub>把提示词按破甲 / 逆向、软件开发、写作辅助等分类维护</sub><br />
-      <img src="docs/screenshots/app/new-ui/prompt-categories.png" alt="Everything Patch 提示词分类管理" width="420" />
-    </td>
-    <td align="center" width="50%">
-      <b>自定义提示词</b><br />
-      <sub>直接添加、编辑或导入自己的 Markdown 提示词</sub><br />
-      <img src="docs/screenshots/app/new-ui/prompt-form.png" alt="Everything Patch 添加自定义提示词" width="420" />
-    </td>
-  </tr>
-</table>
-</div>
-
-<details>
-<summary><b>Skills / MCP 可视化管理</b></summary>
 
 <p align="center">
-  <img src="docs/screenshots/app/new-ui/skills-mcp.png" alt="Everything Patch Skills 与 MCP 管理界面" width="920" />
+  <img src="docs/screenshots/app/new-ui/skills-mcp.png" alt="Everything Patch Skills 与 MCP 管理界面" width="900" />
 </p>
 
-</details>
+## 支持范围
 
-## 功能特性
+| 工具 | 配置与指令 | Skills / MCP | 专属能力 |
+| --- | --- | --- | --- |
+| Codex | `config.toml`、登录信息、Provider、指令 | 支持 | 本地会话管理、皮肤中心 |
+| Claude Code | `CLAUDE.md`、设置与 Provider | 支持 | Burp MCP 的 SSE 直连 |
+| Grok Build | `AGENTS.md`、TOML 配置与 Provider | 支持 | Burp MCP 的 stdio 代理配置 |
+| ZCode | system role、JSON 配置与 Provider | 支持 | Burp MCP 的 SSE 直连 |
 
-<div align="center">
-<table>
-  <tr>
-    <th align="center" width="190">你想做的事</th>
-    <th align="center">Everything Patch 能帮你</th>
-  </tr>
-  <tr>
-    <td align="center"><b>提示词注入管理</b></td>
-    <td align="left">内置 <b>5 套</b>提示词模板，支持分类、GitHub 同步、本地缓存、导入 <code>.md</code>、添加自定义提示词、编辑说明、一键启用 / 禁用。</td>
-  </tr>
-  <tr>
-    <td align="center"><b>启用方式切换</b></td>
-    <td align="left">可选择“保留原提示词”追加写入，也可选择“替换原提示词”完整切换；适合在不同模型、不同任务、不同 Prompt 之间快速切换。</td>
-  </tr>
-  <tr>
-    <td align="center"><b>Provider / API</b></td>
-    <td align="left">添加、编辑、启用、删除第三方供应商；支持连接检测、模型获取 / 测试、从 cc-switch 导入，并可在 OpenAI Official 与中转 API 之间切换。</td>
-  </tr>
-  <tr>
-    <td align="center"><b>会话管理</b></td>
-    <td align="left">搜索本地会话、按项目路径分组、同步当前供应商、检查会话状态，并支持单选 / 多选 / 项目级永久删除。</td>
-  </tr>
-  <tr>
-    <td align="center"><b>Skills / MCP</b></td>
-    <td align="left">可视化查看 Skills 与 MCP，导入已有配置，从 ZIP 安装 Skill，逐项启用 / 禁用，并检查更新状态。</td>
-  </tr>
-  <tr>
-    <td align="center"><b>配置与登录</b></td>
-    <td align="left">集中查看 Codex 当前使用的 <code>config.toml</code> 与 <code>auth.json</code>，区分官方登录态和第三方 API Key；重要写入前自动备份。</td>
-  </tr>
-  <tr>
-    <td align="center"><b>macOS / Windows 皮肤中心</b></td>
-    <td align="left">内置“椎名真白·樱花画室”主题，以真实壁纸和完整界面缩略图展示主题效果，支持导入 / 导出、热切换和关闭皮肤；换肤运行时已经内置在 Everything Patch 中，无需另装 Codex Dream Skin 引擎。</td>
-  </tr>
-  <tr>
-    <td align="center"><b>跨平台使用</b></td>
-    <td align="left">提供 macOS Apple Silicon / Intel、Windows MSI / 便携版和 Linux 安装包；安装版可在应用内直接下载、校验并安装更新，便携版继续使用手动下载。</td>
-  </tr>
-</table>
-</div>
+功能会根据本机实际安装状态显示。会话同步、检查和删除只适用于 Codex；皮肤中心也只面向 Codex。
 
-## 核心亮点
+## 主要功能
 
-### 1. 可视化提示词注入中心
+### 指令与提示词
 
-<p align="center">
-  <img src="https://img.shields.io/badge/当前模板库-5_套-2563eb?style=flat-square" alt="当前模板库 5 套" />
-  <img src="https://img.shields.io/badge/离线内置-5_套-16a34a?style=flat-square" alt="离线内置 5 套" />
-  <img src="https://img.shields.io/badge/GitHub_同步-自动更新-f59e0b?style=flat-square" alt="GitHub 自动同步" />
-  <img src="https://img.shields.io/badge/自定义提示词-支持导入_编辑-7c3aed?style=flat-square" alt="支持自定义提示词" />
-</p>
+- 管理内置与自定义 Markdown 指令，支持分类、导入、编辑、启用和禁用。
+- 在“保留原提示词”和“替换原提示词”之间切换，避免覆盖不属于 Everything Patch 管理的内容。
+- 写入前创建备份，便于检查和恢复。
 
-> [!TIP]
-> **安装后就能用，联网后自动补齐，也能维护自己的提示词库。**
->
-> 安装包离线自带当前全部 5 套模板；软件启动后可同步 GitHub `examples/` 的更新和新增模板。同步成功的在线版本会缓存到本地，临时离线仍可继续使用。你也可以导入自己的 `.md`、新增分类、编辑说明，并像切换插件一样启用或禁用任意提示词。
+### Provider 与配置
 
-Everything Patch 现在不只是“几套内置 Prompt”的启动器，而是一个可视化提示词注入与管理工具：
+- 在一个界面中查看、编辑、测试和切换 Provider。
+- 管理 Codex 的 `config.toml` 与 `auth.json`，并支持从 cc-switch 导入已有 Provider。
+- 按工具读取对应的 TOML 或 JSON 配置，预览时对敏感信息进行处理。
 
-- 按分类管理提示词，例如破甲 / 逆向、软件开发、写作辅助，也可以新增自己的分类
-- 支持同步 GitHub 模板、导入 Markdown、手动添加提示词、编辑标题 / 文件名 / 内容
-- 每个提示词都有独立开关，打开时自动按当前启用方式写入 Codex 指令文件
-- 支持“保留原提示词”和“替换原提示词”两种模式，适合日常叠加或完整切换
-- 本地缓存可离线使用，后续模板更新不会影响你自己维护的自定义提示词
+### Codex 会话管理
 
-<div align="center">
-<table>
-  <tr>
-    <th align="center">模板</th>
-    <th align="center">适合场景</th>
-    <th align="center">获取方式</th>
-  </tr>
-  <tr>
-    <td><a href="examples/gpt5.5-unrestricted.md"><code>gpt5.5-unrestricted.md</code></a></td>
-    <td align="left">短小通用，适合日常 coding 与常规技术任务</td>
-    <td align="center">离线内置<br />GitHub 更新</td>
-  </tr>
-  <tr>
-    <td><a href="examples/gpt5.4-unrestricted.md"><code>gpt5.4-unrestricted.md</code></a></td>
-    <td align="left">面向 GPT-5.4 / Codex CLI，偏 CTF 与安全研究工作流</td>
-    <td align="center">离线内置<br />GitHub 更新</td>
-  </tr>
-  <tr>
-    <td><a href="examples/gpt5.5-jeli.md"><code>gpt5.5-jeli.md</code></a></td>
-    <td align="left">大白话通用版，提供更完整的工程与逆向执行流程</td>
-    <td align="center">离线内置<br />GitHub 更新</td>
-  </tr>
-  <tr>
-    <td><a href="examples/gpt-5.6-sol-unrestricted.md"><code>gpt-5.6-sol-unrestricted.md</code></a></td>
-    <td align="left">gpt5.6-sol 破甲提示词，偏直接执行与中英文任务</td>
-    <td align="center">离线内置<br />GitHub 更新</td>
-  </tr>
-  <tr>
-    <td><a href="examples/%E6%B5%B7%E9%B8%A53.0%E7%A0%B4%E7%94%B2.md"><code>海鸥3.0破甲.md</code></a></td>
-    <td align="left">中文技术操作员人格，覆盖 coding、CTF、逆向、内存与协议任务路由</td>
-    <td align="center">离线内置<br />GitHub 更新</td>
-  </tr>
-</table>
-</div>
+- 按项目路径、标题和 ID 搜索本地会话。
+- 检查会话与当前 Provider / 模型的关系，并在需要时同步配置。
+- 支持精确选择会话或项目范围删除。删除是不可恢复操作，界面会要求再次确认。
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <b>保留原提示词</b><br />
-      适合已经有个人规则的用户。Everything Patch 只追加自己管理的内容，禁用时也只移除这一部分，不动原有提示词。
-    </td>
-    <td width="50%" valign="top">
-      <b>替换原提示词</b><br />
-      将所选模板设为当前主要指令入口，适合希望完整切换到某套模板的用户。
-    </td>
-  </tr>
-</table>
+### Skills 与 MCP
 
-每次启用或禁用前都会自动创建备份。除了模板库，你也可以导入、编辑、删除自己的 `.md` 提示词，并通过分类管理把常用提示词整理成自己的工作流。
+- 查看和导入已有 Skills / MCP 配置，安装 ZIP Skill，并按条目启用或禁用。
+- 在同一处查看受管配置与操作结果，配置写入失败会在弹窗中显示并恢复原配置。
+- 提供针对常见逆向与安全工具的手动 MCP 接入目录，详见下一节。
 
-> [!NOTE]
-> 如果你有好用的提示词模板，欢迎在 [Issues](https://github.com/Xdjjw/everything-patch/issues) 提交：请附上模板名称、适用场景、Markdown 内容、推荐启用方式和必要说明。合适的模板会考虑收录到 `examples/`，让更多用户可以一键同步使用。
+### Codex 皮肤中心
 
-### 2. Provider / API：添加、检测、获取模型、随时切换
+- 导入、导出和切换 Codex 主题包；实机应用支持 macOS 和 Windows。
+- 皮肤运行时只绑定本机回环地址，不修改官方 Codex 应用、`app.asar`、代码签名或配置目录权限。
+- 首次应用可能需要重启 Codex。请先保存未发送的输入和进行中的工作。
 
-> [!NOTE]
-> 启用新的第三方供应商后，新建或重新打开 Codex 会话即可使用新的中转，不需要重启整个 Codex 客户端。
+## 手动 MCP 接入目录
 
-- 保存多个第三方供应商，随时查看当前正在使用哪一个
-- 切换前可检测连接，并可获取模型进行测试
-- 在同一页面编辑 Base URL、API Key、Model、Wire API 和完整 TOML
-- 从 cc-switch 导入时自动区分新增、更新、合并与跳过；相同 URL + Key 不再重复显示
-- 切回 OpenAI Official 时保留当前官方登录态，第三方配置也不会凭空消失
+在“Skills 与 MCP”页面可以选择目标工具、手动选择项目目录、脚本或 JAR，并在确认后写入 MCP 配置。所有集成均要求你先自行安装和配置第三方软件及其依赖。
 
-### 3. 会话管理：同步、检查与永久删除
+| 集成 | 本地条件 | Windows | macOS |
+| --- | --- | --- | --- |
+| [IDA Pro MCP](https://github.com/mrexodia/ida-pro-mcp) | IDA Pro 8.3+、Python 3.11+、`uv`，且已手动激活 idalib 并完成 `uv sync` | 本地 | 本地 |
+| [Cheat Engine MCP](https://github.com/miscusi-peek/cheatengine-mcp-bridge) | Cheat Engine、Python 与 MCP 桥接项目 | Named Pipe 本地模式 | 远程 Windows TCP 桥接 |
+| [x64dbg MCP](https://github.com/Wasdubya/x64dbgMCP) | x64dbg/x32dbg 插件、Python 桥接脚本 | 本地模式 | 远程 Windows HTTP 桥接 |
+| [Burp Suite MCP](https://github.com/PortSwigger/mcp-server) | Burp MCP Server 扩展；stdio 代理模式还需要 Java | 依目标工具选择 SSE 或代理 | 依目标工具选择 SSE 或代理 |
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <b>同步和检查</b><br />
-      检查本地会话是否和当前 Provider / 模型一致，需要时一键同步到当前供应商配置，不修改聊天内容。
-    </td>
-    <td width="50%" valign="top">
-      <b>查找和整理</b><br />
-      按标题、项目路径、供应商或 ID 搜索会话，也可以按项目路径分组查看，适合清理长期使用后积累的会话列表。
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2" valign="top">
-      <b>精确删除</b><br />
-      支持单选、多选，也可以勾选一个或多个项目，一次选中项目下的全部会话；确认后会从 Codex 自身存储中删除对应会话及其派生子会话。
-    </td>
-  </tr>
-</table>
+接入规则：
 
-> [!CAUTION]
-> **永久删除不可恢复。** 删除前请先关闭仍在使用这些会话的 Codex 窗口或 CLI，并在确认窗口中再次核对待删除列表。
+- **IDA Pro MCP** 使用 `uv run --offline --no-sync`，不会在配置时自动同步或下载依赖。
+- **Cheat Engine 与 x64dbg** 的本地模式仅适用于 Windows；在 macOS 上使用时，连接到你自己维护的远程 Windows 桥接端。
+- **Burp Suite MCP** 的传统 SSE 直连仅用于 Claude Code 和 ZCode。Codex 与 Grok Build 使用 Burp 扩展提供的官方 `mcp-proxy-all.jar` 作为 stdio 代理，以避免传输协议不兼容。
+- 应用会校验所选路径和文件名是否符合对应项目要求。它不会代替你下载项目、安装扩展、创建 Python 环境或执行第三方安装程序。
 
-### 4. Skills / MCP 管理
+请只连接自己信任的 MCP 服务和远程桥接地址。对于 HTTP 桥接，建议始终限制在受信任网络或 `127.0.0.1`。
 
-在【技能和 MCP】页面集中管理 Codex 的能力扩展，不必再到多个目录和配置文件中逐项查找。
+## 下载与安装包
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <b>Skills</b><br />
-      查看当前 Skill，导入已有内容或从 ZIP 安装；可以逐项启用 / 禁用，并检查已安装 Skill 是否有更新。
-    </td>
-    <td width="50%" valign="top">
-      <b>MCP</b><br />
-      导入前先预览现有 MCP Server，再决定哪些需要纳管；启用或禁用后由 Everything Patch 自动维护 Codex 配置。
-    </td>
-  </tr>
-</table>
+正式版本请从 [GitHub Releases](https://github.com/Xdjjw/everything-patch/releases) 获取。当前的 `Build Package` 工作流会在推送到 `main` 或手动触发时构建以下产物：
 
-### 5. TOML 与官方 Auth 管理
+| 平台 | 格式 | Actions artifact 名称 |
+| --- | --- | --- |
+| Windows x64 | `.msi` | `Everything-Patch-package-windows-latest-x86_64-pc-windows-msvc` |
+| macOS Apple Silicon | `.dmg` | `Everything-Patch-package-macos-latest-aarch64-apple-darwin` |
+| macOS Intel | `.dmg` | `Everything-Patch-package-macos-latest-x86_64-apple-darwin` |
 
-- 自动读取 Codex 官方 `auth.json`
-- 支持查看 / 编辑 ChatGPT 登录态 Auth
-- 区分官方 Auth 与第三方 API Key
-- 官方配置可和第三方 Provider 在 UI 中统一管理
-- 查看当前 Codex 正在使用的 live `config.toml`
-- 深色代码预览与语法高亮
-- Provider 编辑页可直接编辑完整 TOML
-- 保存后同步到 Codex 配置目录
+构建验证产物可在 [Actions](https://github.com/Xdjjw/everything-patch/actions/workflows/main.yml) 下载。它们用于测试，不等同于已签名、公证或正式发布的安装包；仅在你信任对应提交内容时使用。
 
-### 6. 逆向 Skills 导航
+## 从源码运行
 
-<div align="center">
-  <a href="https://xdjjw.github.io/everything-patch/">
-    <img src="https://img.shields.io/badge/Everything--Patch-在线逆向%20Skills%20导航-0ea5e9?style=for-the-badge&logo=githubpages&logoColor=white" alt="Everything Patch 在线逆向 Skills 导航" />
-  </a>
-</div>
+前置条件：Node.js 22、pnpm 9 和 Rust stable。macOS 还需要可用的 Xcode Command Line Tools。
 
-<br />
+```bash
+pnpm install --frozen-lockfile
+pnpm dev
+```
 
-<table>
-  <tr>
-    <td width="55%">
-      <b>在线教程页</b>：解释什么是“破甲”、Everything Patch 如何启用 GPT-5.5 / unrestricted jeli、以及如何搭配不同领域的逆向 Skills。
-      <br /><br />
-      <b>分类覆盖</b>：Android APK / Windows EXE / Web 协议逆向。
-      <br /><br />
-      <b>内容包含</b>：Skill 用途、安装方式、来源地址、推荐使用流程。
-    </td>
-    <td width="45%">
-      <ul>
-        <li>🧩 GPT-5.5 / unrestricted jeli 使用流程</li>
-        <li>📱 Android APK 逆向 Skills</li>
-        <li>🪟 Windows EXE / DLL 逆向 Skills</li>
-        <li>🌐 Web / API / 协议逆向 Skills</li>
-        <li>📋 安装命令一键复制</li>
-      </ul>
-    </td>
-  </tr>
-</table>
+常用校验与打包命令：
 
-<p align="center">
-  <a href="https://xdjjw.github.io/everything-patch/">
-    <b>🚀 打开 Everything Patch 逆向 Skills 导航</b>
-  </a>
-</p>
+```bash
+pnpm typecheck
+pnpm build
+```
 
-### 7. 跨平台桌面软件
+按目标平台构建：
 
-- macOS Apple Silicon `.dmg`
-- macOS Intel `.dmg`
-- Windows `.msi`
-- Windows Portable `.zip`
-- Linux `.deb` / `.rpm` / `.AppImage`
-- GitHub Releases 自动构建发布
-- 安装版支持应用内自动更新，Windows 便携版保留手动更新
+```bash
+pnpm --dir apps/desktop build -- --target x86_64-pc-windows-msvc
+pnpm --dir apps/desktop build -- --target aarch64-apple-darwin
+pnpm --dir apps/desktop build -- --target x86_64-apple-darwin
+```
 
-## 技术栈
+本地未设置 `TAURI_SIGNING_PRIVATE_KEY` 时，构建脚本会关闭需要发布私钥的 updater 产物，但仍会生成常规安装包。发布、签名和公证应由受控的 Release 流程处理。
 
-| 类型 | 技术 |
-| --- | --- |
-| 桌面框架 | Tauri 2 |
-| 前端 | React 18 / TypeScript / Vite |
-| 后端 | Rust |
-| 本地数据 | SQLite / rusqlite |
-| 配置编辑 | TOML / JSON |
-| 发布 | GitHub Actions / GitHub Releases |
+## 配置与迁移
 
-## 配置路径
-
-Everything Patch 默认读取 Codex 配置目录：
+Codex 默认配置路径：
 
 ```text
 ~/.codex/config.toml
 ~/.codex/auth.json
 ```
 
-也支持环境变量：
+Everything Patch 的本地数据默认位于：
+
+```text
+~/.everything-patch/everything-patch.db
+```
+
+可用环境变量：
 
 ```text
 CODEX_HOME=/path/to/.codex
@@ -337,78 +160,14 @@ EVERYTHING_PATCH_HOME=/path/to/everything-patch-data
 CC_SWITCH_HOME=/path/to/.cc-switch
 ```
 
-Everything Patch 自身数据库默认位于：
+旧版 `CODEXX_HOME`、`~/.codexx/codexx.db` 与 `codex-x-skins` 目录会被自动识别，已有用户无需手动迁移。
 
-```text
-~/.everything-patch/everything-patch.db
-```
+## 使用边界
 
-旧版 `CODEXX_HOME`、`~/.codexx/codexx.db` 和 `codex-x-skins` 会继续自动识别，无需手动迁移。
+- 在写入前核对目标工具、配置目录、文件路径和远程端点。
+- 第三方 MCP、调试器、代理和主题包由其各自作者维护；使用前请阅读其许可证、安全说明和兼容性要求。
+- 请仅在合法、合规且获得授权的环境中使用本项目及其连接的工具。
 
-## 下载
+## 贡献与许可证
 
-请前往 Releases 页面下载：
-
-https://github.com/Xdjjw/everything-patch/releases
-
-## 开发运行
-
-```bash
-pnpm install
-pnpm dev
-```
-
-构建桌面端：
-
-```bash
-npm run build
-```
-
-本地未配置 `TAURI_SIGNING_PRIVATE_KEY` 时，构建脚本会跳过需要发布私钥的更新签名产物，MSI、NSIS 等安装包仍会正常生成。CI 发布流程仍直接使用 Tauri 和仓库密钥生成已签名更新包。
-
-## 桌面端安装说明
-
-### 皮肤中心安全边界
-
-- 实机换肤支持 macOS 和 Windows；Linux 仍可管理、导入和导出主题包，但不会显示为已应用。
-- macOS 只使用官方 Codex 内置且签名一致的 Node.js，并校验 Bundle ID、代码签名和进程归属；Windows 动态校验当前用户注册的 `OpenAI.Codex` Store 包，并使用发布包内固定校验的 Node.js 22 运行时。
-- CDP 仅绑定 `127.0.0.1`，不修改官方 `.app`、`WindowsApps`、`app.asar`、代码签名、目录权限或 `config.toml`。
-- 首次应用通常需要确认重启 Codex；“关闭皮肤”会立即移除当前界面皮肤，之后可随时重新应用主题。
-- 主题默认会根据图片尺寸和内容自适应裁切；人物或主体构图可在 `theme.json` 使用 `art.focusX`、`art.focusY`（`0` 到 `1`）和 `art.safeArea` 精确控制，无需为同一主题重复生成图片。
-- 注入实现基于 [Fei-Away/Codex-Dream-Skin](https://github.com/Fei-Away/Codex-Dream-Skin) 的 MIT 源码，固定来源和许可见 `apps/desktop/src-tauri/resources/skin-runtime/NOTICE.md`。
-
-如果你在未签名 / 未公证的 DMG 中看到“软件已损坏”提示，这是 macOS Gatekeeper 的正常行为。
-
-- 最佳方式：使用 Apple Developer ID 签名并 notarize
-- 仅本地测试：可手动移除 quarantine 属性
-
-```bash
-xattr -dr com.apple.quarantine "/Applications/Everything Patch.app"
-```
-
-## 许可证
-
-本项目基于 [MIT License](https://github.com/Xdjjw/everything-patch/blob/main/LICENSE) 开源。
-
-## 致谢 / Thanks
-
-感谢 [LINUX DO 论坛](https://linux.do/) 社区的关注、反馈与支持。
-
-## Star History
-
-<p align="center">
-  <a href="https://github.com/Xdjjw/everything-patch/stargazers">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://codex-star-history.zhihack0728.workers.dev/v1/charts/everything-patch.svg?theme=dark" />
-      <source media="(prefers-color-scheme: light)" srcset="https://codex-star-history.zhihack0728.workers.dev/v1/charts/everything-patch.svg?theme=light" />
-      <img alt="Everything Patch Star History" src="https://codex-star-history.zhihack0728.workers.dev/v1/charts/everything-patch.svg?theme=light" width="900" />
-    </picture>
-  </a>
-</p>
-
-<br />
-
-> [!IMPORTANT]
-> **使用声明**
->
-> 本项目仅用于大模型与智能体相关技术的学习、研究与交流，软件本身不包含主动破坏性功能。请在合法、合规并获得授权的范围内使用，禁止将其用于攻击、侵害他人权益或其他违法用途。使用者应自行判断使用边界，并对相关行为与后果承担责任。
+欢迎通过 [Issues](https://github.com/Xdjjw/everything-patch/issues) 报告问题、提出功能建议或提交改进。项目使用 [MIT License](LICENSE)。
