@@ -101,7 +101,7 @@ fn run_app_server_delete_attempt(
             "params": {
                 "clientInfo": {
                     "name": "everything_patch",
-                    "title": "Everything Patch",
+                    "title": "DevConduit",
                     "version": env!("CARGO_PKG_VERSION")
                 },
                 "capabilities": null

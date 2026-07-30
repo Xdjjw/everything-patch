@@ -22,6 +22,8 @@ import type { AppUpdaterPhase } from "../appUpdater";
 import type { ToolStatus } from "../types";
 import { IconButton } from "./ui/IconButton";
 
+const devConduitMark = new URL("../../src-tauri/icons/devconduit.svg", import.meta.url).href;
+
 export type AppLanguage = "zh" | "en";
 export type AppTheme = "light" | "dark";
 
@@ -139,10 +141,10 @@ export function AppShell({
 
       <aside className="cx-sidebar">
         <div className="cx-brand">
-          <div className="cx-brand-mark" aria-hidden="true">EP</div>
+          <img className="cx-brand-mark" src={devConduitMark} alt="" aria-hidden="true" />
           <div className="cx-brand-copy">
             <div className="cx-brand-title-row">
-              <h1>Everything Patch</h1>
+              <h1>DevConduit</h1>
               {appVersion && <span className="cx-app-version">v{appVersion.replace(/^v/i, "")}</span>}
             </div>
             <p>{lang === "zh" ? "多工具 · 指令 · 配置" : "Multi-tool · Prompts · Config"}</p>
@@ -193,7 +195,7 @@ export function AppShell({
             <div className="cx-tool-status-summary-heading">
               <TerminalSquare size={16} strokeWidth={1.8} aria-hidden="true" />
               <span>
-                <small>Everything Patch</small>
+                <small>DevConduit</small>
                 <strong>{appVersion ? `v${appVersion.replace(/^v/i, "")}` : "—"}</strong>
               </span>
             </div>

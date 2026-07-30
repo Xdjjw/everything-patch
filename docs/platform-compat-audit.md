@@ -135,7 +135,7 @@ ZCode、Grok 或 Claude 没有解析出供应商时，仍可能显示 Codex 的�
 
 ### H9. ZCode 原生供应商读取与切换
 
-ZCode 供应商不再写入 Everything Patch 自身数据库，而是直接读取 ZCode 3.5.x 的原生配置：
+ZCode 供应商不再写入 DevConduit 自身数据库，而是直接读取 ZCode 3.5.x 的原生配置：
 
 - `~/.zcode/v2/config.json`：供应商注册表、认证选项和模型表。
 - `~/.zcode/v2/setting.json`：Z.ai / BigModel 的 API Key、Coding Plan、Team Plan 通道。
@@ -145,7 +145,7 @@ Windows x64、macOS ARM 和 macOS Intel 共用同一套 Rust JSON 读写代码�
 继续使用现有平台分支。切换前会备份三份文件，备份目录名会清理 Windows 不允许的 `:` 等字符；
 写入采用原子替换，任一文件失败会恢复全部原文件。ZCode 正在运行时会拒绝切换，避免退出时被其内存状态覆盖。
 
-原生条目只允许刷新与切换，增删改仍在 ZCode 中完成，API Key 不进入 Everything Patch 数据库或前端 IPC。
+原生条目只允许刷新与切换，增删改仍在 ZCode 中完成，API Key 不进入 DevConduit 数据库或前端 IPC。
 fixture 已覆盖对象式模型表、内置通道、自定义供应商、Windows 安全文件名和部分写入失败回滚。
 
 ---
@@ -165,7 +165,7 @@ fixture 已覆盖对象式模型表、内置通道、自定义供应商、Window
 ### 皮肤 Node.js 来源
 
 - macOS 使用官方 Codex.app 内置的 `cua_node`，校验签名 Team ID、Node 主版本和机器架构。
-- Windows 使用 Everything Patch 安装包内置的固定 Node.js 22.23.1，并保留环境变量/PATH 作为开发回退。
+- Windows 使用 DevConduit 安装包内置的固定 Node.js 22.23.1，并保留环境变量/PATH 作为开发回退。
 
 这项差异是有意设计，不要求两端使用同一分发方式。
 

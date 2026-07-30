@@ -281,7 +281,7 @@ fn scan_shared_skills(
         (
             selected_disabled_dir.to_path_buf(),
             false,
-            "Everything Patch 已禁用".to_string(),
+            "DevConduit 已禁用".to_string(),
         ),
     ] {
         if let Err(error) = scan_skill_dir(&directory, enabled, &source, &mut skills, &mut seen) {
@@ -349,7 +349,7 @@ pub(crate) fn build_tool_state_inner(
             name,
             transport,
             enabled: target_state.get(&id).copied().unwrap_or(enabled),
-            source: "Everything Patch".to_string(),
+            source: "DevConduit".to_string(),
             summary,
             command,
             url,

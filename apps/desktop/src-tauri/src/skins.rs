@@ -692,7 +692,7 @@ pub(crate) fn update_skin_theme_settings_inner(
     surface_opacity: f64,
 ) -> Result<SkinActionResult> {
     let _guard = SKIN_OPERATION_LOCK.lock().map_err(|_| {
-        CodexxError::Config("皮肤操作锁已损坏，请重启 Everything Patch".to_string())
+        CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string())
     })?;
     ensure_builtin_themes()?;
     let id = normalize_theme_id(&id)?;
@@ -819,7 +819,7 @@ pub(crate) fn enable_skin_theme_inner(
     restart_existing: bool,
 ) -> Result<SkinActionResult> {
     let _guard = SKIN_OPERATION_LOCK.lock().map_err(|_| {
-        CodexxError::Config("皮肤操作锁已损坏，请重启 Everything Patch".to_string())
+        CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string())
     })?;
     ensure_builtin_themes()?;
     let id = normalize_theme_id(&id)?;
@@ -866,7 +866,7 @@ pub(crate) fn enable_skin_theme_inner(
 
 pub(crate) fn pause_skin_theme_inner() -> Result<SkinActionResult> {
     let _guard = SKIN_OPERATION_LOCK.lock().map_err(|_| {
-        CodexxError::Config("皮肤操作锁已损坏，请重启 Everything Patch".to_string())
+        CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string())
     })?;
     let SkinRuntimeAction::Paused(message) = pause_skin_runtime()? else {
         return Err(CodexxError::Config(
@@ -882,7 +882,7 @@ pub(crate) fn pause_skin_theme_inner() -> Result<SkinActionResult> {
 
 pub(crate) fn restore_skin_theme_inner(restart_existing: bool) -> Result<SkinActionResult> {
     let _guard = SKIN_OPERATION_LOCK.lock().map_err(|_| {
-        CodexxError::Config("皮肤操作锁已损坏，请重启 Everything Patch".to_string())
+        CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string())
     })?;
     match restore_skin_runtime(restart_existing)? {
         SkinRuntimeAction::Restored(message) => Ok(SkinActionResult {
@@ -906,7 +906,7 @@ pub(crate) fn import_skin_theme_zip_inner(
     bytes: Vec<u8>,
 ) -> Result<SkinActionResult> {
     let _guard = SKIN_OPERATION_LOCK.lock().map_err(|_| {
-        CodexxError::Config("皮肤操作锁已损坏，请重启 Everything Patch".to_string())
+        CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string())
     })?;
     ensure_builtin_themes()?;
     if !file_name.to_ascii_lowercase().ends_with(".zip") {
@@ -1050,7 +1050,7 @@ pub(crate) fn create_skin_theme_from_image_inner(
     bytes: Vec<u8>,
 ) -> Result<SkinActionResult> {
     let _guard = SKIN_OPERATION_LOCK.lock().map_err(|_| {
-        CodexxError::Config("皮肤操作锁已损坏，请重启 Everything Patch".to_string())
+        CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string())
     })?;
     ensure_builtin_themes()?;
     let extension = uploaded_image_extension(&file_name, &bytes)?;
@@ -1116,7 +1116,7 @@ pub(crate) fn export_skin_theme_inner(
     destination_path: String,
 ) -> Result<SkinExportResult> {
     let _guard = SKIN_OPERATION_LOCK.lock().map_err(|_| {
-        CodexxError::Config("皮肤操作锁已损坏，请重启 Everything Patch".to_string())
+        CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string())
     })?;
     ensure_builtin_themes()?;
     let id = normalize_theme_id(&id)?;

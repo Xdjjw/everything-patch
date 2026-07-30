@@ -15,16 +15,16 @@ REPOSITORY = "example/everything-patch"
 RELEASE_TAG = "v0.3.1"
 VERSION = "0.3.1"
 PLATFORM_ASSETS = {
-    "darwin-aarch64": "Everything-Patch.app.tar.gz",
-    "darwin-aarch64-app": "Everything-Patch.app.tar.gz",
-    "darwin-x86_64": "Everything-Patch-intel.app.tar.gz",
-    "darwin-x86_64-app": "Everything-Patch-intel.app.tar.gz",
-    "windows-x86_64": "Everything-Patch.msi",
-    "windows-x86_64-msi": "Everything-Patch.msi",
-    "linux-x86_64": "Everything-Patch.AppImage",
-    "linux-x86_64-deb": "Everything-Patch.deb",
-    "linux-x86_64-rpm": "Everything-Patch.rpm",
-    "linux-x86_64-appimage": "Everything-Patch.AppImage",
+    "darwin-aarch64": "DevConduit.app.tar.gz",
+    "darwin-aarch64-app": "DevConduit.app.tar.gz",
+    "darwin-x86_64": "DevConduit-intel.app.tar.gz",
+    "darwin-x86_64-app": "DevConduit-intel.app.tar.gz",
+    "windows-x86_64": "DevConduit.msi",
+    "windows-x86_64-msi": "DevConduit.msi",
+    "linux-x86_64": "DevConduit.AppImage",
+    "linux-x86_64-deb": "DevConduit.deb",
+    "linux-x86_64-rpm": "DevConduit.rpm",
+    "linux-x86_64-appimage": "DevConduit.AppImage",
 }
 
 

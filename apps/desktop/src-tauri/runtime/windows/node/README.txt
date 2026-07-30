@@ -1,4 +1,4 @@
-Everything Patch build scripts place the pinned Node.js runtime here.
+DevConduit build scripts place the pinned Node.js runtime here.
 
 Version: 22.23.1
 Archive: node-v22.23.1-win-x64.zip

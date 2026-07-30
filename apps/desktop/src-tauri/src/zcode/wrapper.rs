@@ -75,7 +75,7 @@ pub(crate) fn render_patch_sidecar(injection_mode: PromptInjectionMode) -> Strin
         serde_json::to_string(replacement).unwrap_or_else(|_| "\"\"".to_string());
     format!(
         r#""use strict";
-// ZCode runtime patch parameters (generated at install time by Everything Patch)
+// ZCode runtime patch parameters (generated at install time by DevConduit)
 module.exports = {{
   needle: `{needle}`,
   replacementTemplate: {replacement}

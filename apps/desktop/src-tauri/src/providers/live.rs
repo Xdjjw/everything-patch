@@ -292,7 +292,7 @@ where
     pre_persist(&codex_dir)?;
     // Switching to official must not overwrite auth.json with a stale cc-switch
     // ChatGPT token. Codex desktop/CLI owns the live official login flow; after
-    // the user logs in, Everything Patch should simply refresh and display ~/.codex/auth.json.
+    // the user logs in, DevConduit should simply refresh and display ~/.codex/auth.json.
     apply_official_config(
         config_dir,
         None,
@@ -405,7 +405,7 @@ where
     let backup_id = create_backup(&codex_dir, "switch-provider")?;
 
     let provider_name = input.provider_name.trim();
-    // Keep the saved provider id only for Everything Patch/cc-switch bookkeeping.
+    // Keep the saved provider id only for DevConduit/cc-switch bookkeeping.
     // cc-switch writes third-party Codex providers to the live config as
     // `model_provider = "custom"` + `[model_providers.custom]`; mirroring
     // that behavior avoids Codex CLI/App versions that ignore arbitrary live

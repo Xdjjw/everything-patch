@@ -249,7 +249,7 @@ const dict = {
     },
     instruction: {
       title: "一键管理指令提示词",
-      desc: "启用时写入指令提示词文件并设置 model_instructions_file；禁用时只移除 Everything Patch 管理的指令提示词字段并删除 md 文件。每次操作前都会创建备份。",
+      desc: "启用时写入指令提示词文件并设置 model_instructions_file；禁用时只移除 DevConduit 管理的指令提示词字段并删除 md 文件。每次操作前都会创建备份。",
       enabled: "已启用",
       disabled: "未启用",
       unset: "model_instructions_file 未设置",
@@ -351,7 +351,7 @@ const dict = {
     },
     instruction: {
       title: "Manage instruction prompt",
-      desc: "Enable writes the instruction prompt file and sets model_instructions_file; disable removes Everything Patch-managed instruction prompt config and deletes the md file. Every write creates a backup first.",
+      desc: "Enable writes the instruction prompt file and sets model_instructions_file; disable removes DevConduit-managed instruction prompt config and deletes the md file. Every write creates a backup first.",
       enabled: "Enabled",
       disabled: "Disabled",
       unset: "model_instructions_file is not set",
@@ -398,8 +398,8 @@ function getProviderPageCopy(lang: Lang, tool: ToolId): ProviderCopy {
     title: isChinese ? `${activeToolLabel} 供应商` : `${activeToolLabel} providers`,
     subtitle: tool === "zcode"
       ? (isChinese
-        ? "读取 ZCode 原生供应商与模型配置。供应商和密钥仍由 ZCode 管理，Everything Patch 只负责安全切换。"
-        : "Read ZCode's native providers and models. Providers and secrets remain managed by ZCode; Everything Patch only switches them safely.")
+        ? "读取 ZCode 原生供应商与模型配置。供应商和密钥仍由 ZCode 管理，DevConduit 只负责安全切换。"
+        : "Read ZCode's native providers and models. Providers and secrets remain managed by ZCode; DevConduit only switches them safely.")
       : (isChinese
         ? `管理 ${activeToolLabel} 的第三方 API。供应商数据和启用状态按工具隔离。`
         : `Manage third-party APIs for ${activeToolLabel}. Provider data and activation are isolated by tool.`),
@@ -3351,11 +3351,11 @@ function App() {
                     title: lang === "zh" ? "用户原有指令提示词" : "Existing user prompt",
                     description: state?.instructionInjectionMode === "append"
                       ? (lang === "zh"
-                        ? "追加模式已保留这份外部提示词，并同时加载 Everything Patch 的 AGENTS.md 区块。"
-                        : "Append mode preserves this external prompt alongside the Everything Patch AGENTS.md block.")
+                        ? "追加模式已保留这份外部提示词，并同时加载 DevConduit 的 AGENTS.md 区块。"
+                        : "Append mode preserves this external prompt alongside the DevConduit AGENTS.md block.")
                       : (lang === "zh"
-                        ? "当前使用的是非 Everything Patch 管理的外部提示词。"
-                        : "This external prompt is not managed by Everything Patch."),
+                        ? "当前使用的是非 DevConduit 管理的外部提示词。"
+                        : "This external prompt is not managed by DevConduit."),
                     filename: currentInstructionFilename,
                   }
                   : null}
@@ -3448,8 +3448,8 @@ function App() {
               <AboutPage
                 copy={{
                   eyebrow: "About",
-                   title: lang === "zh" ? "关于 Everything Patch" : "About Everything Patch",
-                   appVersionLabel: `Everything Patch ${lang === "zh" ? "版本" : "Version"}`,
+                   title: lang === "zh" ? "关于 DevConduit" : "About DevConduit",
+                   appVersionLabel: `DevConduit ${lang === "zh" ? "版本" : "Version"}`,
                    projectLabel: lang === "zh" ? "项目地址" : "Project",
                   environmentsTitle: lang === "zh" ? "工具环境" : "Tool environments",
                   installedLabel: lang === "zh" ? "已检测到" : "Detected",
@@ -3503,7 +3503,7 @@ function App() {
                   englishLabel: t.settings.en,
                   productTitle: t.settings.productName,
                   productDescription: t.settings.productDesc,
-                  productValue: "Everything Patch",
+                  productValue: "DevConduit",
                   recheckTitle: lang === "zh" ? "首次启动向导" : "First-run wizard",
                   recheckDescription: lang === "zh"
                     ? "重新检测 CODEX_HOME、config.toml、auth.json 和 SQLite 会话库。"

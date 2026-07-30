@@ -7,7 +7,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-const PROVIDER_SYNC_MANAGER: &str = "Everything Patch provider sync v2";
+const PROVIDER_SYNC_MANAGER: &str = "DevConduit provider sync v3";
+const PREVIOUS_PROVIDER_SYNC_MANAGER: &str = "Everything Patch provider sync v2";
 const LEGACY_PROVIDER_SYNC_MANAGER: &str = "Codex-X provider sync v2";
 
 #[derive(Debug, Clone)]
@@ -168,7 +169,9 @@ pub(crate) fn prune_provider_sync_backups(codex_dir: &Path) -> Result<()> {
                     .get("managedBy")
                     .and_then(Value::as_str)
                     .is_some_and(|value| {
-                        value == PROVIDER_SYNC_MANAGER || value == LEGACY_PROVIDER_SYNC_MANAGER
+                        value == PROVIDER_SYNC_MANAGER
+                            || value == PREVIOUS_PROVIDER_SYNC_MANAGER
+                            || value == LEGACY_PROVIDER_SYNC_MANAGER
                     })
             });
         if is_v2_provider_sync_backup {

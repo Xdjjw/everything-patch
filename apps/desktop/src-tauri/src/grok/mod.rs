@@ -95,7 +95,7 @@ fn managed_prompt_bounds(content: &str) -> Result<Option<(usize, usize)>> {
     }
     if begins.len() != 1 || ends.len() != 1 || begins[0] >= ends[0] {
         return Err(CodexxError::Config(
-            "Grok AGENTS.md 中的 Everything Patch 受管区块不完整或重复".to_string(),
+            "Grok AGENTS.md 中的 DevConduit 受管区块不完整或重复".to_string(),
         ));
     }
     Ok(Some((begins[0], ends[0] + GROK_PROMPT_END.len())))

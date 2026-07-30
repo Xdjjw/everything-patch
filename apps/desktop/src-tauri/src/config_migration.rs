@@ -26,7 +26,7 @@ fn remove_markdown_path(table: &mut Table, key: &str) -> Option<Item> {
     }
 }
 
-/// Repairs prompt paths appended by older Everything Patch versions after a `[tui]`
+/// Repairs prompt paths appended by older DevConduit versions after a `[tui]`
 /// header. Only the exact legacy keys with Markdown path values are touched.
 pub(crate) fn migrate_legacy_prompt_config(codex_dir: &Path) -> Result<bool> {
     let cfg = config_path(codex_dir);

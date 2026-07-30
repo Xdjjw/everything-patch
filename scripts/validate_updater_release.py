@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Everything Patch updater metadata before a draft release is published."""
+"""Validate DevConduit updater metadata before a draft release is published."""
 
 from __future__ import annotations
 

@@ -171,7 +171,7 @@ function getCopy(lang: Lang) {
         inactiveDetail: "先选择启用方式，再打开下方任一模板。",
         enableMethod: "启用方式",
         helpLabel: "查看启用方式说明",
-        appendHelp: "只在 AGENTS.md 中增加 Everything Patch 管理区块，不改动原有 model_instructions_file，适合叠加使用。",
+        appendHelp: "只在 AGENTS.md 中增加 DevConduit 管理区块，不改动原有 model_instructions_file，适合叠加使用。",
         replaceHelp: "当前模板会成为唯一生效的指令入口，原有 model_instructions_file 将被替换。",
         pendingMode: (mode: string) => `当前模式不变，下次启用将使用“${mode}”。`,
         modeHint: "点击模板开关时，使用这里选择的方式。",
@@ -251,7 +251,7 @@ function getCopy(lang: Lang) {
         inactiveDetail: "Choose an activation method, then turn on a template below.",
         enableMethod: "Enable method",
         helpLabel: "Show activation method help",
-        appendHelp: "Adds a Everything Patch managed block to AGENTS.md without changing the existing model_instructions_file.",
+        appendHelp: "Adds a DevConduit-managed block to AGENTS.md without changing the existing model_instructions_file.",
         replaceHelp: "Makes the selected template the only instruction entry and replaces the existing model_instructions_file.",
         pendingMode: (mode: string) => `The current mode is unchanged. The next enable uses “${mode}”.`,
         modeHint: "This method is used when a template is turned on.",
@@ -330,7 +330,7 @@ function getEngineModeCopy(
         ? {
           label: "保留 CLAUDE.md",
           detail: "在现有 CLAUDE.md 后加入受管 import 区块，原有内容继续生效。",
-          help: "保留 CLAUDE.md 原内容，只增加 Everything Patch 管理的 import 区块。",
+          help: "保留 CLAUDE.md 原内容，只增加 DevConduit 管理的 import 区块。",
           title: "保留现有 CLAUDE.md，并追加当前提示词 import",
         }
         : {
@@ -360,7 +360,7 @@ function getEngineModeCopy(
         ? {
           label: "追加到 AGENTS.md",
           detail: "只在现有 AGENTS.md 中增加受管区块，原有规则继续生效。",
-          help: "保留 Grok 的 AGENTS.md，只追加 Everything Patch 管理的提示词区块。",
+          help: "保留 Grok 的 AGENTS.md，只追加 DevConduit 管理的提示词区块。",
           title: "保留 Grok AGENTS.md，并追加当前提示词",
         }
         : {
@@ -374,7 +374,7 @@ function getEngineModeCopy(
       ? {
         label: "追加到 AGENTS.md",
         detail: "当前模板写入 AGENTS.md，同时保留已有指令文件。",
-        help: "只在 AGENTS.md 中增加 Everything Patch 管理区块，不改动原有 model_instructions_file。",
+        help: "只在 AGENTS.md 中增加 DevConduit 管理区块，不改动原有 model_instructions_file。",
         title: "写入 AGENTS.md，并保留现有 model_instructions_file",
       }
       : {
@@ -390,7 +390,7 @@ function getEngineModeCopy(
       ? {
         label: "Keep CLAUDE.md",
         detail: "A managed import block is appended while the existing CLAUDE.md remains active.",
-        help: "Keeps the existing CLAUDE.md and adds only the Everything Patch managed import block.",
+        help: "Keeps the existing CLAUDE.md and adds only the DevConduit-managed import block.",
         title: "Keep CLAUDE.md and append the current prompt import",
       }
       : {
@@ -420,7 +420,7 @@ function getEngineModeCopy(
       ? {
         label: "Append to AGENTS.md",
         detail: "Only a managed block is added to AGENTS.md, so existing rules remain active.",
-        help: "Keeps Grok's AGENTS.md and appends an Everything Patch managed prompt block.",
+        help: "Keeps Grok's AGENTS.md and appends a DevConduit-managed prompt block.",
         title: "Keep Grok AGENTS.md and append the current prompt",
       }
       : {
@@ -434,7 +434,7 @@ function getEngineModeCopy(
     ? {
       label: "Append to AGENTS.md",
       detail: "The current template is written to AGENTS.md while the existing instruction file is preserved.",
-      help: "Adds an Everything Patch managed block to AGENTS.md without changing model_instructions_file.",
+      help: "Adds a DevConduit-managed block to AGENTS.md without changing model_instructions_file.",
       title: "Write AGENTS.md and preserve model_instructions_file",
     }
     : {

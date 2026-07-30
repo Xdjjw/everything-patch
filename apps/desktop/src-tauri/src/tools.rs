@@ -930,7 +930,7 @@ pub(crate) fn get_tool_config_inner(
             let scanned = files.len();
             Some(format!(
                 "已扫描 {scanned} 个配置文件：~/.zcode（CLI 与 MCP）、ZCode 桌面端应用数据目录（供应商与模型通道）、\
-                 以及 keysmith/ 前缀的 Everything Patch 注入产物（诊断用，不是 ZCode 主配置）。凭据均已脱敏。"
+                 以及 keysmith/ 前缀的 DevConduit 注入产物（诊断用，不是 ZCode 主配置）。凭据均已脱敏。"
             ))
         }
     };

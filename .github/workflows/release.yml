@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing version tag to build, for example v0.3.4
+        description: Existing version tag to build, for example v0.4.0
         required: true
         type: string
 
@@ -82,7 +82,7 @@ jobs:
           )
           body = match.group(1).strip() if match else ""
           if not body:
-              body = "Everything Patch desktop release."
+              body = "DevConduit desktop release."
           Path("release-body.md").write_text(body + "\n", encoding="utf-8")
           PY
 
@@ -101,13 +101,13 @@ jobs:
             fi
             gh release edit "$RELEASE_TAG" \
               --draft \
-              --title "Everything Patch ${RELEASE_TAG}" \
+              --title "DevConduit ${RELEASE_TAG}" \
               --notes-file release-body.md
           else
             gh release create "$RELEASE_TAG" \
               --verify-tag \
               --draft \
-              --title "Everything Patch ${RELEASE_TAG}" \
+              --title "DevConduit ${RELEASE_TAG}" \
               --notes-file release-body.md
           fi
 
@@ -192,7 +192,7 @@ jobs:
           asset_count=0
           while IFS= read -r -d '' asset; do
             release_version="${RELEASE_TAG#v}"
-            release_asset="${{ matrix.artifact_dir }}/Everything.Patch_${release_version}_${{ matrix.release_asset_suffix }}"
+            release_asset="${{ matrix.artifact_dir }}/DevConduit_${release_version}_${{ matrix.release_asset_suffix }}"
             if [ "$asset" != "$release_asset" ]; then
               mv "$asset" "$release_asset"
             fi

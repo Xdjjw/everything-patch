@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub(super) const RUNTIME_VERSION: &str = "1.2.2-everything-patch.1";
+pub(super) const RUNTIME_VERSION: &str = "1.2.3-devconduit.1";
 pub(super) const UPSTREAM_COMMIT: &str = "5fd8af532efbaa87d2d0092297fd2d45cd56574e";
 
 struct EmbeddedRuntimeAsset {

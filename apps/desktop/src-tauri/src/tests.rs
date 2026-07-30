@@ -1707,7 +1707,7 @@ fn provider_sync_rewrites_every_session_meta_and_preserves_item_ids() {
 
     let metadata = fs::read_to_string(PathBuf::from(&result.backup_dir).join("metadata.json"))
         .expect("read backup metadata");
-    assert!(metadata.contains("\"managedBy\": \"Everything Patch provider sync v2\""));
+    assert!(metadata.contains("\"managedBy\": \"DevConduit provider sync v3\""));
 
     let second = sync_sessions_provider_inner(
         Some(codex_dir.display().to_string()),
@@ -1950,10 +1950,10 @@ fn backup_pruning_handles_current_and_legacy_provider_sync_backups() {
         write_json(
             &v2.join("metadata.json"),
             &json!({
-                "managedBy": if index % 2 == 0 {
-                    "Everything Patch provider sync v2"
-                } else {
-                    "Codex-X provider sync v2"
+                "managedBy": match index % 3 {
+                    0 => "DevConduit provider sync v3",
+                    1 => "Everything Patch provider sync v2",
+                    _ => "Codex-X provider sync v2",
                 },
                 "targetProvider": "custom"
             }),

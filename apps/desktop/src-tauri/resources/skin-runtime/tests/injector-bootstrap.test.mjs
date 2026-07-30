@@ -222,7 +222,7 @@ assert.match(
 assert.match(
   source,
   /await runOneShot\(options\);[\s\S]{0,160}await flushStandardStreams\(\);[\s\S]{0,100}process\.exit\(process\.exitCode \?\? 0\)/,
-  "One-shot commands must exit after flushing output so a lingering CDP close handshake cannot block Everything Patch.",
+  "One-shot commands must exit after flushing output so a lingering CDP close handshake cannot block DevConduit.",
 );
 
 console.log("PASS: renderer probing is route-aware, delayed-load safe, generation-safe, and guarded.");

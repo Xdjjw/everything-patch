@@ -71,7 +71,7 @@ pub(crate) fn build_skills_mcp_state_inner(config_dir: Option<String>) -> Result
     if let Err(e) = scan_skill_dir(
         &disabled_dir,
         false,
-        "Everything Patch 已禁用",
+        "DevConduit 已禁用",
         &mut skills,
         &mut seen,
     ) {
@@ -90,7 +90,7 @@ pub(crate) fn build_skills_mcp_state_inner(config_dir: Option<String>) -> Result
             name,
             transport,
             enabled,
-            source: "Everything Patch".to_string(),
+            source: "DevConduit".to_string(),
             summary,
             command,
             url,

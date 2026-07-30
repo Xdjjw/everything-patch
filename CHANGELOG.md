@@ -1,6 +1,18 @@
 # Changelog
 
-All notable changes to Everything Patch will be documented here.
+All notable changes to DevConduit will be documented here.
+
+## [v0.4.0] - 2026-07-30
+
+### 品牌
+
+- 产品正式更名为 DevConduit，定位为连接和管理多种 AI 编程工具的本地开发控制台。
+- 更换全平台应用图标：以连接通道为核心图形，重新生成 macOS、Windows 和各尺寸安装包图标。
+- 后续 Release 使用 DevConduit 标题与安装包文件名。
+
+### 兼容性
+
+- 保留 `com.xdjjw.everythingpatch`、`~/.everything-patch`、`EVERYTHING_PATCH_HOME`、现有 GitHub 更新地址和受管配置标记，覆盖升级不会丢失已有配置、提示词、Provider、MCP 或皮肤数据。
 
 ## [v0.3.4] - 2026-07-30
 

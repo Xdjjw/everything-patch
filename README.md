@@ -4,9 +4,9 @@
 </p>
 
 <div align="center">
-  <img src="apps/desktop/src-tauri/icons/icon.png" alt="Everything Patch Logo" width="132" />
+  <img src="apps/desktop/src-tauri/icons/icon.png" alt="DevConduit Logo" width="132" />
 
-  <h1>Everything Patch</h1>
+  <h1>DevConduit</h1>
 
   <p><strong>Codex、Claude Code、Grok Build 与 ZCode 的本地配置与工作流控制台</strong></p>
 
@@ -20,11 +20,11 @@
 
 ## 概览
 
-Everything Patch 是一个本地桌面工具，用于集中管理多种 AI 编程工具的指令、Provider、配置文件、Skills 与 MCP。它直接对接你已经安装在本机的工具和配置目录，帮助你看清当前状态，并在确认后完成可追溯的配置写入。
+DevConduit 是一个本地桌面工具，用于集中管理多种 AI 编程工具的指令、Provider、配置文件、Skills 与 MCP。它直接对接你已经安装在本机的工具和配置目录，帮助你看清当前状态，并在确认后完成可追溯的配置写入。
 
-它不是模型服务、账号服务或第三方工具安装器。尤其是在 MCP 集成中，Everything Patch 只校验你手动选择的本地文件并写入配置，不会自动下载、安装或执行第三方安装程序。
+它不是模型服务、账号服务或第三方工具安装器。尤其是在 MCP 集成中，DevConduit 只校验你手动选择的本地文件并写入配置，不会自动下载、安装或执行第三方安装程序。
 
-原项目名为 Codex-X。仓库中仍可见的 `codexx`、`codex-x` 和旧数据目录仅用于兼容已有配置，产品名称与后续发布均以 **Everything Patch** 为准。
+项目此前使用过 Codex-X 和 Everything Patch。仓库中仍可见的 `codexx`、`codex-x`、`everything-patch` 和旧数据目录仅用于兼容已有配置；产品名称与后续发布均以 **DevConduit** 为准。
 
 ## 支持范围
 
@@ -42,7 +42,7 @@ Everything Patch 是一个本地桌面工具，用于集中管理多种 AI 编�
 ### 指令与提示词
 
 - 管理内置与自定义 Markdown 指令，支持分类、导入、编辑、启用和禁用。
-- 在“保留原提示词”和“替换原提示词”之间切换，避免覆盖不属于 Everything Patch 管理的内容。
+- 在“保留原提示词”和“替换原提示词”之间切换，避免覆盖不属于 DevConduit 管理的内容。
 - 写入前创建备份，便于检查和恢复。
 
 ### Provider 与配置
@@ -91,13 +91,13 @@ Everything Patch 是一个本地桌面工具，用于集中管理多种 AI 编�
 
 ## 下载与安装包
 
-正式版本请从 [GitHub Releases](https://github.com/Xdjjw/everything-patch/releases) 获取。推送形如 `v0.3.4` 的版本标签后，发布工作流会构建并把以下安装包直接上传到对应的 Release：
+正式版本请从 [GitHub Releases](https://github.com/Xdjjw/everything-patch/releases) 获取。推送形如 `v0.4.0` 的版本标签后，发布工作流会构建并把以下安装包直接上传到对应的 Release：
 
 | 平台 | 格式 | Release 安装包 |
 | --- | --- | --- |
-| Windows x64 | `.msi` | `Everything.Patch_<version>_x64.msi` |
-| macOS Apple Silicon | `.dmg` | `Everything.Patch_<version>_aarch64.dmg` |
-| macOS Intel | `.dmg` | `Everything.Patch_<version>_x64.dmg` |
+| Windows x64 | `.msi` | `DevConduit_<version>_x64.msi` |
+| macOS Apple Silicon | `.dmg` | `DevConduit_<version>_aarch64.dmg` |
+| macOS Intel | `.dmg` | `DevConduit_<version>_x64.dmg` |
 
 `Build Package` 工作流仍会在推送到 `main` 时生成 Actions 验证产物。当前发布包没有配置 Apple Developer 签名或公证，因此 macOS 首次打开会由系统提示确认；Windows 也可能显示 SmartScreen 提示。
 
@@ -136,7 +136,7 @@ Codex 默认配置路径：
 ~/.codex/auth.json
 ```
 
-Everything Patch 的本地数据默认位于：
+DevConduit 会继续使用原有本地数据目录，保证覆盖升级后保留已有配置：
 
 ```text
 ~/.everything-patch/everything-patch.db
@@ -146,7 +146,7 @@ Everything Patch 的本地数据默认位于：
 
 ```text
 CODEX_HOME=/path/to/.codex
-EVERYTHING_PATCH_HOME=/path/to/everything-patch-data
+EVERYTHING_PATCH_HOME=/path/to/everything-patch-data  # legacy compatibility key
 CC_SWITCH_HOME=/path/to/.cc-switch
 ```
 

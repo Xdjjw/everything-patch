@@ -350,7 +350,7 @@ fn discover_node_runtime() -> Result<NodeRuntime> {
         }
     }
     Err(CodexxError::Config(
-        "Windows 皮肤运行时缺少内置 Node.js；请重新安装 Everything Patch".to_string(),
+        "Windows 皮肤运行时缺少内置 Node.js；请重新安装 DevConduit".to_string(),
     ))
 }
 
@@ -816,7 +816,7 @@ mod tests {
             injector_pid: 42,
             injector_started_at: "2026-07-24T00:00:00.0000000Z".to_string(),
             injector_path: r"C:\Users\test\.everything-patch\runtime\injector.mjs".to_string(),
-            node_path: r"C:\Program Files\Everything Patch\skin-runtime\node\node.exe".to_string(),
+            node_path: r"C:\Program Files\DevConduit\skin-runtime\node\node.exe".to_string(),
             node_version: "v22.23.1".to_string(),
             codex_package_root: r"C:\Program Files\WindowsApps\OpenAI.Codex_1.0.0.0_x64"
                 .to_string(),
@@ -854,7 +854,7 @@ mod tests {
         );
         assert_eq!(
             value["nodePath"],
-            r"C:\Program Files\Everything Patch\skin-runtime\node\node.exe"
+            r"C:\Program Files\DevConduit\skin-runtime\node\node.exe"
         );
         assert_eq!(value["browserId"], "browser-1");
     }

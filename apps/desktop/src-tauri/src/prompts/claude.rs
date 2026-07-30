@@ -63,7 +63,7 @@ fn marker_bounds(content: &str, begin: &str, end: &str) -> Result<Option<(usize,
     }
     if begins.len() != 1 || ends.len() != 1 || begins[0] >= ends[0] {
         return Err(CodexxError::Config(
-            "CLAUDE.md 中的 Everything Patch 受管区块标记不完整或重复，请先修复 BEGIN/END 标记"
+            "CLAUDE.md 中的 DevConduit 受管区块标记不完整或重复，请先修复 BEGIN/END 标记"
                 .to_string(),
         ));
     }
@@ -79,7 +79,7 @@ pub(crate) fn managed_claude_bounds(content: &str) -> Result<Option<(usize, usiz
     )?;
     match (current, legacy) {
         (Some(_), Some(_)) => Err(CodexxError::Config(
-            "CLAUDE.md 中存在多个 Everything Patch 受管区块，请只保留一个".to_string(),
+            "CLAUDE.md 中存在多个 DevConduit 受管区块，请只保留一个".to_string(),
         )),
         (Some(bounds), None) | (None, Some(bounds)) => Ok(Some(bounds)),
         (None, None) => Ok(None),

@@ -4,9 +4,9 @@
 </p>
 
 <div align="center">
-  <img src="apps/desktop/src-tauri/icons/icon.png" alt="Everything Patch Logo" width="132" />
+  <img src="apps/desktop/src-tauri/icons/icon.png" alt="DevConduit Logo" width="132" />
 
-  <h1>Everything Patch</h1>
+  <h1>DevConduit</h1>
 
   <p><strong>A local configuration and workflow console for Codex, Claude Code, Grok Build, and ZCode</strong></p>
 
@@ -20,11 +20,11 @@
 
 ## Overview
 
-Everything Patch is a local desktop application for managing instructions, providers, configuration files, Skills, and MCP servers across several AI coding tools. It works with tools and configuration directories already present on your machine, making their current state visible and applying deliberate, traceable configuration changes after confirmation.
+DevConduit is a local desktop application for managing instructions, providers, configuration files, Skills, and MCP servers across several AI coding tools. It works with tools and configuration directories already present on your machine, making their current state visible and applying deliberate, traceable configuration changes after confirmation.
 
 It is not a model service, account service, or third-party installer. In particular, its MCP catalog validates files that you select yourself and writes configuration only. It never downloads, installs, or runs third-party installers automatically.
 
-The project was formerly named Codex-X. Remaining `codexx`, `codex-x`, and legacy data-directory references exist only for backward compatibility; the product name and future releases are **Everything Patch**.
+The project was formerly named Codex-X and Everything Patch. Remaining `codexx`, `codex-x`, `everything-patch`, and legacy data-directory references exist only for backward compatibility; the product name and future releases are **DevConduit**.
 
 ## Supported Tools
 
@@ -42,7 +42,7 @@ Features are shown according to what is installed locally. Session synchronizati
 ### Instructions and Prompts
 
 - Manage bundled and custom Markdown instructions with categories, import, editing, enablement, and disablement.
-- Choose whether to preserve existing instructions or replace them, without overwriting content that Everything Patch does not manage.
+- Choose whether to preserve existing instructions or replace them, without overwriting content that DevConduit does not manage.
 - Create a backup before a managed write so changes can be reviewed or restored.
 
 ### Providers and Configuration
@@ -91,13 +91,13 @@ Connect only to MCP servers and remote bridges that you trust. For HTTP bridges,
 
 ## Downloads and Packages
 
-Use [GitHub Releases](https://github.com/Xdjjw/everything-patch/releases) for published versions. Pushing a version tag such as `v0.3.4` builds and uploads these installers directly to that release:
+Use [GitHub Releases](https://github.com/Xdjjw/everything-patch/releases) for published versions. Pushing a version tag such as `v0.4.0` builds and uploads these installers directly to that release:
 
 | Platform | Format | Release installer |
 | --- | --- | --- |
-| Windows x64 | `.msi` | `Everything.Patch_<version>_x64.msi` |
-| macOS Apple Silicon | `.dmg` | `Everything.Patch_<version>_aarch64.dmg` |
-| macOS Intel | `.dmg` | `Everything.Patch_<version>_x64.dmg` |
+| Windows x64 | `.msi` | `DevConduit_<version>_x64.msi` |
+| macOS Apple Silicon | `.dmg` | `DevConduit_<version>_aarch64.dmg` |
+| macOS Intel | `.dmg` | `DevConduit_<version>_x64.dmg` |
 
 The `Build Package` workflow still produces verification artifacts on pushes to `main`. Apple Developer signing and notarization are not configured for the current release packages, so macOS will ask for confirmation on first open; Windows may also show a SmartScreen prompt.
 
@@ -136,7 +136,7 @@ Default Codex paths:
 ~/.codex/auth.json
 ```
 
-Everything Patch local data defaults to:
+DevConduit continues to use the existing local data directory so an in-place upgrade retains existing configuration:
 
 ```text
 ~/.everything-patch/everything-patch.db
@@ -146,7 +146,7 @@ Supported environment variables:
 
 ```text
 CODEX_HOME=/path/to/.codex
-EVERYTHING_PATCH_HOME=/path/to/everything-patch-data
+EVERYTHING_PATCH_HOME=/path/to/everything-patch-data  # legacy compatibility key
 CC_SWITCH_HOME=/path/to/.cc-switch
 ```
 

@@ -45,7 +45,7 @@ fn ensure_sqlite_column(
         Err(e) => {
             let message = e.to_string().to_ascii_lowercase();
             if message.contains("duplicate column") || message.contains("duplicate column name") {
-                // Another running Everything Patch process may have applied the same
+                // Another running DevConduit process may have applied the same
                 // lightweight migration between our PRAGMA check and ALTER.
                 Ok(())
             } else {

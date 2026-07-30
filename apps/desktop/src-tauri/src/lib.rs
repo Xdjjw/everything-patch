@@ -749,11 +749,11 @@ fn get_about_info_inner(config_dir: Option<String>) -> Result<AboutInfo> {
     #[cfg(target_os = "windows")]
     let native_updater_supported = std::env::current_exe()
         .ok()
-        .and_then(|path| {
-            path.parent()
-                .map(|parent| parent.join("Everything-Patch.portable"))
+        .and_then(|path| path.parent().map(|parent| parent.to_path_buf()))
+        .map(|parent| {
+            !parent.join("DevConduit.portable").is_file()
+                && !parent.join("Everything-Patch.portable").is_file()
         })
-        .map(|marker| !marker.is_file())
         .unwrap_or(true);
     #[cfg(target_os = "linux")]
     let native_updater_supported = std::env::var_os("APPIMAGE")
@@ -991,7 +991,7 @@ async fn list_saved_providers(app_type: Option<String>) -> Result<Vec<SavedProvi
 fn save_provider_command_inner(provider: SavedProvider) -> Result<SavedProvider> {
     if ToolId::parse(&provider.app_type)? == ToolId::Zcode {
         return Err(CodexxError::Config(
-            "ZCode 原生供应商请在 ZCode 中增删改；Everything Patch 只负责读取和切换".to_string(),
+            "ZCode 原生供应商请在 ZCode 中增删改；DevConduit 只负责读取和切换".to_string(),
         ));
     }
     save_provider_inner(provider)
@@ -1147,9 +1147,9 @@ fn disable_instruction_inner(
         message: if removed {
             "已禁用指令提示词".to_string()
         } else if current.is_some() {
-            "当前使用的是用户自己的提示词，Everything Patch 未做修改".to_string()
+            "当前使用的是用户自己的提示词，DevConduit 未做修改".to_string()
         } else {
-            "当前没有启用 Everything Patch 提示词".to_string()
+            "当前没有启用 DevConduit 提示词".to_string()
         },
         backup_id,
         state,
@@ -1175,7 +1175,7 @@ fn disable_external_instruction_inner(config_dir: Option<String>) -> Result<Acti
     if let Some(value) = current.as_deref() {
         if prompt_template_key_for_instruction(value)?.is_some() {
             return Err(CodexxError::Config(
-                "当前是 Everything Patch 管理的提示词，请使用普通禁用按钮".to_string(),
+                "当前是 DevConduit 管理的提示词，请使用普通禁用按钮".to_string(),
             ));
         }
     }
@@ -1576,7 +1576,7 @@ fn disable_claude_instruction_inner(delete_file: Option<bool>) -> Result<ClaudeA
         message: if removed {
             "已禁用 Claude 指令提示词".to_string()
         } else {
-            "当前没有启用 Everything Patch 管理的 Claude 指令".to_string()
+            "当前没有启用 DevConduit 管理的 Claude 指令".to_string()
         },
         backup_id,
         state,
@@ -2166,7 +2166,7 @@ pub fn run() {
             open_url,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Everything Patch");
+        .expect("error while running DevConduit");
 }
 
 #[cfg(test)]
