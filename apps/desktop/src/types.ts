@@ -175,6 +175,40 @@ export type ActionResult = {
   state: CodexState;
 };
 
+export type ClaudeRuntimeProfile = {
+  path: string;
+  exists: boolean;
+  managed: boolean;
+};
+
+export type ClaudeRuntimeState = {
+  supported: boolean;
+  platform: "macos" | "windows" | "unsupported";
+  shell?: string;
+  promptPath: string;
+  promptExists: boolean;
+  profiles: ClaudeRuntimeProfile[];
+  status: "active" | "inactive" | "partial" | "needs-repair" | "unsupported";
+  active: boolean;
+};
+
+export type RuntimePreviewTarget = {
+  label: string;
+  path: string;
+  operation: string;
+  exists: boolean;
+};
+
+export type PromptRuntimePreview = {
+  engine: PromptEngine;
+  operation: "install" | "uninstall";
+  title: string;
+  summary: string;
+  backupLocation: string;
+  restartHint?: string;
+  targets: RuntimePreviewTarget[];
+};
+
 export type ClaudeState = {
   claudeDir: string;
   memoryPath: string;
@@ -183,6 +217,7 @@ export type ClaudeState = {
   instructionInjectionMode?: PromptInjectionMode;
   instructionTemplateKey?: string;
   activeInstructionTitle?: string;
+  runtime: ClaudeRuntimeState;
 };
 
 export type ClaudeActionResult = {

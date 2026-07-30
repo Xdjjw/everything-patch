@@ -1970,6 +1970,18 @@ function App() {
       handleClaudeActionResult,
     );
 
+  const installClaudeRuntime = () =>
+    call(
+      () => invoke<ClaudeActionResult>("install_claude_runtime"),
+      handleClaudeActionResult,
+    );
+
+  const uninstallClaudeRuntime = () =>
+    call(
+      () => invoke<ClaudeActionResult>("uninstall_claude_runtime"),
+      handleClaudeActionResult,
+    );
+
   const enableClaudeSavedPrompt = (id: string) =>
     call(
       () => invoke<ClaudeActionResult>("enable_claude_saved_prompt", {
@@ -3326,6 +3338,12 @@ function App() {
                 codexInactiveInstructionFile={state?.inactiveInstructionFile}
                 activeInstructionTitle={activeInstructionTitle}
                 activeInjectionMode={activePromptInjectionMode}
+                codexRuntimeScope={state?.codexDir}
+                codexRuntimeEntryPath={state?.agentsPath}
+                claudeRuntimeEntryPath={claudeState?.memoryPath}
+                claudeRuntime={claudeState?.runtime}
+                zcodeRuntime={zcodeState}
+                grokRuntime={grokState}
                 promptBackups={promptBackups}
                 promptBackupsOpen={promptBackupsOpen}
                 promptBackupsLoading={promptBackupsLoading}
@@ -3396,6 +3414,8 @@ function App() {
                 onDeleteClaudePrompt={removeClaudeSavedPrompt}
                 onImportClaudePrompt={importClaudePromptMd}
                 onSaveClaudePrompt={saveClaudePromptOnly}
+                onInstallClaudeRuntime={installClaudeRuntime}
+                onUninstallClaudeRuntime={uninstallClaudeRuntime}
                 zcodeInstructionEnabled={Boolean(zcodeState?.instructionEnabled)}
                 zcodeActiveInstructionTitle={zcodeActiveInstructionTitle}
                 zcodeInstructionTemplates={zcodeInstructionTemplates}

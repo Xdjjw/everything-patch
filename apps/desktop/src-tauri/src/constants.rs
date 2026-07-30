@@ -41,6 +41,10 @@ pub(crate) const MAX_SKILL_ZIP_BYTES: u64 = 20 * 1024 * 1024;
 pub(crate) const CLAUDE_HOME_DIRNAME: &str = ".claude";
 pub(crate) const CLAUDE_MEMORY_FILENAME: &str = "CLAUDE.md";
 pub(crate) const CLAUDE_KEYSMITH_DIRNAME: &str = "keysmith";
+// Claude CLI runtime injection stays separate from the historical keysmith
+// instruction directory so uninstalling either layer cannot remove the other.
+pub(crate) const CLAUDE_RUNTIME_DIRNAME: &str = "devconduit";
+pub(crate) const CLAUDE_RUNTIME_PROMPT_FILENAME: &str = "runtime-prompt.md";
 
 // CLAUDE.md 受管 import-block 标记，与 AGENTS.md 的 BEGIN/END 模式对齐。
 pub(crate) const CLAUDE_MANAGED_BEGIN: &str = "<!-- EVERYTHING-PATCH:CLAUDE:BEGIN -->";
@@ -50,6 +54,8 @@ pub(crate) const CLAUDE_MODE_PREFIX: &str = "<!-- EVERYTHING-PATCH:CLAUDE:MODE:"
 pub(crate) const LEGACY_CLAUDE_MANAGED_BEGIN: &str = "<!-- CODEX-X:CLAUDE:BEGIN -->";
 pub(crate) const LEGACY_CLAUDE_MANAGED_END: &str = "<!-- CODEX-X:CLAUDE:END -->";
 pub(crate) const LEGACY_CLAUDE_TEMPLATE_PREFIX: &str = "<!-- CODEX-X:CLAUDE:TEMPLATE:";
+pub(crate) const CLAUDE_RUNTIME_BEGIN: &str = "# >>> DevConduit Claude runtime >>>";
+pub(crate) const CLAUDE_RUNTIME_END: &str = "# <<< DevConduit Claude runtime <<<";
 
 // keysmith 默认模板，编译进二进制。
 pub(crate) const CLAUDE_BUILTIN_ID: &str = "claude-project-rules";

@@ -307,6 +307,7 @@ pub(crate) struct ClaudeState {
     pub(crate) instruction_injection_mode: Option<String>,
     pub(crate) instruction_template_key: Option<String>,
     pub(crate) active_instruction_title: Option<String>,
+    pub(crate) runtime: crate::claude_runtime::ClaudeRuntimeState,
 }
 
 /// Claude 操作结果，与 `ActionResult` 对应但携带 `ClaudeState`。
@@ -348,6 +349,7 @@ pub(crate) fn build_claude_state() -> Result<ClaudeState> {
     let instruction_injection_mode =
         managed_claude_injection_mode()?.map(|mode| mode.as_str().to_string());
     let active_instruction_title = template_key.as_deref().and_then(claude_instruction_title);
+    let runtime = crate::claude_runtime::build_runtime_state()?;
     Ok(ClaudeState {
         claude_dir: memory
             .parent()
@@ -359,6 +361,7 @@ pub(crate) fn build_claude_state() -> Result<ClaudeState> {
         instruction_injection_mode,
         instruction_template_key: template_key,
         active_instruction_title,
+        runtime,
     })
 }
 

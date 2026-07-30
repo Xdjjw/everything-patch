@@ -1,10 +1,12 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import type { ChangeEvent, RefObject } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import {
   ArrowLeft,
   ArrowLeftRight,
   CircleHelp,
   CirclePlus,
+  Eye,
   FileText,
   History,
   Loader2,
@@ -14,7 +16,9 @@ import {
   RotateCcw,
   Save,
   Settings2,
+  ShieldCheck,
   Sparkles,
+  Terminal,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -22,18 +26,22 @@ import {
 import { PageTransition } from "../components/PageTransition";
 import { PromptCategoryManager } from "../components/PromptCategoryManager";
 import type { PromptCategoryItem } from "../components/PromptCategoryManager";
-import { Button, IconButton, ModalShell, StatusBadge, Toggle, cx } from "../components/ui";
+import { Button, Checkbox, IconButton, ModalShell, StatusBadge, Toggle, cx } from "../components/ui";
 import { usePromptCategories } from "../promptCategories";
 import type {
   BuiltinPromptStatus,
+  ClaudeRuntimeState,
   CodexInstructionStatus,
+  GrokState,
   InstructionMode,
   InstructionTemplate,
   Lang,
   PromptBackupEntry,
   PromptEngine,
   PromptInjectionMode,
+  PromptRuntimePreview,
   SavedPrompt,
+  ZcodeState,
 } from "../types";
 import "../styles/skills-prompts-pages.css";
 
@@ -73,6 +81,12 @@ export type PromptsPageProps = {
   codexInactiveInstructionFile?: string | null;
   activeInstructionTitle: string;
   activeInjectionMode?: PromptInjectionMode;
+  codexRuntimeScope?: string;
+  codexRuntimeEntryPath?: string;
+  claudeRuntimeEntryPath?: string;
+  claudeRuntime?: ClaudeRuntimeState;
+  zcodeRuntime?: ZcodeState | null;
+  grokRuntime?: GrokState | null;
   promptBackups: PromptBackupEntry[];
   promptBackupsOpen: boolean;
   promptBackupsLoading: boolean;
@@ -118,6 +132,8 @@ export type PromptsPageProps = {
   onDeleteClaudePrompt: (id: string) => void | Promise<void>;
   onImportClaudePrompt: (file?: File | null) => void | Promise<void>;
   onSaveClaudePrompt: MaybeAsyncAction;
+  onInstallClaudeRuntime: MaybeAsyncAction;
+  onUninstallClaudeRuntime: MaybeAsyncAction;
   // ─── ZCode 平行 props ──────────────────────────────────────────────────
   zcodeInstructionEnabled: boolean;
   zcodeActiveInstructionTitle: string;
@@ -467,6 +483,271 @@ function run(action: MaybeAsyncAction) {
   void action();
 }
 
+function getRuntimeCopy(lang: Lang) {
+  return lang === "zh"
+    ? {
+      deployment: "部署状态",
+      preview: "预览变更",
+      active: "已部署",
+      inactive: "未部署",
+      attention: "需要处理",
+      unsupported: "当前平台不支持",
+      nativeCodex: "原生配置入口",
+      nativeClaude: "原生 CLAUDE.md 入口",
+      nativeZcode: "运行时 launcher 入口",
+      nativeGrok: "全局规则入口",
+      cliRuntime: "Claude CLI runtime",
+      cliRuntimeDetail: "在新终端中追加当前 DevConduit 指令",
+      cliRuntimeUnavailable: "当前平台只支持 macOS zsh 或 Windows PowerShell。",
+      cliRuntimeNeedsPrompt: "先启用一个 Claude 指令后才能安装。",
+      previewTitle: "部署变更预览",
+      previewDescription: "确认前不会写入任何文件。确认后会先创建可恢复快照。",
+      files: "将处理的文件",
+      backup: "恢复快照位置",
+      restart: "完成后需要重新打开对应终端或应用。",
+      confirm: "我确认先创建恢复快照，再应用这些文件变更。",
+      install: "确认安装",
+      uninstall: "确认卸载",
+      close: "关闭",
+      cancel: "取消",
+      operationInstall: "写入或更新",
+      operationUninstall: "移除或恢复",
+      nativeDetail: "使用该工具自身支持的原生配置方式，不接管全局命令。",
+      claudeDetail: "使用受管 profile 区块调用原始 claude 命令，不修改 Claude 二进制或设置。",
+    }
+    : {
+      deployment: "Deployment status",
+      preview: "Preview changes",
+      active: "Deployed",
+      inactive: "Not deployed",
+      attention: "Needs attention",
+      unsupported: "Unsupported platform",
+      nativeCodex: "Native config entry",
+      nativeClaude: "Native CLAUDE.md entry",
+      nativeZcode: "Runtime launcher entry",
+      nativeGrok: "Global rules entry",
+      cliRuntime: "Claude CLI runtime",
+      cliRuntimeDetail: "Append the current DevConduit instruction in new terminals",
+      cliRuntimeUnavailable: "Only macOS zsh and Windows PowerShell are supported on this platform.",
+      cliRuntimeNeedsPrompt: "Enable a Claude instruction before installing it.",
+      previewTitle: "Deployment change preview",
+      previewDescription: "No files are written until confirmation. A restorable snapshot is created first.",
+      files: "Files to change",
+      backup: "Recovery snapshot location",
+      restart: "Reopen the related terminal or application after completion.",
+      confirm: "I understand that a recovery snapshot is created before these changes are applied.",
+      install: "Install",
+      uninstall: "Uninstall",
+      close: "Close",
+      cancel: "Cancel",
+      operationInstall: "Write or update",
+      operationUninstall: "Remove or restore",
+      nativeDetail: "Uses the tool's own supported configuration path without replacing a global command.",
+      claudeDetail: "Uses a managed profile block to invoke the original claude command without modifying Claude binaries or settings.",
+    };
+}
+
+type PendingRuntimePreview = {
+  preview: PromptRuntimePreview;
+  apply?: MaybeAsyncAction;
+  claudeCliRuntime: boolean;
+};
+
+type RuntimePreviewDialogProps = {
+  lang: Lang;
+  pending: PendingRuntimePreview | null;
+  busy: boolean;
+  onClose: () => void;
+  onApply: () => void | Promise<void>;
+};
+
+function RuntimePreviewDialog({ lang, pending, busy, onClose, onApply }: RuntimePreviewDialogProps) {
+  const copy = getRuntimeCopy(lang);
+  const [confirmed, setConfirmed] = useState(false);
+
+  useEffect(() => {
+    setConfirmed(false);
+  }, [pending?.preview.engine, pending?.preview.operation, pending?.claudeCliRuntime]);
+
+  if (!pending) return null;
+  const { preview } = pending;
+  const isInstall = preview.operation === "install";
+
+  return (
+    <ModalShell
+      open
+      onClose={onClose}
+      title={<span className="cx-prompt-runtime-dialog-title"><Eye size={19} aria-hidden="true" />{copy.previewTitle}</span>}
+      description={copy.previewDescription}
+      closeLabel={copy.close}
+      closeOnBackdrop={!busy}
+      closeOnEscape={!busy}
+      showCloseButton={!busy}
+      size="lg"
+      className="cx-prompt-runtime-dialog"
+      bodyClassName="cx-prompt-runtime-dialog-body"
+      footer={pending.apply ? (
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={busy}>{copy.cancel}</Button>
+          <Button
+            icon={busy ? <Loader2 className="cx-prompts-spin" /> : <ShieldCheck />}
+            onClick={() => void onApply()}
+            disabled={busy || !confirmed}
+            data-initial-focus
+          >
+            {isInstall ? copy.install : copy.uninstall}
+          </Button>
+        </>
+      ) : (
+        <Button variant="secondary" onClick={onClose}>{copy.close}</Button>
+      )}
+    >
+      <div className="cx-prompt-runtime-preview-copy">
+        <strong>{pending.claudeCliRuntime ? copy.claudeDetail : copy.nativeDetail}</strong>
+        {preview.restartHint && <span>{copy.restart}</span>}
+      </div>
+      <section className="cx-prompt-runtime-preview-files" aria-label={copy.files}>
+        <strong>{copy.files}</strong>
+        <div>
+          {preview.targets.map((target) => (
+            <div className="cx-prompt-runtime-preview-file" key={`${target.path}:${target.operation}`}>
+              <span>{target.label}</span>
+              <code title={target.path}>{target.path}</code>
+              <StatusBadge tone={isInstall ? "info" : "warning"} dot={false}>
+                {isInstall ? copy.operationInstall : copy.operationUninstall}
+              </StatusBadge>
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="cx-prompt-runtime-preview-backup" aria-label={copy.backup}>
+        <ShieldCheck size={18} aria-hidden="true" />
+        <div>
+          <strong>{copy.backup}</strong>
+          <code title={preview.backupLocation}>{preview.backupLocation}</code>
+        </div>
+      </section>
+      {pending.apply && (
+        <Checkbox
+          checked={confirmed}
+          onCheckedChange={setConfirmed}
+          label={copy.confirm}
+          disabled={busy}
+          className="cx-prompt-runtime-confirm"
+        />
+      )}
+    </ModalShell>
+  );
+}
+
+type RuntimeDeploymentPanelProps = {
+  lang: Lang;
+  engine: PromptEngine;
+  instructionEnabled: boolean;
+  codexRuntimeEntryPath?: string;
+  claudeRuntimeEntryPath?: string;
+  claudeRuntime?: ClaudeRuntimeState;
+  zcodeRuntime?: ZcodeState | null;
+  grokRuntime?: GrokState | null;
+  loading: boolean;
+  previewLoading: boolean;
+  onPreview: () => void;
+  onToggleClaudeRuntime: () => void;
+};
+
+function RuntimeDeploymentPanel({
+  lang,
+  engine,
+  instructionEnabled,
+  codexRuntimeEntryPath,
+  claudeRuntimeEntryPath,
+  claudeRuntime,
+  zcodeRuntime,
+  grokRuntime,
+  loading,
+  previewLoading,
+  onPreview,
+  onToggleClaudeRuntime,
+}: RuntimeDeploymentPanelProps) {
+  const copy = getRuntimeCopy(lang);
+  const native = engine === "codex"
+    ? { title: copy.nativeCodex, path: codexRuntimeEntryPath, active: instructionEnabled, attention: false }
+    : engine === "claude"
+      ? { title: copy.nativeClaude, path: claudeRuntimeEntryPath, active: instructionEnabled, attention: false }
+      : engine === "zcode"
+        ? {
+          title: copy.nativeZcode,
+          path: zcodeRuntime?.systemFile,
+          active: instructionEnabled,
+          attention: Boolean(zcodeRuntime?.zcodeApp && !zcodeRuntime.runtimePatchable),
+        }
+        : {
+          title: copy.nativeGrok,
+          path: grokRuntime?.grokDir,
+          active: instructionEnabled,
+          attention: Boolean(grokRuntime?.grokDirExists && !grokRuntime.configTomlExists),
+        };
+  const nativeTone = native.attention ? "warning" : native.active ? "success" : "neutral";
+  const nativeLabel = native.attention ? copy.attention : native.active ? copy.active : copy.inactive;
+  const runtimeStatus = claudeRuntime?.status;
+  const claudeRuntimeTone = runtimeStatus === "active"
+    ? "success"
+    : runtimeStatus === "partial" || runtimeStatus === "needs-repair"
+      ? "warning"
+      : "neutral";
+  const claudeRuntimeLabel = runtimeStatus === "active"
+    ? copy.active
+    : runtimeStatus === "partial" || runtimeStatus === "needs-repair"
+      ? copy.attention
+      : runtimeStatus === "unsupported"
+        ? copy.unsupported
+        : copy.inactive;
+
+  return (
+    <section className="cx-prompt-runtime-panel" aria-label={copy.deployment}>
+      <div className="cx-prompt-runtime-native">
+        <div className="cx-prompt-runtime-heading">
+          <Terminal size={17} aria-hidden="true" />
+          <div>
+            <strong>{copy.deployment}</strong>
+            <span>{native.title}</span>
+          </div>
+        </div>
+        {native.path && <code title={native.path}>{native.path}</code>}
+        <div className="cx-prompt-runtime-native-actions">
+          <StatusBadge tone={nativeTone} dot={false}>{nativeLabel}</StatusBadge>
+          <IconButton
+            icon={previewLoading ? <Loader2 className="cx-prompts-spin" /> : <Eye size={16} />}
+            label={copy.preview}
+            variant="ghost"
+            size="sm"
+            onClick={onPreview}
+            disabled={loading || previewLoading}
+          />
+        </div>
+      </div>
+      {engine === "claude" && claudeRuntime && (
+        <div className="cx-prompt-runtime-cli">
+          <div className="cx-prompt-runtime-cli-copy">
+            <div>
+              <strong>{copy.cliRuntime}</strong>
+              <StatusBadge tone={claudeRuntimeTone} dot={false}>{claudeRuntimeLabel}</StatusBadge>
+            </div>
+            <span>{claudeRuntime.supported ? copy.cliRuntimeDetail : copy.cliRuntimeUnavailable}</span>
+            {!instructionEnabled && claudeRuntime.supported && <span>{copy.cliRuntimeNeedsPrompt}</span>}
+          </div>
+          <Toggle
+            checked={claudeRuntime.active}
+            onCheckedChange={() => onToggleClaudeRuntime()}
+            disabled={loading || previewLoading || (!instructionEnabled && !claudeRuntime.active) || !claudeRuntime.supported}
+            aria-label={copy.cliRuntime}
+          />
+        </div>
+      )}
+    </section>
+  );
+}
+
 function promptCategoryKey(engine: PromptEngine, kind: "builtin" | "saved" | "external", id: string) {
   return `${engine}:${kind}:${id.trim().toLowerCase()}`;
 }
@@ -770,6 +1051,12 @@ export function PromptsPage({
   codexInactiveInstructionFile,
   activeInstructionTitle,
   activeInjectionMode,
+  codexRuntimeScope,
+  codexRuntimeEntryPath,
+  claudeRuntimeEntryPath,
+  claudeRuntime,
+  zcodeRuntime,
+  grokRuntime,
   promptBackups,
   promptBackupsOpen,
   promptBackupsLoading,
@@ -814,6 +1101,8 @@ export function PromptsPage({
   onDeleteClaudePrompt,
   onImportClaudePrompt,
   onSaveClaudePrompt,
+  onInstallClaudeRuntime,
+  onUninstallClaudeRuntime,
   zcodeInstructionEnabled,
   zcodeActiveInstructionTitle,
   zcodeInstructionTemplates,
@@ -860,6 +1149,10 @@ export function PromptsPage({
   const activeModeLabel = activeModeCopy.label;
   const importBusy = actionBusy === "importPrompt";
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
+  const [pendingRuntimePreview, setPendingRuntimePreview] = useState<PendingRuntimePreview | null>(null);
+  const [runtimePreviewLoading, setRuntimePreviewLoading] = useState(false);
+  const [runtimePreviewBusy, setRuntimePreviewBusy] = useState(false);
+  const [runtimePreviewError, setRuntimePreviewError] = useState("");
   const promptCategories = usePromptCategories(lang);
   // 当前引擎下的派生值：四引擎共享列表交互，各自保留后端写入语义。
   const activeTemplates = isGrok ? grokInstructionTemplates : isZcode ? zcodeInstructionTemplates : isClaude ? claudeInstructionTemplates : instructionTemplates;
@@ -924,10 +1217,65 @@ export function PromptsPage({
   const disableHandler = isGrok ? onDisableGrokInstruction : isZcode ? onDisableZcodeInstruction : isClaude ? onDisableClaudeInstruction : onDisableInstruction;
   const enableSavedHandler = isGrok ? onEnableGrokSavedPrompt : isZcode ? onEnableZcodeSavedPrompt : isClaude ? onEnableClaudeSavedPrompt : onEnableSavedPrompt;
   const editHandler = isGrok ? onEditGrokPrompt : isZcode ? onEditZcodePrompt : isClaude ? onEditClaudePrompt : onEditPrompt;
+  const requestRuntimePreview = async (operation: "install" | "uninstall", apply?: MaybeAsyncAction) => {
+    setRuntimePreviewLoading(true);
+    setRuntimePreviewError("");
+    try {
+      const preview = await invoke<PromptRuntimePreview>("preview_prompt_runtime", {
+        engine: promptEngine,
+        operation,
+        configDir: isCodex ? codexRuntimeScope || null : null,
+      });
+      setPendingRuntimePreview({ preview, apply, claudeCliRuntime: false });
+    } catch (error) {
+      setRuntimePreviewError(String(error));
+    } finally {
+      setRuntimePreviewLoading(false);
+    }
+  };
+  const requestClaudeRuntimePreview = async () => {
+    setRuntimePreviewLoading(true);
+    setRuntimePreviewError("");
+    try {
+      const preview = await invoke<PromptRuntimePreview>("preview_claude_runtime");
+      setPendingRuntimePreview({
+        preview,
+        apply: preview.operation === "install" ? onInstallClaudeRuntime : onUninstallClaudeRuntime,
+        claudeCliRuntime: true,
+      });
+    } catch (error) {
+      setRuntimePreviewError(String(error));
+    } finally {
+      setRuntimePreviewLoading(false);
+    }
+  };
+  const applyRuntimePreview = async () => {
+    const action = pendingRuntimePreview?.apply;
+    if (!action) return;
+    setRuntimePreviewBusy(true);
+    try {
+      await action();
+      setPendingRuntimePreview(null);
+    } finally {
+      setRuntimePreviewBusy(false);
+    }
+  };
+  const confirmPromptChange = (operation: "install" | "uninstall", action: MaybeAsyncAction) => {
+    void requestRuntimePreview(operation, action);
+  };
 
   return (
     <PageTransition pageKey={`prompts:${instructionMode}`}>
       <section className={cx("cx-prompts-page", "cx-prompts-page--list", className)} aria-label={copy.title}>
+      <RuntimePreviewDialog
+        lang={lang}
+        pending={pendingRuntimePreview}
+        busy={runtimePreviewBusy}
+        onClose={() => {
+          if (!runtimePreviewBusy) setPendingRuntimePreview(null);
+        }}
+        onApply={applyRuntimePreview}
+      />
       <PromptBackupsDialog
         lang={lang}
         engine={promptEngine}
@@ -1105,6 +1453,22 @@ export function PromptsPage({
         </div>
       </section>
 
+      <RuntimeDeploymentPanel
+        lang={lang}
+        engine={promptEngine}
+        instructionEnabled={activeInstructionEnabled}
+        codexRuntimeEntryPath={codexRuntimeEntryPath}
+        claudeRuntimeEntryPath={claudeRuntimeEntryPath}
+        claudeRuntime={claudeRuntime}
+        zcodeRuntime={zcodeRuntime}
+        grokRuntime={grokRuntime}
+        loading={loading}
+        previewLoading={runtimePreviewLoading}
+        onPreview={() => void requestRuntimePreview(activeInstructionEnabled ? "uninstall" : "install")}
+        onToggleClaudeRuntime={() => void requestClaudeRuntimePreview()}
+      />
+      {runtimePreviewError && <p className="cx-prompt-runtime-error" role="alert">{runtimePreviewError}</p>}
+
       <div className="cx-prompt-category-toolbar">
         <div className="cx-skills-tabs cx-prompt-category-tabs" role="group" aria-label={copy.manageCategories}>
           {promptCategories.categories.map((category) => (
@@ -1141,7 +1505,10 @@ export function PromptsPage({
                 enabled={enabled}
                 loading={loading}
                 toggleLabel={enabled ? copy.disable : copy.enable}
-                onToggle={() => enabled ? disableHandler() : enableBuiltinHandler(template.id)}
+                onToggle={() => confirmPromptChange(
+                  enabled ? "uninstall" : "install",
+                  enabled ? disableHandler : () => enableBuiltinHandler(template.id),
+                )}
               >
                 {enabled && (
                   <div className="cx-prompts-row-meta">
@@ -1160,7 +1527,7 @@ export function PromptsPage({
               enabled
               loading={loading}
               toggleLabel={copy.disable}
-              onToggle={disableHandler}
+              onToggle={() => confirmPromptChange("uninstall", disableHandler)}
             >
               <div className="cx-prompts-row-meta">
                 <StatusBadge tone="accent" dot={false}>{copy.current} · {activeModeLabel}</StatusBadge>
@@ -1183,10 +1550,10 @@ export function PromptsPage({
                 loading={loading}
                 toggleLabel={managed ? copy.disable : preserved ? copy.disableExternal : copy.enable}
                 onToggle={() => managed
-                  ? disableHandler()
+                  ? confirmPromptChange("uninstall", disableHandler)
                   : preserved
-                    ? onDisableExternalPrompt()
-                    : enableSavedHandler(prompt.id)}
+                    ? confirmPromptChange("uninstall", onDisableExternalPrompt)
+                    : confirmPromptChange("install", () => enableSavedHandler(prompt.id))}
                 actions={(
                   <div className="cx-prompts-icon-actions">
                     <IconButton
@@ -1229,7 +1596,7 @@ export function PromptsPage({
               enabled
               loading={loading}
               toggleLabel={copy.disableExternal}
-              onToggle={onDisableExternalPrompt}
+              onToggle={() => confirmPromptChange("uninstall", onDisableExternalPrompt)}
             >
               {externalPrompt.filename && <code className="cx-prompts-external-path">{externalPrompt.filename}</code>}
             </PromptRow>

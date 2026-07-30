@@ -15,6 +15,7 @@ use std::process::Command;
 
 mod app_db;
 mod backups;
+mod claude_runtime;
 mod ccswitch;
 mod config_migration;
 mod constants;
@@ -27,6 +28,7 @@ mod prompt_backups;
 mod prompts;
 mod providers;
 mod remote;
+mod runtime;
 mod sessions;
 mod skills_mcp;
 mod skin_presets;
@@ -53,8 +55,8 @@ use file_io::{
 use paths::app_home;
 use paths::home_dir;
 use prompt_backups::{
-    create_claude_prompt_backup, create_codex_prompt_backup, create_grok_prompt_backup,
-    create_zcode_prompt_backup, list_prompt_backups as prompt_backup_entries,
+    create_claude_prompt_backup, create_claude_runtime_backup, create_codex_prompt_backup,
+    create_grok_prompt_backup, create_zcode_prompt_backup, list_prompt_backups as prompt_backup_entries,
     restore_prompt_backup as restore_prompt_backup_snapshot, PromptBackupEntry,
 };
 use prompts::{
@@ -1400,6 +1402,31 @@ async fn get_claude_state() -> Result<ClaudeState> {
 }
 
 #[tauri::command]
+async fn preview_prompt_runtime(
+    engine: String,
+    operation: String,
+    config_dir: Option<String>,
+) -> Result<runtime::PromptRuntimePreview> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let codex_dir = if engine.trim().eq_ignore_ascii_case("codex") {
+            Some(resolve_codex_dir(config_dir)?)
+        } else {
+            None
+        };
+        runtime::preview_prompt_runtime(&engine, &operation, codex_dir.as_deref())
+    })
+    .await
+    .map_err(|error| CodexxError::Config(format!("预览运行时部署失败: {error}")))?
+}
+
+#[tauri::command]
+async fn preview_claude_runtime() -> Result<runtime::PromptRuntimePreview> {
+    tauri::async_runtime::spawn_blocking(runtime::preview_claude_runtime)
+        .await
+        .map_err(|error| CodexxError::Config(format!("预览 Claude CLI runtime 失败: {error}")))?
+}
+
+#[tauri::command]
 async fn list_claude_prompts() -> Result<Vec<SavedPrompt>> {
     tauri::async_runtime::spawn_blocking(move || list_saved_prompts_inner(ENGINE_CLAUDE))
         .await
@@ -1479,17 +1506,23 @@ fn enable_claude_prompt_content_inner(
 
     let backup_id = create_claude_prompt_backup(action)?;
     install_managed_claude_block(template_key, filename, content, injection_mode)?;
+    let runtime_synced = claude_runtime::sync_runtime_prompt_if_active()?;
 
     let state = build_claude_state()?;
     Ok(ClaudeActionResult {
         ok: true,
         message: format!(
-            "已用{}模式启用 {title}（来源：{content_source}）",
+            "已用{}模式启用 {title}（来源：{content_source}）{}",
             if injection_mode == PromptInjectionMode::Append {
                 "保留"
             } else {
                 "替换"
-            }
+            },
+            if runtime_synced {
+                "，已同步 Claude CLI runtime"
+            } else {
+                ""
+            },
         ),
         backup_id,
         state,
@@ -1569,12 +1602,17 @@ fn disable_claude_instruction_inner(delete_file: Option<bool>) -> Result<ClaudeA
     // Codex disable_instruction 命令签名对齐。
     let _ = delete_file;
     let backup_id = create_claude_prompt_backup("disable-claude-instruct")?;
+    let runtime_removed = claude_runtime::uninstall_runtime()?;
     let removed = uninstall_managed_claude_block()?;
     let state = build_claude_state()?;
     Ok(ClaudeActionResult {
         ok: true,
-        message: if removed {
+        message: if removed && runtime_removed {
+            "已禁用 Claude 指令提示词并移除 CLI runtime".to_string()
+        } else if removed {
             "已禁用 Claude 指令提示词".to_string()
+        } else if runtime_removed {
+            "已移除 Claude CLI runtime".to_string()
         } else {
             "当前没有启用 DevConduit 管理的 Claude 指令".to_string()
         },
@@ -1588,6 +1626,49 @@ async fn disable_claude_instruction(delete_file: Option<bool>) -> Result<ClaudeA
     tauri::async_runtime::spawn_blocking(move || disable_claude_instruction_inner(delete_file))
         .await
         .map_err(|e| CodexxError::Config(format!("禁用 Claude 指令失败: {e}")))?
+}
+
+fn install_claude_runtime_inner() -> Result<ClaudeActionResult> {
+    let backup_id = create_claude_runtime_backup("install-claude-runtime")?;
+    claude_runtime::install_runtime()?;
+    let state = build_claude_state()?;
+    Ok(ClaudeActionResult {
+        ok: true,
+        message: "已安装 Claude CLI runtime；新开的终端会自动追加当前 DevConduit 指令"
+            .to_string(),
+        backup_id,
+        state,
+    })
+}
+
+#[tauri::command]
+async fn install_claude_runtime() -> Result<ClaudeActionResult> {
+    tauri::async_runtime::spawn_blocking(install_claude_runtime_inner)
+        .await
+        .map_err(|error| CodexxError::Config(format!("安装 Claude CLI runtime 失败: {error}")))?
+}
+
+fn uninstall_claude_runtime_inner() -> Result<ClaudeActionResult> {
+    let backup_id = create_claude_runtime_backup("uninstall-claude-runtime")?;
+    let removed = claude_runtime::uninstall_runtime()?;
+    let state = build_claude_state()?;
+    Ok(ClaudeActionResult {
+        ok: true,
+        message: if removed {
+            "已移除 Claude CLI runtime，profile 其余内容保持不变".to_string()
+        } else {
+            "当前没有安装 DevConduit 管理的 Claude CLI runtime".to_string()
+        },
+        backup_id,
+        state,
+    })
+}
+
+#[tauri::command]
+async fn uninstall_claude_runtime() -> Result<ClaudeActionResult> {
+    tauri::async_runtime::spawn_blocking(uninstall_claude_runtime_inner)
+        .await
+        .map_err(|error| CodexxError::Config(format!("卸载 Claude CLI runtime 失败: {error}")))?
 }
 
 // ─── ZCode App 指令管理命令 ───────────────────────────────────────────────
@@ -2137,6 +2218,8 @@ pub fn run() {
             list_prompt_backups,
             restore_prompt_backup,
             get_claude_state,
+            preview_prompt_runtime,
+            preview_claude_runtime,
             list_claude_prompts,
             get_claude_builtin_prompt_status,
             save_claude_prompt,
@@ -2144,6 +2227,8 @@ pub fn run() {
             enable_claude_instruction,
             enable_claude_saved_prompt,
             disable_claude_instruction,
+            install_claude_runtime,
+            uninstall_claude_runtime,
             get_zcode_state,
             list_zcode_prompts,
             get_zcode_builtin_prompt_status,

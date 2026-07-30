@@ -240,7 +240,10 @@ pub(crate) fn create_codex_prompt_backup(codex_dir: &Path, action: &str) -> Resu
     )
 }
 
-pub(crate) fn create_claude_prompt_backup(action: &str) -> Result<Option<String>> {
+fn create_claude_prompt_backup_with_runtime(
+    action: &str,
+    include_runtime: bool,
+) -> Result<Option<String>> {
     let memory = claude_memory_path()?;
     let managed_filename = managed_claude_instruction_filename()?;
     let mode = managed_claude_injection_mode()?;
@@ -255,8 +258,24 @@ pub(crate) fn create_claude_prompt_backup(action: &str) -> Result<Option<String>
             )?,
             None => missing_file(KEY_INSTRUCTION),
         });
+        if include_runtime {
+            for (key, path) in crate::claude_runtime::runtime_backup_targets()? {
+                files.push(capture_file(dir, &key, &path, None)?);
+            }
+        }
         Ok(files)
     })
+}
+
+pub(crate) fn create_claude_prompt_backup(action: &str) -> Result<Option<String>> {
+    // Record absent runtime files as well as existing ones. A later restore can
+    // then return Claude to the exact pre-action state instead of leaving a
+    // wrapper installed by a newer action.
+    create_claude_prompt_backup_with_runtime(action, true)
+}
+
+pub(crate) fn create_claude_runtime_backup(action: &str) -> Result<Option<String>> {
+    create_claude_prompt_backup_with_runtime(action, true)
 }
 
 pub(crate) fn create_zcode_prompt_backup(action: &str) -> Result<Option<String>> {
@@ -456,6 +475,14 @@ fn restore_claude_snapshot(dir: &Path, meta: &PromptBackupMeta) -> Result<()> {
         return Err(CodexxError::Config(
             "备份中的 Claude 提示词文件名缺失".to_string(),
         ));
+    }
+    for file in &meta.files {
+        if !file.key.starts_with("claude-runtime-") {
+            continue;
+        }
+        if let Some(target) = crate::claude_runtime::runtime_target_for_backup_key(&file.key)? {
+            restore_file(dir, meta, &file.key, &target)?;
+        }
     }
     Ok(())
 }

@@ -1191,6 +1191,230 @@
   border-color: #a7dac0;
 }
 
+.cx-prompt-runtime-panel {
+  min-width: 0;
+  display: grid;
+  border: 1px solid #dfe3e8;
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.cx-prompt-runtime-native,
+.cx-prompt-runtime-cli {
+  min-width: 0;
+  display: grid;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 15px;
+}
+
+.cx-prompt-runtime-native {
+  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 1.4fr) auto;
+}
+
+.cx-prompt-runtime-heading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #555d67;
+}
+
+.cx-prompt-runtime-heading > svg {
+  flex: 0 0 auto;
+  color: #476a88;
+}
+
+.cx-prompt-runtime-heading > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.cx-prompt-runtime-heading strong,
+.cx-prompt-runtime-cli-copy strong {
+  color: #3d454e;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.cx-prompt-runtime-heading span,
+.cx-prompt-runtime-cli-copy > span {
+  overflow-wrap: anywhere;
+  color: #7c858f;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.cx-prompt-runtime-native > code,
+.cx-prompt-runtime-preview-file code,
+.cx-prompt-runtime-preview-backup code {
+  min-width: 0;
+  overflow: hidden;
+  color: #53616d;
+  font-family: var(--cx-font-mono);
+  font-size: 10px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cx-prompt-runtime-native-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.cx-prompt-runtime-native-actions .ui-icon-button {
+  width: 30px;
+  height: 30px;
+}
+
+.cx-prompt-runtime-cli {
+  grid-template-columns: minmax(0, 1fr) auto;
+  border-top: 1px solid #e5e8ec;
+  background: #f7fbfa;
+}
+
+.cx-prompt-runtime-cli-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.cx-prompt-runtime-cli-copy > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.cx-prompt-runtime-cli .ui-toggle {
+  flex: 0 0 auto;
+}
+
+.cx-prompt-runtime-error {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+  overflow-wrap: anywhere;
+  color: #b42318;
+  background: #fff7f7;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.ui-modal.cx-prompt-runtime-dialog {
+  width: min(720px, calc(100vw - 40px));
+}
+
+.cx-prompt-runtime-dialog-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cx-prompt-runtime-dialog-body {
+  display: grid;
+  gap: 13px;
+}
+
+.cx-prompt-runtime-preview-copy {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-left: 3px solid #5c8e7b;
+  color: #57616b;
+  background: #f3faf7;
+}
+
+.cx-prompt-runtime-preview-copy strong,
+.cx-prompt-runtime-preview-backup strong,
+.cx-prompt-runtime-preview-files > strong {
+  color: #37424b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.cx-prompt-runtime-preview-copy span {
+  color: #65717b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.cx-prompt-runtime-preview-files {
+  display: grid;
+  gap: 8px;
+}
+
+.cx-prompt-runtime-preview-files > div {
+  display: grid;
+  gap: 6px;
+}
+
+.cx-prompt-runtime-preview-file {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(0, 1.6fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 1px solid #e2e6ea;
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.cx-prompt-runtime-preview-file > span {
+  min-width: 0;
+  overflow: hidden;
+  color: #59636d;
+  font-size: 11px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cx-prompt-runtime-preview-file .ui-status-badge {
+  white-space: nowrap;
+}
+
+.cx-prompt-runtime-preview-backup {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 19px minmax(0, 1fr);
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid #cbe1d7;
+  border-radius: 7px;
+  color: #2f6d56;
+  background: #f3faf7;
+}
+
+.cx-prompt-runtime-preview-backup > svg {
+  margin-top: 2px;
+}
+
+.cx-prompt-runtime-preview-backup > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.cx-prompt-runtime-confirm {
+  align-items: flex-start;
+  padding: 2px 1px;
+}
+
+.cx-prompt-runtime-confirm .ui-checkbox__label {
+  color: #56616a;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .ui-modal.cx-prompt-backups-dialog {
   width: min(680px, calc(100vw - 40px));
 }
@@ -1927,6 +2151,10 @@
   .cx-prompts-mode-choice {
     grid-template-columns: minmax(150px, 1fr) minmax(290px, 1.2fr);
   }
+
+  .cx-prompt-runtime-native {
+    grid-template-columns: minmax(150px, 0.8fr) minmax(0, 1.2fr) auto;
+  }
 }
 
 @media (max-width: 760px) {
@@ -1959,6 +2187,30 @@
 
   .cx-prompts-mode-segments {
     grid-template-columns: 1fr;
+  }
+
+  .cx-prompt-runtime-native {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .cx-prompt-runtime-native > code {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .cx-prompt-runtime-native-actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .cx-prompt-runtime-preview-file {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .cx-prompt-runtime-preview-file > code {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    white-space: normal;
   }
 
   .cx-prompts-mode-help {
