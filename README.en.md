@@ -95,7 +95,7 @@ Use [GitHub Releases](https://github.com/Xdjjw/everything-patch/releases) for pu
 
 | Platform | Format | Release installer |
 | --- | --- | --- |
-| Windows x64 | `.msi` | `Everything.Patch_<version>_x64_en-US.msi` |
+| Windows x64 | `.msi` | `Everything.Patch_<version>_x64.msi` |
 | macOS Apple Silicon | `.dmg` | `Everything.Patch_<version>_aarch64.dmg` |
 | macOS Intel | `.dmg` | `Everything.Patch_<version>_x64.dmg` |
 

@@ -126,16 +126,19 @@ jobs:
             target: x86_64-pc-windows-msvc
             artifact_dir: apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi
             artifact_glob: '*.msi'
+            release_asset_suffix: x64.msi
           - name: macOS Apple Silicon DMG
             platform: macos-latest
             target: aarch64-apple-darwin
             artifact_dir: apps/desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg
             artifact_glob: '*.dmg'
+            release_asset_suffix: aarch64.dmg
           - name: macOS Intel DMG
             platform: macos-latest
             target: x86_64-apple-darwin
             artifact_dir: apps/desktop/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg
             artifact_glob: '*.dmg'
+            release_asset_suffix: x64.dmg
 
     steps:
       - name: Checkout release tag
@@ -188,7 +191,12 @@ jobs:
           set -euo pipefail
           asset_count=0
           while IFS= read -r -d '' asset; do
-            gh release upload "$RELEASE_TAG" "$asset" --clobber
+            release_version="${RELEASE_TAG#v}"
+            release_asset="${{ matrix.artifact_dir }}/Everything.Patch_${release_version}_${{ matrix.release_asset_suffix }}"
+            if [ "$asset" != "$release_asset" ]; then
+              mv "$asset" "$release_asset"
+            fi
+            gh release upload "$RELEASE_TAG" "$release_asset" --clobber
             asset_count=$((asset_count + 1))
           done < <(find "${{ matrix.artifact_dir }}" -maxdepth 1 -type f -name "${{ matrix.artifact_glob }}" -print0)
 

@@ -95,7 +95,7 @@ Everything Patch 是一个本地桌面工具，用于集中管理多种 AI 编�
 
 | 平台 | 格式 | Release 安装包 |
 | --- | --- | --- |
-| Windows x64 | `.msi` | `Everything.Patch_<version>_x64_en-US.msi` |
+| Windows x64 | `.msi` | `Everything.Patch_<version>_x64.msi` |
 | macOS Apple Silicon | `.dmg` | `Everything.Patch_<version>_aarch64.dmg` |
 | macOS Intel | `.dmg` | `Everything.Patch_<version>_x64.dmg` |
 
