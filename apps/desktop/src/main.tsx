@@ -3322,6 +3322,8 @@ function App() {
                 promptEngine={promptEngine}
                 onPromptEngineChange={setPromptEngine}
                 instructionEnabled={Boolean(state?.instructionEnabled)}
+                codexInstructionStatus={state?.instructionStatus}
+                codexInactiveInstructionFile={state?.inactiveInstructionFile}
                 activeInstructionTitle={activeInstructionTitle}
                 activeInjectionMode={activePromptInjectionMode}
                 promptBackups={promptBackups}

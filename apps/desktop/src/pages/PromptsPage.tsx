@@ -26,6 +26,7 @@ import { Button, IconButton, ModalShell, StatusBadge, Toggle, cx } from "../comp
 import { usePromptCategories } from "../promptCategories";
 import type {
   BuiltinPromptStatus,
+  CodexInstructionStatus,
   InstructionMode,
   InstructionTemplate,
   Lang,
@@ -68,6 +69,8 @@ export type PromptsPageProps = {
   promptEngine: PromptEngine;
   onPromptEngineChange: (engine: PromptEngine) => void;
   instructionEnabled: boolean;
+  codexInstructionStatus?: CodexInstructionStatus;
+  codexInactiveInstructionFile?: string | null;
   activeInstructionTitle: string;
   activeInjectionMode?: PromptInjectionMode;
   promptBackups: PromptBackupEntry[];
@@ -162,6 +165,8 @@ function getCopy(lang: Lang) {
         emptyCategory: "该分类下暂无提示词",
         currentStatus: "当前状态",
         noActive: "未启用提示词",
+        inactiveByConfig: "当前配置未加载",
+        inactiveByConfigDetail: (filename: string) => `检测到 DevConduit 管理的 ${filename}，但当前 config.toml 没有引用它。CCSwitch 切换到不含 model_instructions_file 的配置时会出现这个状态。`,
         keepExisting: "保留原提示词",
         replaceExisting: "替换原提示词",
         appendMode: "追加到 AGENTS.md",
@@ -242,6 +247,8 @@ function getCopy(lang: Lang) {
         emptyCategory: "No prompts in this category",
         currentStatus: "Current status",
         noActive: "No prompt enabled",
+        inactiveByConfig: "Current config does not load it",
+        inactiveByConfigDetail: (filename: string) => `DevConduit found ${filename}, but the current config.toml does not reference it. This can happen when CCSwitch switches to a profile without model_instructions_file.`,
         keepExisting: "Keep existing",
         replaceExisting: "Replace existing",
         appendMode: "Append to AGENTS.md",
@@ -759,6 +766,8 @@ export function PromptsPage({
   promptEngine,
   onPromptEngineChange,
   instructionEnabled,
+  codexInstructionStatus,
+  codexInactiveInstructionFile,
   activeInstructionTitle,
   activeInjectionMode,
   promptBackups,
@@ -866,6 +875,7 @@ export function PromptsPage({
   const activeManagedSavedPromptId = isGrok ? grokManagedSavedPromptId : isZcode ? zcodeManagedSavedPromptId : isClaude ? claudeManagedSavedPromptId : managedSavedPromptId;
   const activeInstructionEnabled = isGrok ? grokInstructionEnabled : isZcode ? zcodeInstructionEnabled : isClaude ? claudeInstructionEnabled : instructionEnabled;
   const activeInstructionTitleResolved = isGrok ? grokActiveInstructionTitle : isZcode ? zcodeActiveInstructionTitle : isClaude ? claudeActiveInstructionTitle : activeInstructionTitle;
+  const codexInstructionInactive = isCodex && codexInstructionStatus === "inactive";
   const modePending = Boolean(activeInstructionEnabled && activeInjectionMode && activeInjectionMode !== promptInjectionMode);
   const categoryItems = useMemo<PromptCategoryItem[]>(() => [
     ...activeTemplates.map((template) => ({
@@ -1028,12 +1038,21 @@ export function PromptsPage({
             </button>
           </div>
           <div className="cx-prompts-active-title" aria-live="polite">
-            <span className={cx("cx-prompts-state-dot", activeInstructionEnabled && "cx-prompts-state-dot--active")} aria-hidden="true" />
-            <strong>{activeInstructionEnabled ? activeInstructionTitleResolved : copy.noActive}</strong>
+            <span className={cx(
+              "cx-prompts-state-dot",
+              activeInstructionEnabled && "cx-prompts-state-dot--active",
+              codexInstructionInactive && "cx-prompts-state-dot--warning",
+            )} aria-hidden="true" />
+            <strong>{activeInstructionEnabled ? activeInstructionTitleResolved : codexInstructionInactive ? copy.inactiveByConfig : copy.noActive}</strong>
             {activeInstructionEnabled && <StatusBadge tone="success" dot={false}>{activeModeLabel}</StatusBadge>}
+            {codexInstructionInactive && <StatusBadge tone="warning" dot={false}>{copy.inactiveByConfig}</StatusBadge>}
           </div>
           <span>
-            {activeInstructionEnabled ? activeModeCopy.detail : copy.inactiveDetail}
+            {activeInstructionEnabled
+              ? activeModeCopy.detail
+              : codexInstructionInactive
+                ? copy.inactiveByConfigDetail(codexInactiveInstructionFile || "Markdown")
+                : copy.inactiveDetail}
           </span>
         </div>
 

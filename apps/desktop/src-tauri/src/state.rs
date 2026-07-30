@@ -40,6 +40,8 @@ pub(crate) struct CodexState {
     pub(crate) model_provider: Option<String>,
     instruction_file: Option<String>,
     pub(crate) instruction_enabled: bool,
+    instruction_status: String,
+    inactive_instruction_file: Option<String>,
     pub(crate) instruction_injection_mode: Option<String>,
     pub(crate) instruction_template_key: Option<String>,
     agents_path: String,
@@ -145,6 +147,61 @@ fn normalized_provider_toml_for_match(text: &str) -> String {
         .to_string()
 }
 
+fn inactive_managed_instruction_file(codex_dir: &Path) -> Result<Option<String>> {
+    let entries = match fs::read_dir(codex_dir) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(io_err(codex_dir, error)),
+    };
+    let mut filenames = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|error| io_err(codex_dir, error))?;
+        if !entry
+            .file_type()
+            .map_err(|error| io_err(&entry.path(), error))?
+            .is_file()
+        {
+            continue;
+        }
+        let Some(filename) = entry.file_name().to_str().map(ToString::to_string) else {
+            continue;
+        };
+        if Path::new(&filename)
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
+        {
+            filenames.push(filename);
+        }
+    }
+    filenames.sort_unstable();
+
+    for filename in filenames {
+        let Some(template_key) = prompt_template_key_for_instruction(&filename)? else {
+            continue;
+        };
+        if !template_key.starts_with("saved:external-") {
+            return Ok(Some(filename));
+        }
+    }
+    Ok(None)
+}
+
+fn codex_instruction_status(
+    instruction_enabled: bool,
+    instruction_file: Option<&str>,
+    inactive_instruction_file: Option<&str>,
+) -> &'static str {
+    if instruction_enabled {
+        "active"
+    } else if instruction_file.is_some() {
+        "external"
+    } else if inactive_instruction_file.is_some() {
+        "inactive"
+    } else {
+        "none"
+    }
+}
+
 pub(crate) fn active_saved_provider_id_from_config(
     config_text: &str,
     providers: &[SavedProvider],
@@ -193,6 +250,17 @@ pub(crate) fn build_state(codex_dir: PathBuf) -> Result<CodexState> {
             (None, None)
         };
     let instruction_enabled = instruction_template_key.is_some();
+    let inactive_instruction_file = if instruction_enabled || instruction_file.is_some() {
+        None
+    } else {
+        inactive_managed_instruction_file(&codex_dir)?
+    };
+    let instruction_status = codex_instruction_status(
+        instruction_enabled,
+        instruction_file.as_deref(),
+        inactive_instruction_file.as_deref(),
+    )
+    .to_string();
     let providers = extract_providers(&doc, model_provider.as_deref());
     let active_saved_provider_id = if model_provider.as_deref() == Some("openai") {
         None
@@ -212,6 +280,8 @@ pub(crate) fn build_state(codex_dir: PathBuf) -> Result<CodexState> {
         model_provider,
         instruction_file,
         instruction_enabled,
+        instruction_status,
+        inactive_instruction_file,
         instruction_injection_mode,
         instruction_template_key,
         agents_path: agents_path(&codex_dir).display().to_string(),
@@ -448,4 +518,26 @@ pub(crate) fn build_grok_state() -> Result<GrokState> {
         instruction_template_key,
         active_instruction_title,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::codex_instruction_status;
+
+    #[test]
+    fn codex_instruction_status_distinguishes_profile_switches_from_external_prompts() {
+        assert_eq!(
+            codex_instruction_status(true, Some("./managed.md"), None),
+            "active"
+        );
+        assert_eq!(
+            codex_instruction_status(false, Some("./external.md"), None),
+            "external"
+        );
+        assert_eq!(
+            codex_instruction_status(false, None, Some("managed.md")),
+            "inactive"
+        );
+        assert_eq!(codex_instruction_status(false, None, None), "none");
+    }
 }

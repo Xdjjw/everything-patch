@@ -6,6 +6,7 @@ export type InstructionMode = "list" | "form";
 export type PromptInjectionMode = "append" | "replace";
 export type PromptEngine = "codex" | "claude" | "zcode" | "grok";
 export type ToolId = "codex" | "claude" | "grok" | "zcode";
+export type CodexInstructionStatus = "active" | "external" | "inactive" | "none";
 
 export type ToolCapabilitySet = {
   providers: boolean;
@@ -154,6 +155,8 @@ export type CodexState = {
   modelProvider?: string;
   instructionFile?: string;
   instructionEnabled: boolean;
+  instructionStatus: CodexInstructionStatus;
+  inactiveInstructionFile?: string;
   instructionInjectionMode?: PromptInjectionMode;
   instructionTemplateKey?: string;
   agentsPath: string;
