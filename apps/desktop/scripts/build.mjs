@@ -8,7 +8,11 @@ const tauriCli = fileURLToPath(
 const windowsNodeStageScript = fileURLToPath(
   new URL("./stage-windows-node.ps1", import.meta.url),
 );
-const args = ["build", ...process.argv.slice(2)];
+const userArgs = process.argv.slice(2);
+if (userArgs[0] === "--") {
+  userArgs.shift();
+}
+const args = ["build"];
 const hasSigningKey = Boolean(process.env.TAURI_SIGNING_PRIVATE_KEY?.trim());
 
 function requireSuccess(result, label) {
@@ -62,6 +66,8 @@ if (!hasSigningKey) {
     JSON.stringify({ bundle: { createUpdaterArtifacts: false } }),
   );
 }
+
+args.push(...userArgs);
 
 const result = spawnSync(process.execPath, [tauriCli, ...args], {
   env: process.env,
