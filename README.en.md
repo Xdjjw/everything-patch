@@ -26,16 +26,6 @@ It is not a model service, account service, or third-party installer. In particu
 
 The project was formerly named Codex-X. Remaining `codexx`, `codex-x`, and legacy data-directory references exist only for backward compatibility; the product name and future releases are **Everything Patch**.
 
-## Preview
-
-<p align="center">
-  <img src="docs/screenshots/app/new-ui/prompts.png" alt="Everything Patch instruction and prompt management" width="900" />
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/app/new-ui/skills-mcp.png" alt="Everything Patch Skills and MCP management" width="900" />
-</p>
-
 ## Supported Tools
 
 | Tool | Configuration and instructions | Skills / MCP | Tool-specific capability |
@@ -101,15 +91,15 @@ Connect only to MCP servers and remote bridges that you trust. For HTTP bridges,
 
 ## Downloads and Packages
 
-Use [GitHub Releases](https://github.com/Xdjjw/everything-patch/releases) for published versions. The `Build Package` workflow runs on pushes to `main` and manual dispatch, producing these artifacts:
+Use [GitHub Releases](https://github.com/Xdjjw/everything-patch/releases) for published versions. Pushing a version tag such as `v0.3.4` builds and uploads these installers directly to that release:
 
-| Platform | Format | Actions artifact name |
+| Platform | Format | Release installer |
 | --- | --- | --- |
-| Windows x64 | `.msi` | `Everything-Patch-package-windows-latest-x86_64-pc-windows-msvc` |
-| macOS Apple Silicon | `.dmg` | `Everything-Patch-package-macos-latest-aarch64-apple-darwin` |
-| macOS Intel | `.dmg` | `Everything-Patch-package-macos-latest-x86_64-apple-darwin` |
+| Windows x64 | `.msi` | `Everything Patch_<version>_x64_en-US.msi` |
+| macOS Apple Silicon | `.dmg` | `Everything Patch_<version>_aarch64.dmg` |
+| macOS Intel | `.dmg` | `Everything Patch_<version>_x64.dmg` |
 
-Verification packages are available from [Actions](https://github.com/Xdjjw/everything-patch/actions/workflows/main.yml). They are build artifacts, not necessarily signed, notarized, or published installers. Use them only when you trust the source commit.
+The `Build Package` workflow still produces verification artifacts on pushes to `main`. Apple Developer signing and notarization are not configured for the current release packages, so macOS will ask for confirmation on first open; Windows may also show a SmartScreen prompt.
 
 ## Run From Source
 

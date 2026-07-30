@@ -26,16 +26,6 @@ Everything Patch 是一个本地桌面工具，用于集中管理多种 AI 编�
 
 原项目名为 Codex-X。仓库中仍可见的 `codexx`、`codex-x` 和旧数据目录仅用于兼容已有配置，产品名称与后续发布均以 **Everything Patch** 为准。
 
-## 界面预览
-
-<p align="center">
-  <img src="docs/screenshots/app/new-ui/prompts.png" alt="Everything Patch 指令与提示词管理界面" width="900" />
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/app/new-ui/skills-mcp.png" alt="Everything Patch Skills 与 MCP 管理界面" width="900" />
-</p>
-
 ## 支持范围
 
 | 工具 | 配置与指令 | Skills / MCP | 专属能力 |
@@ -101,15 +91,15 @@ Everything Patch 是一个本地桌面工具，用于集中管理多种 AI 编�
 
 ## 下载与安装包
 
-正式版本请从 [GitHub Releases](https://github.com/Xdjjw/everything-patch/releases) 获取。当前的 `Build Package` 工作流会在推送到 `main` 或手动触发时构建以下产物：
+正式版本请从 [GitHub Releases](https://github.com/Xdjjw/everything-patch/releases) 获取。推送形如 `v0.3.4` 的版本标签后，发布工作流会构建并把以下安装包直接上传到对应的 Release：
 
-| 平台 | 格式 | Actions artifact 名称 |
+| 平台 | 格式 | Release 安装包 |
 | --- | --- | --- |
-| Windows x64 | `.msi` | `Everything-Patch-package-windows-latest-x86_64-pc-windows-msvc` |
-| macOS Apple Silicon | `.dmg` | `Everything-Patch-package-macos-latest-aarch64-apple-darwin` |
-| macOS Intel | `.dmg` | `Everything-Patch-package-macos-latest-x86_64-apple-darwin` |
+| Windows x64 | `.msi` | `Everything Patch_<version>_x64_en-US.msi` |
+| macOS Apple Silicon | `.dmg` | `Everything Patch_<version>_aarch64.dmg` |
+| macOS Intel | `.dmg` | `Everything Patch_<version>_x64.dmg` |
 
-构建验证产物可在 [Actions](https://github.com/Xdjjw/everything-patch/actions/workflows/main.yml) 下载。它们用于测试，不等同于已签名、公证或正式发布的安装包；仅在你信任对应提交内容时使用。
+`Build Package` 工作流仍会在推送到 `main` 时生成 Actions 验证产物。当前发布包没有配置 Apple Developer 签名或公证，因此 macOS 首次打开会由系统提示确认；Windows 也可能显示 SmartScreen 提示。
 
 ## 从源码运行
 

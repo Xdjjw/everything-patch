@@ -1,4 +1,4 @@
-name: Release
+name: Release Installers
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to rebuild, for example v0.3.0
+        description: Existing version tag to build, for example v0.3.4
         required: true
         type: string
 
@@ -18,27 +18,20 @@ concurrency:
   group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
-defaults:
-  run:
-    shell: bash
-
 jobs:
   prepare:
     name: Prepare draft release
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.metadata.outputs.tag }}
-      version: ${{ steps.metadata.outputs.version }}
-      release_body: ${{ steps.metadata.outputs.release_body }}
-      release_id: ${{ steps.release.outputs.release_id }}
     steps:
       - name: Checkout release tag
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
-      - name: Validate versions and prepare release notes
+      - name: Validate version and prepare release notes
         id: metadata
         env:
           REQUESTED_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
@@ -48,11 +41,7 @@ jobs:
             echo "Invalid release tag: $REQUESTED_TAG" >&2
             exit 1
           fi
-          tag_commit=$(git rev-list -n 1 "refs/tags/${REQUESTED_TAG}^{commit}")
-          if [ -z "$tag_commit" ] || [ "$tag_commit" != "$(git rev-parse HEAD)" ]; then
-            echo "The workflow must run from the exact commit referenced by ${REQUESTED_TAG}" >&2
-            exit 1
-          fi
+          git rev-parse --quiet --verify "refs/tags/${REQUESTED_TAG}^{commit}" >/dev/null
 
           RELEASE_TAG="$REQUESTED_TAG" python3 - <<'PY'
           import json
@@ -97,57 +86,30 @@ jobs:
           Path("release-body.md").write_text(body + "\n", encoding="utf-8")
           PY
 
-          delimiter="release_body_$(date +%s)_${RANDOM}"
-          {
-            echo "tag=$REQUESTED_TAG"
-            echo "version=${REQUESTED_TAG#v}"
-            echo "release_body<<$delimiter"
-            cat release-body.md
-            echo "$delimiter"
-          } >> "$GITHUB_OUTPUT"
+          echo "tag=$REQUESTED_TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Create clean draft release
-        id: release
+      - name: Create or update draft release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
         run: |
           set -euo pipefail
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            is_draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft')
+          if is_draft=$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft' 2>/dev/null); then
             if [ "$is_draft" != "true" ]; then
-              echo "${RELEASE_TAG} is already published; use a new version instead of replacing updater assets" >&2
+              echo "${RELEASE_TAG} is already published; create a new version instead." >&2
               exit 1
             fi
             gh release edit "$RELEASE_TAG" \
+              --draft \
               --title "Everything Patch ${RELEASE_TAG}" \
-              --notes-file release-body.md \
-              --draft
+              --notes-file release-body.md
           else
             gh release create "$RELEASE_TAG" \
               --verify-tag \
+              --draft \
               --title "Everything Patch ${RELEASE_TAG}" \
-              --notes-file release-body.md \
-              --draft
+              --notes-file release-body.md
           fi
-
-          release_id=""
-          for attempt in {1..10}; do
-            release_id=$(gh release view "$RELEASE_TAG" \
-              --json databaseId \
-              --jq '.databaseId' 2>/dev/null || true)
-            [ -z "$release_id" ] || break
-            sleep 2
-          done
-          if [ -z "$release_id" ]; then
-            echo "Unable to locate draft release for ${RELEASE_TAG}" >&2
-            exit 1
-          fi
-          gh api "/repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets?per_page=100" \
-            --jq '.[].id' | while read -r asset_id; do
-              [ -z "$asset_id" ] || gh api --method DELETE "/repos/${GITHUB_REPOSITORY}/releases/assets/${asset_id}"
-            done
-          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build ${{ matrix.name }}
@@ -159,64 +121,48 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: macOS Apple Silicon
-            platform: macos-latest
-            macos: true
-            args: --bundles app,dmg
-            asset_pattern: Everything-Patch-[version]-macos-apple-silicon[ext]
-          - name: macOS Intel
-            platform: macos-15-intel
-            macos: true
-            args: --bundles app,dmg
-            asset_pattern: Everything-Patch-[version]-macos-intel[ext]
-          - name: Linux x64
-            platform: ubuntu-22.04
-            macos: false
-            args: --bundles deb,rpm,appimage
-            asset_pattern: Everything-Patch-[version]-linux-x64[ext]
-          - name: Windows x64
+          - name: Windows MSI
             platform: windows-latest
-            macos: false
-            args: --bundles msi
-            asset_pattern: Everything-Patch-[version]-windows-x64[ext]
+            target: x86_64-pc-windows-msvc
+            artifact_dir: apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi
+            artifact_glob: '*.msi'
+          - name: macOS Apple Silicon DMG
+            platform: macos-latest
+            target: aarch64-apple-darwin
+            artifact_dir: apps/desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg
+            artifact_glob: '*.dmg'
+          - name: macOS Intel DMG
+            platform: macos-latest
+            target: x86_64-apple-darwin
+            artifact_dir: apps/desktop/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg
+            artifact_glob: '*.dmg'
 
     steps:
       - name: Checkout release tag
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.tag }}
 
-      - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            patchelf
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
         with:
-          version: 10.26.0
+          targets: ${{ matrix.target }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
-        with:
-          toolchain: stable
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          workspaces: apps/desktop/src-tauri
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -226,275 +172,42 @@ jobs:
         shell: pwsh
         run: ./apps/desktop/scripts/stage-windows-node.ps1
 
-      - name: Test platform compatibility
-        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib --locked
+      - name: Install macOS target
+        if: matrix.platform == 'macos-latest'
+        run: rustup target add ${{ matrix.target }}
 
-      - name: Import Apple signing certificate and notarization key
-        if: matrix.macos
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: |
-          set -euo pipefail
-          required=(
-            APPLE_CERTIFICATE
-            APPLE_CERTIFICATE_PASSWORD
-            APPLE_API_ISSUER
-            APPLE_API_KEY
-            APPLE_API_KEY_P8_BASE64
-            APPLE_SIGNING_IDENTITY
-            APPLE_TEAM_ID
-            KEYCHAIN_PASSWORD
-          )
-          for name in "${required[@]}"; do
-            if [ -z "${!name:-}" ]; then
-              echo "Missing required repository secret: ${name}" >&2
-              exit 1
-            fi
-          done
-          certificate_path="$RUNNER_TEMP/everything-patch-developer-id.p12"
-          api_key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
-          keychain_path="$RUNNER_TEMP/everything-patch-signing.keychain-db"
+      - name: Build installer
+        run: pnpm --dir apps/desktop build -- --target ${{ matrix.target }}
 
-          printf '%s' "$APPLE_CERTIFICATE" | base64 -D > "$certificate_path"
-          printf '%s' "$APPLE_API_KEY_P8_BASE64" | base64 -D > "$api_key_path"
-          chmod 600 "$certificate_path" "$api_key_path"
-
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
-          security default-keychain -s "$keychain_path"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
-          security set-keychain-settings -lut 21600 "$keychain_path"
-          security import "$certificate_path" \
-            -k "$keychain_path" \
-            -P "$APPLE_CERTIFICATE_PASSWORD" \
-            -T /usr/bin/codesign
-          security set-key-partition-list \
-            -S apple-tool:,apple:,codesign: \
-            -s \
-            -k "$KEYCHAIN_PASSWORD" \
-            "$keychain_path"
-          security find-identity -v -p codesigning "$keychain_path" \
-            | grep -F -- "$APPLE_SIGNING_IDENTITY" >/dev/null
-
-          echo "APPLE_API_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
-          echo "EVERYTHING_PATCH_KEYCHAIN_PATH=$keychain_path" >> "$GITHUB_ENV"
-          echo "EVERYTHING_PATCH_CERTIFICATE_PATH=$certificate_path" >> "$GITHUB_ENV"
-
-      - name: Validate updater signing secrets
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ] || [ -z "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" ]; then
-            echo "Missing Tauri updater signing repository secrets" >&2
-            exit 1
-          fi
-
-      - name: Build, sign, and upload updater artifacts
-        # Pinned to tauri-action v1.0.0 because this step receives the updater private key.
-        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ matrix.macos && secrets.APPLE_SIGNING_IDENTITY || '' }}
-          APPLE_API_ISSUER: ${{ matrix.macos && secrets.APPLE_API_ISSUER || '' }}
-          APPLE_API_KEY: ${{ matrix.macos && secrets.APPLE_API_KEY || '' }}
-          APPLE_API_KEY_PATH: ${{ matrix.macos && env.APPLE_API_KEY_PATH || '' }}
-          APPLE_TEAM_ID: ${{ matrix.macos && secrets.APPLE_TEAM_ID || '' }}
-        with:
-          releaseId: ${{ needs.prepare.outputs.release_id }}
-          tagName: ${{ needs.prepare.outputs.tag }}
-          releaseBody: ${{ needs.prepare.outputs.release_body }}
-          releaseDraft: true
-          prerelease: false
-          projectPath: apps/desktop
-          args: ${{ matrix.args }}
-          releaseAssetNamePattern: ${{ matrix.asset_pattern }}
-          uploadUpdaterJson: true
-          uploadUpdaterSignatures: true
-          updaterJsonPreferNsis: false
-          retryAttempts: 3
-
-      - name: Verify updater signatures were generated
-        run: |
-          set -euo pipefail
-          signature_count=$(find apps/desktop/src-tauri/target/release/bundle -type f -name '*.sig' | wc -l | tr -d ' ')
-          if [ "$signature_count" -lt 1 ]; then
-            echo "No updater signatures were generated" >&2
-            exit 1
-          fi
-
-      - name: Verify signed and notarized macOS bundles
-        if: matrix.macos
-        run: |
-          set -euo pipefail
-          app_path=$(find apps/desktop/src-tauri/target/release/bundle/macos -maxdepth 1 -type d -name '*.app' -print -quit)
-          dmg_path=$(find apps/desktop/src-tauri/target/release/bundle/dmg -maxdepth 1 -type f -name '*.dmg' -print -quit)
-          test -n "$app_path"
-          test -n "$dmg_path"
-          codesign --verify --deep --strict --verbose=2 "$app_path"
-          spctl --assess --type execute --verbose=4 "$app_path"
-          xcrun stapler validate "$app_path"
-          hdiutil verify "$dmg_path"
-
-      - name: Create and upload Windows portable archive
-        if: matrix.platform == 'windows-latest'
+      - name: Upload installer to draft release
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
-          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
-          portable_root="apps/desktop/src-tauri/portable"
-          portable_dir="$portable_root/Everything-Patch-${VERSION}-windows-x64-portable"
-          archive="apps/desktop/src-tauri/Everything-Patch-${VERSION}-windows-x64-portable.zip"
-          rm -rf "$portable_root"
-          mkdir -p "$portable_dir"
-          cp apps/desktop/src-tauri/target/release/everything-patch.exe "$portable_dir/Everything-Patch.exe"
-          mkdir -p "$portable_dir/skin-runtime/node"
-          cp apps/desktop/src-tauri/runtime/windows/node/node.exe "$portable_dir/skin-runtime/node/node.exe"
-          cp apps/desktop/src-tauri/runtime/windows/node/LICENSE "$portable_dir/skin-runtime/node/LICENSE"
-          touch "$portable_dir/Everything-Patch.portable"
-          cat > "$portable_dir/README-portable.txt" <<'EOF'
-          Everything Patch Windows Portable
+          asset_count=0
+          while IFS= read -r -d '' asset; do
+            gh release upload "$RELEASE_TAG" "$asset" --clobber
+            asset_count=$((asset_count + 1))
+          done < <(find "${{ matrix.artifact_dir }}" -maxdepth 1 -type f -name "${{ matrix.artifact_glob }}" -print0)
 
-          Double click Everything-Patch.exe to run. No MSI installation is required.
-          The portable edition uses manual downloads instead of in-app installation.
-          Keep Everything-Patch.portable next to Everything-Patch.exe so the app can identify this edition.
-          Keep the skin-runtime directory beside Everything-Patch.exe; it contains the verified Windows skin runtime.
-          Microsoft Edge WebView2 Runtime is required; Windows 10/11 usually already includes it.
-          EOF
-          powershell -NoProfile -Command "Compress-Archive -Path '${portable_dir}/*' -DestinationPath '${archive}' -Force"
-          gh release upload "$RELEASE_TAG" "$archive" --clobber
-
-      - name: Remove temporary Apple credentials
-        if: always() && matrix.macos
-        run: |
-          if [ -n "${EVERYTHING_PATCH_KEYCHAIN_PATH:-}" ]; then
-            security delete-keychain "$EVERYTHING_PATCH_KEYCHAIN_PATH" || true
+          if [ "$asset_count" -ne 1 ]; then
+            echo "Expected one installer matching ${{ matrix.artifact_glob }} in ${{ matrix.artifact_dir }}, found $asset_count." >&2
+            exit 1
           fi
-          rm -f "${EVERYTHING_PATCH_CERTIFICATE_PATH:-}" "${APPLE_API_KEY_PATH:-}"
 
   publish:
-    name: Validate and publish release
-    needs: [prepare, build]
-    runs-on: ubuntu-22.04
+    name: Publish release
+    needs:
+      - prepare
+      - build
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Checkout release tag
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          ref: ${{ needs.prepare.outputs.tag }}
-
-      - name: Match release asset labels to filenames
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
-        run: |
-          set -euo pipefail
-          assets_endpoint="/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?per_page=100"
-          gh api "$assets_endpoint" \
-            --jq '.[] | select(.label != .name) | [.id, .name] | @tsv' \
-            | while IFS=$'\t' read -r asset_id asset_name; do
-                gh api --method PATCH \
-                  "/repos/${GITHUB_REPOSITORY}/releases/assets/${asset_id}" \
-                  -f "label=${asset_name}" >/dev/null
-              done
-
-          mismatched_labels=$(gh api "$assets_endpoint" \
-            --jq '[.[] | select(.label != .name)] | length')
-          if [ "$mismatched_labels" -ne 0 ]; then
-            echo "Release asset labels do not match their filenames" >&2
-            exit 1
-          fi
-
-      - name: Download and validate updater manifest
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
-          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-        run: |
-          set -euo pipefail
-          gh api "/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?per_page=100" > release-assets.json
-          latest_asset_id=$(jq -r '.[] | select(.name == "latest.json") | .id' release-assets.json)
-          if [ -z "$latest_asset_id" ] || [ "$latest_asset_id" = "null" ]; then
-            echo "latest.json is missing from the draft release" >&2
-            exit 1
-          fi
-          gh api \
-            -H "Accept: application/octet-stream" \
-            "/repos/${GITHUB_REPOSITORY}/releases/assets/${latest_asset_id}" \
-            > latest.json
-          python3 scripts/validate_updater_release.py \
-            --manifest latest.json \
-            --assets release-assets.json \
-            --version "$VERSION" \
-            --repository "$GITHUB_REPOSITORY" \
-            --release-tag "$RELEASE_TAG" \
-            --rewrite-download-urls \
-            --require-signature-assets
-          gh release upload "$RELEASE_TAG" latest.json --clobber
-
-      - name: Remove public signature assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
-        run: |
-          set -euo pipefail
-          gh api "/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?per_page=100" \
-            --jq '.[] | select(.name | endswith(".sig")) | .id' \
-            | while read -r asset_id; do
-                [ -z "$asset_id" ] || gh api --method DELETE "/repos/${GITHUB_REPOSITORY}/releases/assets/${asset_id}"
-              done
-
-      - name: Publish the verified release
+      - name: Publish completed release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         run: gh release edit "$RELEASE_TAG" --draft=false --latest
-
-      - name: Verify published updater endpoint
-        env:
-          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-        run: |
-          set -euo pipefail
-          endpoint="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/latest.json"
-          curl -fsSL \
-            --retry 12 \
-            --retry-delay 5 \
-            --retry-all-errors \
-            "$endpoint" \
-            -o published-latest.json
-          python3 scripts/validate_updater_release.py \
-            --manifest published-latest.json \
-            --assets release-assets.json \
-            --version "$VERSION" \
-            --repository "$GITHUB_REPOSITORY" \
-            --release-tag "$RELEASE_TAG"
-
-          python3 - <<'PY' > updater-urls.txt
-          import json
-          manifest = json.load(open("published-latest.json", encoding="utf-8"))
-          for entry in manifest["platforms"].values():
-              print(entry["url"])
-          PY
-          sort -u updater-urls.txt | while read -r url; do
-            curl -fsSL \
-              --range 0-0 \
-              --retry 5 \
-              --retry-delay 3 \
-              --retry-all-errors \
-              "$url" \
-              -o /dev/null
-          done

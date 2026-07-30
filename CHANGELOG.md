@@ -2,6 +2,18 @@
 
 All notable changes to Everything Patch will be documented here.
 
+## [v0.3.4] - 2026-07-30
+
+### 更新
+
+- 新增 IDA Pro、Cheat Engine、x64dbg/x32dbg 与 Burp Suite 的手动 MCP 接入目录；只接受用户自行选择并确认的本地文件或远程桥接地址，不会下载、安装或执行第三方安装程序。
+- 更新项目说明与产品名称为 Everything Patch，并移除仍显示旧 Codex-X 品牌的界面预览图。
+
+### 发布
+
+- GitHub Release 现在会直接附带 Windows x64 MSI、macOS Apple Silicon DMG 和 macOS Intel DMG，而非只提供源码压缩包。
+- 当前安装包未配置 Apple Developer 签名和公证；macOS 首次打开和 Windows SmartScreen 可能要求用户确认。
+
 ## [v0.3.3] - 2026-07-26
 
 ### 调整
