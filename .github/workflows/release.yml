@@ -182,6 +182,15 @@ jobs:
       - name: Build installer
         run: pnpm --dir apps/desktop build -- --target ${{ matrix.target }}
 
+      - name: Repair unsigned macOS app bundle signature
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg="$(find "${{ matrix.artifact_dir }}" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+          test -n "$dmg"
+          ./apps/desktop/scripts/repack-adhoc-macos-dmg.sh "$dmg"
+
       - name: Upload installer to draft release
         shell: bash
         env:

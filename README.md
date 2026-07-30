@@ -99,7 +99,7 @@ DevConduit 是一个本地桌面工具，用于集中管理多种 AI 编程工�
 | macOS Apple Silicon | `.dmg` | `DevConduit_<version>_aarch64.dmg` |
 | macOS Intel | `.dmg` | `DevConduit_<version>_x64.dmg` |
 
-`Build Package` 工作流仍会在推送到 `main` 时生成 Actions 验证产物。当前发布包没有配置 Apple Developer 签名或公证，因此 macOS 首次打开会由系统提示确认；Windows 也可能显示 SmartScreen 提示。
+`Build Package` 工作流仍会在推送到 `main` 时生成 Actions 验证产物。当前发布包会校验 macOS 应用包的完整 ad-hoc 签名，但没有 Apple Developer 签名或公证；首次打开 macOS 安装包时，请在 Finder 中右键 `DevConduit.app` 并选择“打开”。Windows 也可能显示 SmartScreen 提示。
 
 ## 从源码运行
 

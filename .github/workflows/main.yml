@@ -70,6 +70,16 @@ jobs:
       - name: Build Tauri app
         run: pnpm --dir apps/desktop build -- --target ${{ matrix.target }}
 
+      - name: Repair unsigned macOS app bundle signature
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg_dir="apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/dmg"
+          dmg="$(find "$dmg_dir" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+          test -n "$dmg"
+          ./apps/desktop/scripts/repack-adhoc-macos-dmg.sh "$dmg"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
