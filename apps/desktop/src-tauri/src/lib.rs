@@ -1071,7 +1071,7 @@ fn enable_instruction_inner(
     injection_mode: Option<String>,
 ) -> Result<ActionResult> {
     let resolved_id = if template_id.trim().is_empty() {
-        "gpt5.5-unrestricted"
+        crate::constants::CODEX_KEYSMITH_BUILTIN_ID
     } else {
         template_id.trim()
     };
@@ -1095,7 +1095,11 @@ async fn enable_instruction(
     injection_mode: Option<String>,
 ) -> Result<ActionResult> {
     tauri::async_runtime::spawn_blocking(move || {
-        enable_instruction_inner(config_dir, "gpt5.5-unrestricted", injection_mode)
+        enable_instruction_inner(
+            config_dir,
+            crate::constants::CODEX_KEYSMITH_BUILTIN_ID,
+            injection_mode,
+        )
     })
     .await
     .map_err(|e| CodexxError::Config(format!("启用指令提示词失败: {e}")))?

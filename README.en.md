@@ -42,6 +42,7 @@ Features are shown according to what is installed locally. Session synchronizati
 ### Instructions and Prompts
 
 - Manage bundled and custom Markdown instructions with categories, import, editing, enablement, and disablement.
+- Bundle the default Codex, Claude Code, and ZCode templates from their corresponding Keysmith projects for offline use. Enabling them still requires preview and confirmation; application startup never writes tool configuration automatically.
 - Choose whether to preserve existing instructions or replace them, without overwriting content that DevConduit does not manage.
 - Create a backup before a managed write so changes can be reviewed or restored.
 

@@ -1,3 +1,8 @@
+pub(crate) const CODEX_KEYSMITH_BUILTIN_ID: &str = "codex-keysmith";
+pub(crate) const CODEX_KEYSMITH_BUILTIN_FILENAME: &str = "codex-keysmith.md";
+pub(crate) const CODEX_KEYSMITH_BUILTIN_CONTENT: &str =
+    include_str!("../../../../examples/codex-keysmith.md");
+
 pub(crate) const INSTRUCTION_FILENAME: &str = "gpt5.5-unrestricted.md";
 pub(crate) const INSTRUCTION_CONTENT: &str =
     include_str!("../../../../examples/gpt5.5-unrestricted.md");
@@ -60,7 +65,7 @@ pub(crate) const CLAUDE_RUNTIME_END: &str = "# <<< DevConduit Claude runtime <<<
 // keysmith 默认模板，编译进二进制。
 pub(crate) const CLAUDE_BUILTIN_ID: &str = "claude-project-rules";
 pub(crate) const CLAUDE_BUILTIN_TITLE: &str = "Claude 项目规则";
-pub(crate) const CLAUDE_BUILTIN_SUBTITLE: &str = "keysmith 默认项目记忆规则，作为中立起点";
+pub(crate) const CLAUDE_BUILTIN_SUBTITLE: &str = "同步 claude-keysmith v5 项目规则，离线内置";
 pub(crate) const CLAUDE_BUILTIN_BADGE: &str = "默认";
 pub(crate) const CLAUDE_BUILTIN_FILENAME: &str = "claude-project-rules.md";
 pub(crate) const CLAUDE_BUILTIN_CONTENT: &str =
@@ -89,7 +94,7 @@ pub(crate) const ZCODE_AGENT_ARGS_JSON: &str = "[\"app-server\",\"--stdio\"]";
 // keysmith 默认模板，编译进二进制。
 pub(crate) const ZCODE_BUILTIN_ID: &str = "zcode-system-role";
 pub(crate) const ZCODE_BUILTIN_TITLE: &str = "ZCode 系统 Prompt";
-pub(crate) const ZCODE_BUILTIN_SUBTITLE: &str = "keysmith 默认 system-role，作为中立起点";
+pub(crate) const ZCODE_BUILTIN_SUBTITLE: &str = "同步 zcode-keysmith system-role，离线内置";
 pub(crate) const ZCODE_BUILTIN_BADGE: &str = "默认";
 pub(crate) const ZCODE_BUILTIN_FILENAME: &str = "zcode-system-role.md";
 pub(crate) const ZCODE_BUILTIN_CONTENT: &str =

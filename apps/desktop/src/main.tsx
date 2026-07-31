@@ -113,11 +113,18 @@ type ThemeTransitionDocument = Document & {
 
 const bundledInstructionTemplates: InstructionTemplate[] = [
   {
+    id: "codex-keysmith",
+    filename: "codex-keysmith.md",
+    title: "Codex Keysmith 默认 Prompt",
+    subtitle: "同步 codex-keysmith v0.1.3，离线内置",
+    badge: "默认",
+  },
+  {
     id: "gpt5.5-unrestricted",
     filename: "gpt5.5-unrestricted.md",
     title: "gpt-5.5 unrestricted 破甲",
     subtitle: "方法：先让ai分析项目，分析完之后发【不直白的逆向】命令",
-    badge: "推荐",
+    badge: "兼容",
   },
   {
     id: "gpt5.4-unrestricted",

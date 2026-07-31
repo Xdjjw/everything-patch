@@ -262,6 +262,17 @@ fn builtin_catalog_is_not_embedded_but_source_remains_valid() {
 }
 
 #[test]
+fn missing_builtin_replacement_is_not_a_migration_error() {
+    let root = temp_theme_dir("missing-builtin-replacement");
+
+    assert!(legacy_placeholder_replacement(&root)
+        .expect("treat missing replacement as optional")
+        .is_none());
+
+    fs::remove_dir_all(root).expect("remove replacement fixture");
+}
+
+#[test]
 fn export_destination_adds_zip_extension_and_rejects_other_types() {
     let dir = temp_theme_dir("export-destination");
     let without_extension = dir.join("my-theme");

@@ -18,8 +18,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const KEY_RUNTIME_PROMPT: &str = "claude-runtime-prompt";
+#[cfg(any(target_os = "macos", test))]
 const KEY_RUNTIME_ZSHRC: &str = "claude-runtime-zshrc";
+#[cfg(any(target_os = "windows", test))]
 const KEY_RUNTIME_POWERSHELL: &str = "claude-runtime-powershell";
+#[cfg(any(target_os = "windows", test))]
 const KEY_RUNTIME_WINDOWS_POWERSHELL: &str = "claude-runtime-windows-powershell";
 
 #[derive(Debug, Clone, Serialize)]
@@ -56,29 +59,39 @@ pub(crate) fn runtime_prompt_path() -> Result<PathBuf> {
         .join(CLAUDE_RUNTIME_PROMPT_FILENAME))
 }
 
+#[cfg(any(target_os = "macos", test))]
+fn macos_runtime_profile_paths(home: &Path) -> Vec<(&'static str, PathBuf)> {
+    vec![(KEY_RUNTIME_ZSHRC, home.join(".zshrc"))]
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn windows_runtime_profile_paths(home: &Path) -> Vec<(&'static str, PathBuf)> {
+    let profiles = home.join("Documents");
+    vec![
+        (
+            KEY_RUNTIME_POWERSHELL,
+            profiles
+                .join("PowerShell")
+                .join("Microsoft.PowerShell_profile.ps1"),
+        ),
+        (
+            KEY_RUNTIME_WINDOWS_POWERSHELL,
+            profiles
+                .join("WindowsPowerShell")
+                .join("Microsoft.PowerShell_profile.ps1"),
+        ),
+    ]
+}
+
 fn runtime_profile_paths() -> Result<Vec<(&'static str, PathBuf)>> {
     let home = home_dir()?;
     #[cfg(target_os = "macos")]
     {
-        Ok(vec![(KEY_RUNTIME_ZSHRC, home.join(".zshrc"))])
+        Ok(macos_runtime_profile_paths(&home))
     }
     #[cfg(target_os = "windows")]
     {
-        let profiles = home.join("Documents");
-        Ok(vec![
-            (
-                KEY_RUNTIME_POWERSHELL,
-                profiles
-                    .join("PowerShell")
-                    .join("Microsoft.PowerShell_profile.ps1"),
-            ),
-            (
-                KEY_RUNTIME_WINDOWS_POWERSHELL,
-                profiles
-                    .join("WindowsPowerShell")
-                    .join("Microsoft.PowerShell_profile.ps1"),
-            ),
-        ])
+        Ok(windows_runtime_profile_paths(&home))
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
@@ -132,8 +145,7 @@ fn marker_bounds(content: &str) -> Result<Option<(usize, usize)>> {
     }
     if begins.len() != 1 || ends.len() != 1 || begins[0] >= ends[0] {
         return Err(CodexxError::Config(
-            "Claude runtime 的 DevConduit 标记不完整或重复，请先修复 profile 中的标记"
-                .to_string(),
+            "Claude runtime 的 DevConduit 标记不完整或重复，请先修复 profile 中的标记".to_string(),
         ));
     }
 
@@ -151,28 +163,40 @@ fn is_managed_profile(path: &Path) -> Result<bool> {
     Ok(marker_bounds(&content)?.is_some())
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn shell_single_quote(value: &Path) -> String {
     format!("'{}'", value.display().to_string().replace('\'', "'\"'\"'"))
 }
 
+#[cfg(any(target_os = "windows", test))]
 fn powershell_single_quote(value: &Path) -> String {
     format!("'{}'", value.display().to_string().replace('\'', "''"))
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn render_zsh_wrapper(prompt_path: &Path) -> String {
+    let prompt = shell_single_quote(prompt_path);
+    format!(
+        "{CLAUDE_RUNTIME_BEGIN}\n# Managed by DevConduit. Remove from DevConduit instead of editing this block.\nclaude() {{\n  command claude --append-system-prompt-file {prompt} \"$@\"\n}}\n{CLAUDE_RUNTIME_END}\n"
+    )
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn render_powershell_wrapper(prompt_path: &Path) -> String {
+    let prompt = powershell_single_quote(prompt_path);
+    format!(
+        "{CLAUDE_RUNTIME_BEGIN}\n# Managed by DevConduit. Remove from DevConduit instead of editing this block.\nfunction global:claude {{\n  $devConduitClaude = Get-Command claude -CommandType Application -ErrorAction Stop | Select-Object -First 1\n  & $devConduitClaude.Path --append-system-prompt-file {prompt} @args\n}}\n{CLAUDE_RUNTIME_END}\n"
+    )
 }
 
 fn render_wrapper(prompt_path: &Path) -> String {
     #[cfg(target_os = "macos")]
     {
-        let prompt = shell_single_quote(prompt_path);
-        format!(
-            "{CLAUDE_RUNTIME_BEGIN}\n# Managed by DevConduit. Remove from DevConduit instead of editing this block.\nclaude() {{\n  command claude --append-system-prompt-file {prompt} \"$@\"\n}}\n{CLAUDE_RUNTIME_END}\n"
-        )
+        render_zsh_wrapper(prompt_path)
     }
     #[cfg(target_os = "windows")]
     {
-        let prompt = powershell_single_quote(prompt_path);
-        format!(
-            "{CLAUDE_RUNTIME_BEGIN}\n# Managed by DevConduit. Remove from DevConduit instead of editing this block.\nfunction global:claude {{\n  $devConduitClaude = Get-Command claude -CommandType Application -ErrorAction Stop | Select-Object -First 1\n  & $devConduitClaude.Path --append-system-prompt-file {prompt} @args\n}}\n{CLAUDE_RUNTIME_END}\n"
-        )
+        render_powershell_wrapper(prompt_path)
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
@@ -186,7 +210,11 @@ fn upsert_managed_block(content: &str, block: &str) -> Result<String> {
         Some((start, end)) => Ok(format!("{}{}{}", &content[..start], block, &content[end..])),
         None if content.is_empty() => Ok(block.to_string()),
         None => {
-            let separator = if content.ends_with('\n') { "\n" } else { "\n\n" };
+            let separator = if content.ends_with('\n') {
+                "\n"
+            } else {
+                "\n\n"
+            };
             Ok(format!("{content}{separator}{block}"))
         }
     }
@@ -263,7 +291,9 @@ fn write_transaction(updates: &[(PathBuf, Option<Vec<u8>>)]) -> Result<()> {
 
 fn active_instruction_content() -> Result<String> {
     let filename = managed_claude_instruction_filename()?.ok_or_else(|| {
-        CodexxError::Config("请先在 DevConduit 中启用一个 Claude 指令，再安装 CLI runtime".to_string())
+        CodexxError::Config(
+            "请先在 DevConduit 中启用一个 Claude 指令，再安装 CLI runtime".to_string(),
+        )
     })?;
     let path = claude_instruction_file(&filename)?;
     let content = read_to_string_if_exists(&path)?;
@@ -409,14 +439,16 @@ mod tests {
 
     #[test]
     fn upsert_replaces_only_the_managed_block() {
-        let original = format!("# user\n\n{CLAUDE_RUNTIME_BEGIN}\nold\n{CLAUDE_RUNTIME_END}\n\n# keep\n");
+        let original =
+            format!("# user\n\n{CLAUDE_RUNTIME_BEGIN}\nold\n{CLAUDE_RUNTIME_END}\n\n# keep\n");
         let updated = upsert_managed_block(&original, "new block\n").expect("upsert runtime block");
         assert_eq!(updated, "# user\n\nnew block\n\n# keep\n");
     }
 
     #[test]
     fn remove_preserves_unmanaged_profile_content() {
-        let original = format!("# user\n\n{CLAUDE_RUNTIME_BEGIN}\nblock\n{CLAUDE_RUNTIME_END}\n\n# keep\n");
+        let original =
+            format!("# user\n\n{CLAUDE_RUNTIME_BEGIN}\nblock\n{CLAUDE_RUNTIME_END}\n\n# keep\n");
         let (updated, removed) = remove_managed_block(&original).expect("remove runtime block");
         assert!(removed);
         assert_eq!(updated, "# user\n\n# keep\n");
@@ -426,5 +458,40 @@ mod tests {
     fn malformed_marker_is_rejected() {
         let content = format!("{CLAUDE_RUNTIME_BEGIN}\nmissing end");
         assert!(marker_bounds(&content).is_err());
+    }
+
+    #[test]
+    fn runtime_profiles_cover_macos_and_both_windows_powershell_families() {
+        let home = Path::new("/Users/test");
+        assert_eq!(
+            macos_runtime_profile_paths(home),
+            vec![(KEY_RUNTIME_ZSHRC, home.join(".zshrc"))]
+        );
+
+        let windows = windows_runtime_profile_paths(Path::new(r"C:\Users\Test"));
+        assert_eq!(windows.len(), 2);
+        assert!(windows[0]
+            .1
+            .ends_with("PowerShell/Microsoft.PowerShell_profile.ps1"));
+        assert!(windows[1]
+            .1
+            .ends_with("WindowsPowerShell/Microsoft.PowerShell_profile.ps1"));
+    }
+
+    #[test]
+    fn zsh_wrapper_preserves_arguments_and_escapes_prompt_path() {
+        let wrapper = render_zsh_wrapper(Path::new("/Users/test/O'Brien/runtime prompt.md"));
+        assert!(wrapper.contains("command claude --append-system-prompt-file"));
+        assert!(wrapper.contains("'\"'\"'"));
+        assert!(wrapper.contains("\"$@\""));
+    }
+
+    #[test]
+    fn powershell_wrapper_avoids_function_recursion_and_escapes_prompt_path() {
+        let wrapper = render_powershell_wrapper(Path::new(r"C:\Users\O'Brien\runtime prompt.md"));
+        assert!(wrapper.contains("Get-Command claude -CommandType Application"));
+        assert!(wrapper.contains("--append-system-prompt-file"));
+        assert!(wrapper.contains("O''Brien"));
+        assert!(wrapper.contains("@args"));
     }
 }

@@ -3,10 +3,11 @@ use super::types::{
     BuiltinPromptStatus, BundledPromptMeta, CachedBuiltinPrompt, GithubContentEntry,
 };
 use crate::constants::{
-    CLAUDE_BUILTIN_FILENAME, CLAUDE_BUILTIN_ID, GITHUB_EXAMPLES_API, GITHUB_EXAMPLES_BASE,
-    GROK_BUILTIN_FILENAME, GROK_BUILTIN_ID, INSTRUCTION_54_CONTENT, INSTRUCTION_54_FILENAME,
-    INSTRUCTION_56_SOL_CONTENT, INSTRUCTION_56_SOL_FILENAME, INSTRUCTION_CONTENT,
-    INSTRUCTION_FILENAME, INSTRUCTION_JELI_CONTENT, INSTRUCTION_JELI_FILENAME,
+    CLAUDE_BUILTIN_FILENAME, CLAUDE_BUILTIN_ID, CODEX_KEYSMITH_BUILTIN_CONTENT,
+    CODEX_KEYSMITH_BUILTIN_FILENAME, CODEX_KEYSMITH_BUILTIN_ID, GITHUB_EXAMPLES_API,
+    GITHUB_EXAMPLES_BASE, GROK_BUILTIN_FILENAME, GROK_BUILTIN_ID, INSTRUCTION_54_CONTENT,
+    INSTRUCTION_54_FILENAME, INSTRUCTION_56_SOL_CONTENT, INSTRUCTION_56_SOL_FILENAME,
+    INSTRUCTION_CONTENT, INSTRUCTION_FILENAME, INSTRUCTION_JELI_CONTENT, INSTRUCTION_JELI_FILENAME,
     INSTRUCTION_SEAGULL_CONTENT, INSTRUCTION_SEAGULL_FILENAME, JSDELIVR_EXAMPLES_API,
     JSDELIVR_EXAMPLES_BASE, ZCODE_BUILTIN_FILENAME, ZCODE_BUILTIN_ID,
 };
@@ -66,14 +67,22 @@ impl PromptContentTrust<'_> {
     }
 }
 
-pub(crate) fn bundled_prompt_metas() -> [BundledPromptMeta; 5] {
+pub(crate) fn bundled_prompt_metas() -> [BundledPromptMeta; 6] {
     [
+        BundledPromptMeta {
+            id: CODEX_KEYSMITH_BUILTIN_ID,
+            filename: CODEX_KEYSMITH_BUILTIN_FILENAME,
+            title: "Codex Keysmith 默认 Prompt",
+            subtitle: "同步 codex-keysmith v0.1.3，离线内置",
+            badge: "默认",
+            content: CODEX_KEYSMITH_BUILTIN_CONTENT,
+        },
         BundledPromptMeta {
             id: "gpt5.5-unrestricted",
             filename: INSTRUCTION_FILENAME,
             title: "gpt-5.5 unrestricted 破甲",
             subtitle: "方法：先让ai分析项目，分析完之后发【不直白的逆向】命令",
-            badge: "推荐",
+            badge: "兼容",
             content: INSTRUCTION_CONTENT,
         },
         BundledPromptMeta {
@@ -114,7 +123,7 @@ pub(crate) fn bundled_prompt_metas() -> [BundledPromptMeta; 5] {
 
 pub(crate) fn bundled_prompt_meta(template_id: &str) -> Option<BundledPromptMeta> {
     let id = if template_id.trim().is_empty() {
-        "gpt5.5-unrestricted"
+        CODEX_KEYSMITH_BUILTIN_ID
     } else {
         template_id.trim()
     };
@@ -777,7 +786,7 @@ pub(crate) fn builtin_prompt_content(
         .lock()
         .map_err(|_| CodexxError::Database("提示词缓存锁已损坏".to_string()))?;
     let id = if template_id.trim().is_empty() {
-        "gpt5.5-unrestricted"
+        CODEX_KEYSMITH_BUILTIN_ID
     } else {
         template_id.trim()
     };
@@ -857,6 +866,20 @@ mod tests {
         let conn = Connection::open_in_memory().expect("open prompt cache database");
         initialize_prompt_cache_schema(&conn);
         conn
+    }
+
+    #[test]
+    fn codex_keysmith_is_the_offline_default_without_replacing_legacy_templates() {
+        let default = bundled_prompt_meta("").expect("resolve default bundled prompt");
+        assert_eq!(default.id, CODEX_KEYSMITH_BUILTIN_ID);
+        assert_eq!(default.filename, CODEX_KEYSMITH_BUILTIN_FILENAME);
+        assert_eq!(default.content, CODEX_KEYSMITH_BUILTIN_CONTENT);
+
+        let bundled = bundled_prompt_metas();
+        assert_eq!(bundled[0].id, CODEX_KEYSMITH_BUILTIN_ID);
+        assert!(bundled
+            .iter()
+            .any(|prompt| prompt.id == "gpt5.5-unrestricted"));
     }
 
     #[test]

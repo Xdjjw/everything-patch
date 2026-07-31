@@ -7,6 +7,9 @@ All notable changes to DevConduit will be documented here.
 ### 更新
 
 - Codex 指令状态新增“当前配置未加载”识别：保留的 DevConduit Markdown 未被当前 `config.toml` 引用时，会明确提示该状态，便于识别 CCSwitch 切换到未带 `model_instructions_file` 的配置；全程只读，不会自动修改配置或删除文件。
+- 同步 `codex-keysmith` v0.1.3、`claude-keysmith` v5 与 `zcode-keysmith` 的默认提示词快照并离线内置；Codex Keysmith 成为新的默认模板，原 `gpt5.5` 模板继续保留以兼容已有配置与缓存。
+- Claude CLI runtime 补充 macOS zsh、Windows PowerShell 7 与 Windows PowerShell 的独立生成测试；提示词仍只在用户预览并确认安装后写入。
+- 修复皮肤中心关闭后自动暂停旧皮肤时，因已下线的内置替代主题不存在而反复弹出 `theme.json` 文件缺失错误；旧主题会保留，暂停流程继续完成。
 
 ## [v0.4.0] - 2026-07-30
 

@@ -378,12 +378,27 @@ fn install_builtin_theme(
     Ok(())
 }
 
+fn legacy_placeholder_replacement(root: &Path) -> Result<Option<(PathBuf, SkinThemeManifest)>> {
+    let replacement_dir = root.join(BUILTIN_SKIN_ID);
+    let manifest_path = replacement_dir.join("theme.json");
+    match fs::symlink_metadata(&manifest_path) {
+        Ok(_) => Ok(Some((
+            replacement_dir.clone(),
+            read_manifest(&replacement_dir)?,
+        ))),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(io_err(&manifest_path, error)),
+    }
+}
+
 fn migrate_legacy_placeholder_themes() -> Result<()> {
     let legacy_ids = ["aurora-terminal", "sakura-glass", "neon-night"];
+    let root = themes_root()?;
+    let replacement = legacy_placeholder_replacement(&root)?;
     let mut state = read_skin_state()?;
     let mut state_changed = false;
     for legacy_id in legacy_ids {
-        let legacy_dir = themes_root()?.join(legacy_id);
+        let legacy_dir = root.join(legacy_id);
         let legacy_image = legacy_dir.join("background.png");
         let Ok(bytes) = fs::read(&legacy_image) else {
             continue;
@@ -392,9 +407,12 @@ fn migrate_legacy_placeholder_themes() -> Result<()> {
             continue;
         }
         if state.current_theme_id.as_deref() == Some(legacy_id) {
-            let replacement_dir = themes_root()?.join(BUILTIN_SKIN_ID);
-            let replacement = read_manifest(&replacement_dir)?;
-            copy_theme_files(&replacement_dir, &current_root()?, &replacement)?;
+            let Some((replacement_dir, replacement_manifest)) = replacement.as_ref() else {
+                // The former built-in replacement is intentionally no longer bundled.
+                // Keep the selected legacy theme usable instead of failing startup.
+                continue;
+            };
+            copy_theme_files(replacement_dir, &current_root()?, replacement_manifest)?;
             state.current_theme_id = Some(BUILTIN_SKIN_ID.to_string());
             state.updated_at = Some(now_rfc3339());
             state_changed = true;
@@ -691,9 +709,9 @@ pub(crate) fn update_skin_theme_settings_inner(
     tagline: String,
     surface_opacity: f64,
 ) -> Result<SkinActionResult> {
-    let _guard = SKIN_OPERATION_LOCK.lock().map_err(|_| {
-        CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string())
-    })?;
+    let _guard = SKIN_OPERATION_LOCK
+        .lock()
+        .map_err(|_| CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string()))?;
     ensure_builtin_themes()?;
     let id = normalize_theme_id(&id)?;
     let builtin = builtin_skin_assets().iter().any(|asset| asset.id == id);
@@ -818,9 +836,9 @@ pub(crate) fn enable_skin_theme_inner(
     id: String,
     restart_existing: bool,
 ) -> Result<SkinActionResult> {
-    let _guard = SKIN_OPERATION_LOCK.lock().map_err(|_| {
-        CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string())
-    })?;
+    let _guard = SKIN_OPERATION_LOCK
+        .lock()
+        .map_err(|_| CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string()))?;
     ensure_builtin_themes()?;
     let id = normalize_theme_id(&id)?;
     let src = themes_root()?.join(&id);
@@ -865,9 +883,9 @@ pub(crate) fn enable_skin_theme_inner(
 }
 
 pub(crate) fn pause_skin_theme_inner() -> Result<SkinActionResult> {
-    let _guard = SKIN_OPERATION_LOCK.lock().map_err(|_| {
-        CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string())
-    })?;
+    let _guard = SKIN_OPERATION_LOCK
+        .lock()
+        .map_err(|_| CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string()))?;
     let SkinRuntimeAction::Paused(message) = pause_skin_runtime()? else {
         return Err(CodexxError::Config(
             "皮肤运行时返回了无效的暂停状态".to_string(),
@@ -881,9 +899,9 @@ pub(crate) fn pause_skin_theme_inner() -> Result<SkinActionResult> {
 }
 
 pub(crate) fn restore_skin_theme_inner(restart_existing: bool) -> Result<SkinActionResult> {
-    let _guard = SKIN_OPERATION_LOCK.lock().map_err(|_| {
-        CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string())
-    })?;
+    let _guard = SKIN_OPERATION_LOCK
+        .lock()
+        .map_err(|_| CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string()))?;
     match restore_skin_runtime(restart_existing)? {
         SkinRuntimeAction::Restored(message) => Ok(SkinActionResult {
             message,
@@ -905,9 +923,9 @@ pub(crate) fn import_skin_theme_zip_inner(
     file_name: String,
     bytes: Vec<u8>,
 ) -> Result<SkinActionResult> {
-    let _guard = SKIN_OPERATION_LOCK.lock().map_err(|_| {
-        CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string())
-    })?;
+    let _guard = SKIN_OPERATION_LOCK
+        .lock()
+        .map_err(|_| CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string()))?;
     ensure_builtin_themes()?;
     if !file_name.to_ascii_lowercase().ends_with(".zip") {
         return Err(CodexxError::Config("请选择 .zip 主题包".to_string()));
@@ -1049,9 +1067,9 @@ pub(crate) fn create_skin_theme_from_image_inner(
     file_name: String,
     bytes: Vec<u8>,
 ) -> Result<SkinActionResult> {
-    let _guard = SKIN_OPERATION_LOCK.lock().map_err(|_| {
-        CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string())
-    })?;
+    let _guard = SKIN_OPERATION_LOCK
+        .lock()
+        .map_err(|_| CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string()))?;
     ensure_builtin_themes()?;
     let extension = uploaded_image_extension(&file_name, &bytes)?;
     let name = uploaded_theme_name(&file_name);
@@ -1115,9 +1133,9 @@ pub(crate) fn export_skin_theme_inner(
     id: String,
     destination_path: String,
 ) -> Result<SkinExportResult> {
-    let _guard = SKIN_OPERATION_LOCK.lock().map_err(|_| {
-        CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string())
-    })?;
+    let _guard = SKIN_OPERATION_LOCK
+        .lock()
+        .map_err(|_| CodexxError::Config("皮肤操作锁已损坏，请重启 DevConduit".to_string()))?;
     ensure_builtin_themes()?;
     let id = normalize_theme_id(&id)?;
     let src = themes_root()?.join(&id);
