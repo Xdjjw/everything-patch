@@ -4,6 +4,8 @@ All notable changes to DevConduit will be documented here.
 
 ## [Unreleased]
 
+## [v0.4.1] - 2026-08-03
+
 ### 更新
 
 - Codex 指令状态新增“当前配置未加载”识别：保留的 DevConduit Markdown 未被当前 `config.toml` 引用时，会明确提示该状态，便于识别 CCSwitch 切换到未带 `model_instructions_file` 的配置；全程只读，不会自动修改配置或删除文件。
