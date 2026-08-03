@@ -548,7 +548,7 @@ async fn install_mcp_integration(
         install_mcp_integration_inner(tool, config_dir, input)
     })
     .await
-    .map_err(|e| CodexxError::Config(format!("手动配置 MCP 集成失败: {e}")))?
+    .map_err(|e| CodexxError::Config(format!("配置 MCP 集成失败: {e}")))?
 }
 
 #[tauri::command]

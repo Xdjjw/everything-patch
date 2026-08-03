@@ -1,4 +1,5 @@
 mod catalog;
+mod catalog_download;
 mod mcp;
 mod skills;
 mod tool;

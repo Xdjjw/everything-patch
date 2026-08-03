@@ -4,6 +4,15 @@ All notable changes to DevConduit will be documented here.
 
 ## [Unreleased]
 
+## [v0.4.2] - 2026-08-03
+
+### 更新
+
+- IDA Pro、Cheat Engine、x64dbg/x32dbg 与 Burp Suite 的 MCP 接入新增自动获取模式：仅在用户确认后下载固定上游版本并校验 SHA-256，按需创建隔离的 Python/uv 环境，再写入目标工具配置；原手动文件模式继续保留。
+- 自动获取支持 Windows x64 与 macOS Intel/ARM；Cheat Engine、x64dbg 在 macOS 继续使用远程 Windows 桥接。Burp 会按目标工具自动选择 SSE 直连或官方 stdio 代理。
+- 下载和解压增加大小、文件数量、路径穿越与符号链接限制；依赖安装设有超时并持续排空进程输出，避免长时间安装时界面看似卡住。
+- 完成提示会给出 CE Lua、x64dbg/x32dbg 插件或 Burp 扩展的准确路径。DevConduit 不会静默启动外部软件或代替用户在其中启用插件。
+
 ## [v0.4.1] - 2026-08-03
 
 ### 更新

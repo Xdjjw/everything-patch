@@ -454,6 +454,7 @@ export type McpIntegrationInstallInput = {
   command?: string | null;
   endpoint?: string | null;
   mode?: "local" | "remote" | "direct" | "proxy" | null;
+  sourceMode?: "managed" | "manual" | null;
 };
 
 export type McpIntegrationInstallResult =

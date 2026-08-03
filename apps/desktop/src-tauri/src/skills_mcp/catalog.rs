@@ -1,3 +1,4 @@
+use super::catalog_download::{acquire_mcp_source, AcquiredMcpSource};
 use super::tool::install_tool_mcp_config_inner;
 use super::types::{SkillsMcpActionResult, SkillsMcpState};
 use crate::error::{CodexxError, Result};
@@ -19,6 +20,7 @@ pub(crate) struct McpIntegrationInstallInput {
     pub(crate) command: Option<String>,
     pub(crate) endpoint: Option<String>,
     pub(crate) mode: Option<String>,
+    pub(crate) source_mode: Option<String>,
 }
 
 #[derive(Debug)]
@@ -119,6 +121,70 @@ fn mode_or_default<'a>(
         Err(CodexxError::Config(format!(
             "不支持的 MCP 安装模式: {mode}"
         )))
+    }
+}
+
+fn source_mode(input: &McpIntegrationInstallInput) -> Result<&str> {
+    match clean_optional(input.source_mode.as_deref()).unwrap_or("manual") {
+        mode @ ("managed" | "manual") => Ok(mode),
+        mode => Err(CodexxError::Config(format!(
+            "不支持的 MCP 文件来源模式: {mode}"
+        ))),
+    }
+}
+
+fn managed_acquisition_settings(
+    tool: ToolId,
+    input: &McpIntegrationInstallInput,
+) -> Result<(String, String)> {
+    match input.integration_id.trim() {
+        "ida-pro-mcp" => Ok(("local".to_string(), command_or_default(input, "uv")?)),
+        "cheatengine-mcp" => {
+            let fallback = if cfg!(target_os = "windows") {
+                "local"
+            } else {
+                "remote"
+            };
+            let mode = mode_or_default(input, fallback, &["local", "remote"])?;
+            let command = command_or_default(
+                input,
+                if cfg!(target_os = "windows") {
+                    "python"
+                } else {
+                    "python3"
+                },
+            )?;
+            Ok((mode.to_string(), command))
+        }
+        "x64dbg-mcp" => {
+            let fallback = if cfg!(target_os = "windows") {
+                "local"
+            } else {
+                "remote"
+            };
+            let mode = mode_or_default(input, fallback, &["local", "remote"])?;
+            let command = command_or_default(
+                input,
+                if cfg!(target_os = "windows") {
+                    "python"
+                } else {
+                    "python3"
+                },
+            )?;
+            Ok((mode.to_string(), command))
+        }
+        "burp-suite-mcp" => {
+            let fallback = if matches!(tool, ToolId::Claude | ToolId::Zcode) {
+                "direct"
+            } else {
+                "proxy"
+            };
+            let mode = mode_or_default(input, fallback, &["direct", "proxy"])?;
+            Ok((mode.to_string(), command_or_default(input, "java")?))
+        }
+        integration => Err(CodexxError::Config(format!(
+            "未知的 MCP 集成: {integration}"
+        ))),
     }
 }
 
@@ -333,7 +399,12 @@ fn burp_integration(
     tool: ToolId,
     input: &McpIntegrationInstallInput,
 ) -> Result<PreparedIntegration> {
-    let mode = mode_or_default(input, "direct", &["direct", "proxy"])?;
+    let fallback = if matches!(tool, ToolId::Claude | ToolId::Zcode) {
+        "direct"
+    } else {
+        "proxy"
+    };
+    let mode = mode_or_default(input, fallback, &["direct", "proxy"])?;
     if mode == "direct" && !matches!(tool, ToolId::Claude | ToolId::Zcode) {
         return Err(CodexxError::Config(format!(
             "{} 不支持 Burp 的传统 SSE 直连，请使用官方 stdio 代理 mcp-proxy-all.jar",
@@ -390,8 +461,22 @@ fn prepare_integration(
 pub(crate) fn install_mcp_integration_inner(
     tool: ToolId,
     config_dir: Option<String>,
-    input: McpIntegrationInstallInput,
+    mut input: McpIntegrationInstallInput,
 ) -> Result<SkillsMcpActionResult> {
+    let acquired: Option<AcquiredMcpSource> = if source_mode(&input)? == "managed" {
+        let (mode, command) = managed_acquisition_settings(tool, &input)?;
+        let source = acquire_mcp_source(input.integration_id.trim(), &mode, &command)?;
+        input.source_path = source
+            .source_path
+            .as_ref()
+            .map(|path| path.display().to_string());
+        if let Some(runtime_command) = source.runtime_command.as_ref() {
+            input.command = Some(runtime_command.display().to_string());
+        }
+        Some(source)
+    } else {
+        None
+    };
     let prepared = prepare_integration(tool, &input)?;
     let state: SkillsMcpState = install_tool_mcp_config_inner(
         tool,
@@ -403,11 +488,26 @@ pub(crate) fn install_mcp_integration_inner(
     Ok(SkillsMcpActionResult {
         imported_skills: 0,
         imported_mcp: 1,
-        message: format!(
-            "已为 {} 手动配置 {}，未下载或执行第三方安装程序",
-            tool.label(),
-            prepared.name
-        ),
+        message: if let Some(source) = acquired {
+            let mut message = format!(
+                "已获取并校验 {}，为 {} 配置 {}；托管文件位于 {}",
+                source.version,
+                tool.label(),
+                prepared.name,
+                source.managed_root.display()
+            );
+            if let Some(next_step) = source.next_step {
+                message.push_str("；");
+                message.push_str(&next_step);
+            }
+            message
+        } else {
+            format!(
+                "已使用所选本地文件为 {} 配置 {}",
+                tool.label(),
+                prepared.name
+            )
+        },
         state,
     })
 }
@@ -436,6 +536,7 @@ mod tests {
             command: None,
             endpoint: None,
             mode: None,
+            source_mode: None,
         }
     }
 
@@ -516,7 +617,8 @@ mod tests {
 
     #[test]
     fn burp_direct_transport_rejects_targets_without_legacy_sse_support() {
-        let request = input("burp-suite-mcp");
+        let mut request = input("burp-suite-mcp");
+        request.mode = Some("direct".to_string());
 
         for tool in [ToolId::Codex, ToolId::Grok] {
             let error = prepare_integration(tool, &request).expect_err("reject direct SSE");
@@ -554,5 +656,37 @@ mod tests {
         let error = prepare_integration(ToolId::Codex, &request).expect_err("reject relative path");
 
         assert!(error.to_string().contains("绝对路径"));
+    }
+
+    #[test]
+    fn old_clients_keep_manual_source_behavior() {
+        let request = input("ida-pro-mcp");
+        assert_eq!(
+            source_mode(&request).expect("default source mode"),
+            "manual"
+        );
+    }
+
+    #[test]
+    fn source_mode_rejects_unknown_values() {
+        let mut request = input("ida-pro-mcp");
+        request.source_mode = Some("automatic".to_string());
+
+        let error = source_mode(&request).expect_err("reject unknown source mode");
+
+        assert!(error.to_string().contains("文件来源模式"));
+    }
+
+    #[test]
+    fn managed_burp_transport_matches_target_capabilities() {
+        let request = input("burp-suite-mcp");
+
+        let (claude_mode, _) =
+            managed_acquisition_settings(ToolId::Claude, &request).expect("Claude settings");
+        let (codex_mode, _) =
+            managed_acquisition_settings(ToolId::Codex, &request).expect("Codex settings");
+
+        assert_eq!(claude_mode, "direct");
+        assert_eq!(codex_mode, "proxy");
     }
 }

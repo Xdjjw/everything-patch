@@ -22,7 +22,7 @@
 
 DevConduit 是一个本地桌面工具，用于集中管理多种 AI 编程工具的指令、Provider、配置文件、Skills 与 MCP。它直接对接你已经安装在本机的工具和配置目录，帮助你看清当前状态，并在确认后完成可追溯的配置写入。
 
-它不是模型服务、账号服务或第三方工具安装器。尤其是在 MCP 集成中，DevConduit 只校验你手动选择的本地文件并写入配置，不会自动下载、安装或执行第三方安装程序。
+它不是模型服务或账号服务。MCP 目录可在你明确确认后下载固定版本的上游文件、校验 SHA-256、准备隔离依赖环境并写入配置；也可切换为手动选择文件。DevConduit 不会启动外部工具，也不会静默启用其中的插件或脚本。
 
 项目此前使用过 Codex-X 和 Everything Patch。仓库中仍可见的 `codexx`、`codex-x`、`everything-patch` 和旧数据目录仅用于兼容已有配置；产品名称与后续发布均以 **DevConduit** 为准。
 
@@ -62,7 +62,7 @@ DevConduit 是一个本地桌面工具，用于集中管理多种 AI 编程工�
 
 - 查看和导入已有 Skills / MCP 配置，安装 ZIP Skill，并按条目启用或禁用。
 - 在同一处查看受管配置与操作结果，配置写入失败会在弹窗中显示并恢复原配置。
-- 提供针对常见逆向与安全工具的手动 MCP 接入目录，详见下一节。
+- 提供针对常见逆向与安全工具的自动 MCP 接入目录，并保留手动文件模式，详见下一节。
 
 ### Codex 皮肤中心
 
@@ -70,23 +70,24 @@ DevConduit 是一个本地桌面工具，用于集中管理多种 AI 编程工�
 - 皮肤运行时只绑定本机回环地址，不修改官方 Codex 应用、`app.asar`、代码签名或配置目录权限。
 - 首次应用可能需要重启 Codex。请先保存未发送的输入和进行中的工作。
 
-## 手动 MCP 接入目录
+## MCP 自动接入目录
 
-在“Skills 与 MCP”页面可以选择目标工具、手动选择项目目录、脚本或 JAR，并在确认后写入 MCP 配置。所有集成均要求你先自行安装和配置第三方软件及其依赖。
+在“Skills 与 MCP”页面选择目标工具和集成后，默认使用“自动获取”：DevConduit 下载经过固定提交或版本及 SHA-256 校验的文件，在需要时创建独立 Python 环境，并在确认后写入 MCP 配置。下载内容保存在应用数据目录下的 `mcp-integrations` 中；离线文件或自定义版本仍可使用“手动选择”。
 
 | 集成 | 本地条件 | Windows | macOS |
 | --- | --- | --- | --- |
-| [IDA Pro MCP](https://github.com/mrexodia/ida-pro-mcp) | IDA Pro 8.3+、Python 3.11+、`uv`，且已手动激活 idalib 并完成 `uv sync` | 本地 | 本地 |
-| [Cheat Engine MCP](https://github.com/miscusi-peek/cheatengine-mcp-bridge) | Cheat Engine、Python 与 MCP 桥接项目 | Named Pipe 本地模式 | 远程 Windows TCP 桥接 |
-| [x64dbg MCP](https://github.com/Wasdubya/x64dbgMCP) | x64dbg/x32dbg 插件、Python 桥接脚本 | 本地模式 | 远程 Windows HTTP 桥接 |
-| [Burp Suite MCP](https://github.com/PortSwigger/mcp-server) | Burp MCP Server 扩展；stdio 代理模式还需要 Java | 依目标工具选择 SSE 或代理 | 依目标工具选择 SSE 或代理 |
+| [IDA Pro MCP](https://github.com/mrexodia/ida-pro-mcp) | IDA Pro 8.3+、Python 3.11+、`uv`，且已激活 idalib | 自动准备并本地运行 | 自动准备并本地运行 |
+| [Cheat Engine MCP](https://github.com/miscusi-peek/cheatengine-mcp-bridge) | Cheat Engine 与 Python；Lua 桥需在 CE 内执行 | Named Pipe 本地模式 | 远程 Windows TCP 桥接 |
+| [x64dbg MCP](https://github.com/Wasdubya/x64dbgMCP) | x64dbg/x32dbg 与 Python；下载后的插件需装入调试器 | 本地模式 | 远程 Windows HTTP 桥接 |
+| [Burp Suite MCP](https://github.com/PortSwigger/mcp-server) | Burp Suite；stdio 代理模式还需要 Java | 依目标工具选择 SSE 或代理 | 依目标工具选择 SSE 或代理 |
 
 接入规则：
 
-- **IDA Pro MCP** 使用 `uv run --offline --no-sync`，不会在配置时自动同步或下载依赖。
+- 每次自动获取都先校验固定 SHA-256；缓存不匹配时会重新下载，校验失败不会写入工具配置。固定来源与许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+- **IDA Pro MCP** 首次自动获取会执行 `uv sync --locked`；之后使用 `uv run --offline --no-sync`，避免运行时自行同步依赖。
 - **Cheat Engine 与 x64dbg** 的本地模式仅适用于 Windows；在 macOS 上使用时，连接到你自己维护的远程 Windows 桥接端。
 - **Burp Suite MCP** 的传统 SSE 直连仅用于 Claude Code 和 ZCode。Codex 与 Grok Build 使用 Burp 扩展提供的官方 `mcp-proxy-all.jar` 作为 stdio 代理，以避免传输协议不兼容。
-- 应用会校验所选路径和文件名是否符合对应项目要求。它不会代替你下载项目、安装扩展、创建 Python 环境或执行第三方安装程序。
+- 自动获取不会替你激活 IDA 许可证、在 Cheat Engine 中执行 Lua、把插件复制进 x64dbg/x32dbg，或在 Burp 中启用扩展；完成提示会给出对应文件的准确路径。任何写入失败都会显示在弹窗内并恢复原工具配置。
 
 请只连接自己信任的 MCP 服务和远程桥接地址。对于 HTTP 桥接，建议始终限制在受信任网络或 `127.0.0.1`。
 

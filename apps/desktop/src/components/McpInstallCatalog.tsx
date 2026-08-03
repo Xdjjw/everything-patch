@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Binary,
   Bug,
+  Download,
   ExternalLink,
   FolderOpen,
   Network,
@@ -27,6 +28,7 @@ import { Button, Checkbox, IconButton, ModalShell, StatusBadge, cx } from "./ui"
 type RuntimePlatform = "windows" | "macos" | "linux";
 type InstallMode = "local" | "remote" | "direct" | "proxy";
 type SourceKind = "none" | "directory" | "python" | "jar";
+type SourceMode = "managed" | "manual";
 
 type LocalizedText = {
   zh: string;
@@ -47,10 +49,14 @@ type McpIntegrationDefinition = {
   };
   defaultEndpoint?: string;
   sourceKind: SourceKind;
+  managedVersion: string;
+  managedLicense: string;
+  managedSummary: LocalizedText;
 };
 
 type InstallForm = {
   mode: InstallMode;
+  sourceMode: SourceMode;
   sourcePath: string;
   command: string;
   endpoint: string;
@@ -83,11 +89,18 @@ const integrations: readonly McpIntegrationDefinition[] = [
       { zh: "IDA Pro 8.3+", en: "IDA Pro 8.3+" },
       { zh: "Python 3.11+", en: "Python 3.11+" },
       { zh: "uv", en: "uv" },
-      { zh: "先手动完成 idalib 激活与 uv sync", en: "Activate idalib and run uv sync manually" },
+      { zh: "需先完成 idalib 激活", en: "idalib must already be activated" },
+      { zh: "自动模式执行 uv sync --locked", en: "Automatic mode runs uv sync --locked" },
       { zh: "IDA Free 不支持", en: "IDA Free unsupported" },
     ],
     defaultCommand: { windows: "uv", other: "uv" },
     sourceKind: "directory",
+    managedVersion: "f82e6e2 · 2026-07-30",
+    managedLicense: "MIT",
+    managedSummary: {
+      zh: "下载固定提交源码，并使用 uv.lock 创建项目环境。",
+      en: "Downloads the pinned source revision and creates its environment from uv.lock.",
+    },
   },
   {
     id: "cheatengine-mcp",
@@ -102,12 +115,18 @@ const integrations: readonly McpIntegrationDefinition[] = [
     requirements: [
       { zh: "Cheat Engine 运行于 Windows", en: "Cheat Engine on Windows" },
       { zh: "Python 3.10+", en: "Python 3.10+" },
-      { zh: "mcp Python 包", en: "mcp Python package" },
-      { zh: "本地模式需 pywin32", en: "pywin32 for local mode" },
+      { zh: "需在 CE 中加载下载的 Lua 桥", en: "Load the downloaded Lua bridge in CE" },
+      { zh: "自动模式创建独立 Python 环境", en: "Automatic mode creates an isolated Python environment" },
     ],
     defaultCommand: { windows: "python", other: "python3" },
     defaultEndpoint: "127.0.0.1:9876",
     sourceKind: "directory",
+    managedVersion: "588813f · 2026-08-03",
+    managedLicense: "MIT",
+    managedSummary: {
+      zh: "下载桥接源码与 Lua 脚本，并创建独立 Python 环境。",
+      en: "Downloads the bridge and Lua script and creates an isolated Python environment.",
+    },
   },
   {
     id: "x64dbg-mcp",
@@ -120,14 +139,20 @@ const integrations: readonly McpIntegrationDefinition[] = [
       en: "Python MCP bridge for x64dbg/x32dbg, with remote Windows debugger support from macOS.",
     },
     requirements: [
-      { zh: "x64dbg/x32dbg 插件", en: "x64dbg/x32dbg plugin" },
-      { zh: "Python 3", en: "Python 3" },
-      { zh: "mcp + requests", en: "mcp + requests" },
+      { zh: "Python 3.10+", en: "Python 3.10+" },
+      { zh: "需将下载的插件装入 x64dbg/x32dbg", en: "Install the downloaded plugin into x64dbg/x32dbg" },
+      { zh: "自动模式创建独立 Python 环境", en: "Automatic mode creates an isolated Python environment" },
       { zh: "HTTP 仅绑定可信网络", en: "Bind HTTP only to trusted networks" },
     ],
     defaultCommand: { windows: "python", other: "python3" },
     defaultEndpoint: "http://127.0.0.1:8888/",
     sourceKind: "python",
+    managedVersion: "build1.1",
+    managedLicense: "GPL-3.0",
+    managedSummary: {
+      zh: "下载 Python 桥及 32/64 位插件，并创建独立 Python 环境。",
+      en: "Downloads the Python bridge and 32/64-bit plugins and creates an isolated Python environment.",
+    },
   },
   {
     id: "burp-suite-mcp",
@@ -141,13 +166,19 @@ const integrations: readonly McpIntegrationDefinition[] = [
     },
     requirements: [
       { zh: "Burp Pro / Community", en: "Burp Pro / Community" },
-      { zh: "官方 MCP Server 扩展", en: "Official MCP Server extension" },
+      { zh: "需在 Burp 中加载下载的官方扩展", en: "Load the downloaded official extension in Burp" },
       { zh: "默认 127.0.0.1:9876", en: "Default 127.0.0.1:9876" },
       { zh: "stdio 代理需 Java", en: "Java for the stdio proxy" },
     ],
     defaultCommand: { windows: "java", other: "java" },
     defaultEndpoint: "http://127.0.0.1:9876/sse",
     sourceKind: "none",
+    managedVersion: "v1.3.0",
+    managedLicense: "GPL-3.0",
+    managedSummary: {
+      zh: "下载 PortSwigger 官方扩展；需要代理时同时获取官方 stdio proxy。",
+      en: "Downloads PortSwigger's official extension and its stdio proxy when required.",
+    },
   },
 ];
 
@@ -185,6 +216,7 @@ function createForm(
 ): InstallForm {
   return {
     mode: defaultMode(integration, platform, tool),
+    sourceMode: "managed",
     sourcePath: "",
     command: platform === "windows" ? integration.defaultCommand.windows : integration.defaultCommand.other,
     endpoint: integration.defaultEndpoint || "",
@@ -200,10 +232,10 @@ function sourceKindFor(integration: McpIntegrationDefinition, mode: InstallMode)
 function getCopy(lang: Lang, toolName: string) {
   return lang === "zh"
     ? {
-        title: "手动接入工具 MCP",
-        description: `仅使用你选择的本地文件并写入 ${toolName} 配置，不会自动下载或执行第三方安装程序。`,
+        title: "接入工具 MCP",
+        description: `默认从经过固定版本与 SHA-256 校验的上游来源获取文件，并写入 ${toolName} 配置。`,
         close: "关闭",
-        configure: "配置",
+        configure: "安装",
         reconfigure: "重新配置",
         configured: "已配置",
         added: "已添加",
@@ -213,8 +245,12 @@ function getCopy(lang: Lang, toolName: string) {
         project: "项目主页",
         back: "返回集成目录",
         install: `写入 ${toolName}`,
-        installing: "正在写入",
+        fetchInstall: "获取并配置",
+        installing: "正在获取并安装",
         requirements: "前置条件",
+        sourceMode: "文件来源",
+        managedSource: "自动获取（推荐）",
+        manualSource: "手动选择",
         mode: "连接模式",
         localMode: "Windows 本地",
         remoteMode: "远程桥接",
@@ -229,8 +265,10 @@ function getCopy(lang: Lang, toolName: string) {
         runtimeCommand: "运行时命令",
         endpoint: "服务地址",
         tcpEndpoint: "TCP 桥接地址",
-        noDownload: "DevConduit 只校验路径并修改配置，不会下载或运行文件。目标工具加载配置后会启动该 MCP；第三方代码、依赖和应用插件均由你手动安装。",
-        confirm: "我已从项目主页获取并检查所需文件，同意将该 MCP 写入当前工具配置。",
+        managedNotice: "DevConduit 将下载上述固定版本、核对 SHA-256，并在需要时创建独立 Python 环境。不会启动 IDA、CE、x64dbg 或 Burp，也不会静默启用其中的插件。",
+        manualNotice: "DevConduit 只校验你选择的本地文件并修改配置，不会下载或运行第三方文件。",
+        confirmManaged: "我已确认来源、固定版本和许可证，同意下载依赖并将该 MCP 写入当前工具配置。",
+        confirmManual: "我已检查所选本地文件，同意将该 MCP 写入当前工具配置。",
         pickerFailed: "无法打开文件选择器",
         installFailed: "写入 MCP 配置失败",
         windowsMac: "Windows / macOS 本地",
@@ -238,10 +276,10 @@ function getCopy(lang: Lang, toolName: string) {
         burpProxyRequired: `${toolName} 使用官方 stdio 代理`,
       }
     : {
-        title: "Manually add tool MCP",
-        description: `Uses only local files you select and writes the ${toolName} configuration. It never downloads or runs third-party installers automatically.`,
+        title: "Add tool MCP",
+        description: `By default, fetches upstream files pinned by version and SHA-256, then writes the ${toolName} configuration.`,
         close: "Close",
-        configure: "Configure",
+        configure: "Install",
         reconfigure: "Reconfigure",
         configured: "Configured",
         added: "Added",
@@ -251,8 +289,12 @@ function getCopy(lang: Lang, toolName: string) {
         project: "Project page",
         back: "Back to integrations",
         install: `Write to ${toolName}`,
-        installing: "Writing configuration",
+        fetchInstall: "Fetch and configure",
+        installing: "Fetching and installing",
         requirements: "Requirements",
+        sourceMode: "File source",
+        managedSource: "Automatic (recommended)",
+        manualSource: "Choose manually",
         mode: "Connection mode",
         localMode: "Windows local",
         remoteMode: "Remote bridge",
@@ -267,8 +309,10 @@ function getCopy(lang: Lang, toolName: string) {
         runtimeCommand: "Runtime command",
         endpoint: "Service endpoint",
         tcpEndpoint: "TCP bridge endpoint",
-        noDownload: "DevConduit only validates paths and updates configuration; it does not download or run files. The target tool starts the MCP when it loads the configuration. You install all third-party code, dependencies, and application plugins manually.",
-        confirm: "I obtained and reviewed the required files from the project page and agree to write this MCP into the active tool configuration.",
+        managedNotice: "DevConduit downloads the pinned version, verifies SHA-256, and creates an isolated Python environment when needed. It does not launch IDA, CE, x64dbg, or Burp, or silently enable their plugins.",
+        manualNotice: "DevConduit only validates the local files you choose and updates configuration. It does not download or run third-party files.",
+        confirmManaged: "I reviewed the source, pinned version, and license and agree to download dependencies and write this MCP into the active tool configuration.",
+        confirmManual: "I reviewed the selected local files and agree to write this MCP into the active tool configuration.",
         pickerFailed: "Could not open the file picker",
         installFailed: "Could not write the MCP configuration",
         windowsMac: "Windows / macOS local",
@@ -346,6 +390,12 @@ export function McpInstallCatalog({
     setInstallError("");
   };
 
+  const setSourceMode = (sourceMode: SourceMode) => {
+    updateForm({ sourceMode, sourcePath: "", confirmed: false });
+    setPickerError("");
+    setInstallError("");
+  };
+
   const chooseSource = async () => {
     if (!selected || !form || sourceKind === "none") return;
     setPickerError("");
@@ -375,7 +425,7 @@ export function McpInstallCatalog({
     selected
       && form
       && form.confirmed
-      && (sourceKind === "none" || form.sourcePath.trim())
+      && (form.sourceMode === "managed" || sourceKind === "none" || form.sourcePath.trim())
       && (selected.id === "burp-suite-mcp" && form.mode === "direct" || form.command.trim())
       && (!selected.defaultEndpoint || form.endpoint.trim()),
   );
@@ -386,10 +436,11 @@ export function McpInstallCatalog({
     try {
       const result = await onInstall({
         integrationId: selected.id,
-        sourcePath: sourceKind === "none" ? null : form.sourcePath.trim(),
+        sourcePath: form.sourceMode === "managed" || sourceKind === "none" ? null : form.sourcePath.trim(),
         command: selected.id === "burp-suite-mcp" && form.mode === "direct" ? null : form.command.trim(),
         endpoint: selected.defaultEndpoint ? form.endpoint.trim() : null,
         mode: form.mode,
+        sourceMode: form.sourceMode,
       });
       if (result.ok) {
         onClose();
@@ -418,8 +469,12 @@ export function McpInstallCatalog({
       <Button variant="secondary" icon={<ArrowLeft />} onClick={back} disabled={busy}>
         {copy.back}
       </Button>
-      <Button icon={<Wrench />} onClick={() => void install()} disabled={busy || !canInstall}>
-        {busy ? copy.installing : copy.install}
+      <Button
+        icon={form.sourceMode === "managed" ? <Download /> : <Wrench />}
+        onClick={() => void install()}
+        disabled={busy || !canInstall}
+      >
+        {busy ? copy.installing : form.sourceMode === "managed" ? copy.fetchInstall : copy.install}
       </Button>
     </>
   ) : undefined;
@@ -503,6 +558,28 @@ export function McpInstallCatalog({
 
           <div className="cx-mcp-installer-layout">
             <section className="cx-mcp-installer-form">
+              <div className="cx-mcp-installer-field">
+                <span>{copy.sourceMode}</span>
+                <div className="cx-mcp-mode-switch" role="radiogroup" aria-label={copy.sourceMode}>
+                  {([
+                    { id: "managed" as const, label: copy.managedSource },
+                    { id: "manual" as const, label: copy.manualSource },
+                  ]).map((option) => (
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={form.sourceMode === option.id}
+                      className={cx("cx-mcp-mode-option", form.sourceMode === option.id && "cx-mcp-mode-option--active")}
+                      key={option.id}
+                      onClick={() => setSourceMode(option.id)}
+                      disabled={busy}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {modeOptions.length > 0 && (
                 <div className="cx-mcp-installer-field">
                   <span>{copy.mode}</span>
@@ -524,7 +601,7 @@ export function McpInstallCatalog({
                 </div>
               )}
 
-              {sourceKind !== "none" && (
+              {form.sourceMode === "manual" && sourceKind !== "none" && (
                 <label className="cx-mcp-installer-field">
                   <span>{sourceKind === "directory" ? copy.sourceDirectory : sourceKind === "python" ? copy.pythonFile : copy.proxyJar}</span>
                   <div className="cx-mcp-path-control">
@@ -589,12 +666,16 @@ export function McpInstallCatalog({
               </div>
               <div className="cx-mcp-no-download">
                 <ShieldCheck size={18} aria-hidden="true" />
-                <p>{copy.noDownload}</p>
+                <p>
+                  {form.sourceMode === "managed"
+                    ? `${selected.managedVersion} · ${selected.managedLicense}. ${localized(selected.managedSummary, lang)} ${copy.managedNotice}`
+                    : copy.manualNotice}
+                </p>
               </div>
               <Checkbox
                 checked={form.confirmed}
                 onCheckedChange={(confirmed) => updateForm({ confirmed })}
-                label={copy.confirm}
+                label={form.sourceMode === "managed" ? copy.confirmManaged : copy.confirmManual}
                 disabled={busy}
                 className="cx-mcp-install-confirm"
               />

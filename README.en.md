@@ -22,7 +22,7 @@
 
 DevConduit is a local desktop application for managing instructions, providers, configuration files, Skills, and MCP servers across several AI coding tools. It works with tools and configuration directories already present on your machine, making their current state visible and applying deliberate, traceable configuration changes after confirmation.
 
-It is not a model service, account service, or third-party installer. In particular, its MCP catalog validates files that you select yourself and writes configuration only. It never downloads, installs, or runs third-party installers automatically.
+It is not a model or account service. After explicit confirmation, the MCP catalog can download pinned upstream files, verify SHA-256, prepare isolated dependencies, and write the target configuration. Manual file selection remains available. DevConduit does not launch external tools or silently enable their plugins or scripts.
 
 The project was formerly named Codex-X and Everything Patch. Remaining `codexx`, `codex-x`, `everything-patch`, and legacy data-directory references exist only for backward compatibility; the product name and future releases are **DevConduit**.
 
@@ -62,7 +62,7 @@ Features are shown according to what is installed locally. Session synchronizati
 
 - View and import existing Skills and MCP configuration, install ZIP Skills, and enable or disable entries individually.
 - Review managed configuration and action results in one place. Failed configuration writes are shown in the dialog and the previous configuration is restored.
-- Use the manual MCP catalog for common reverse-engineering and security tooling, described below.
+- Use the automatic MCP catalog for common reverse-engineering and security tooling, with a manual-file fallback as described below.
 
 ### Codex Skin Center
 
@@ -70,23 +70,24 @@ Features are shown according to what is installed locally. Session synchronizati
 - The skin runtime binds only to the local loopback interface and does not modify the official Codex app, `app.asar`, code signature, or configuration-directory permissions.
 - Applying a theme may require restarting Codex. Save unsent input and in-progress work first.
 
-## Manual MCP Catalog
+## Managed MCP Catalog
 
-From the **Skills & MCP** screen, select a target tool, choose a local project directory, script, or JAR yourself, then confirm before writing the MCP configuration. You must install and prepare third-party software and dependencies independently.
+From **Skills & MCP**, choose a target tool and integration. The default automatic mode downloads files pinned by revision or release and SHA-256, creates an isolated Python environment where needed, and writes the MCP configuration after confirmation. Managed files live under `mcp-integrations` in the application data directory. Manual mode remains available for offline files and custom versions.
 
 | Integration | Local prerequisites | Windows | macOS |
 | --- | --- | --- | --- |
-| [IDA Pro MCP](https://github.com/mrexodia/ida-pro-mcp) | IDA Pro 8.3+, Python 3.11+, `uv`, manually activated idalib, and a completed `uv sync` | Local | Local |
-| [Cheat Engine MCP](https://github.com/miscusi-peek/cheatengine-mcp-bridge) | Cheat Engine, Python, and the MCP bridge project | Local Named Pipe mode | Remote Windows TCP bridge |
-| [x64dbg MCP](https://github.com/Wasdubya/x64dbgMCP) | x64dbg/x32dbg plugin and Python bridge script | Local mode | Remote Windows HTTP bridge |
-| [Burp Suite MCP](https://github.com/PortSwigger/mcp-server) | Burp MCP Server extension; Java is also required for stdio proxy mode | SSE or proxy by target tool | SSE or proxy by target tool |
+| [IDA Pro MCP](https://github.com/mrexodia/ida-pro-mcp) | IDA Pro 8.3+, Python 3.11+, `uv`, and activated idalib | Managed local runtime | Managed local runtime |
+| [Cheat Engine MCP](https://github.com/miscusi-peek/cheatengine-mcp-bridge) | Cheat Engine and Python; run the Lua bridge inside CE | Local Named Pipe mode | Remote Windows TCP bridge |
+| [x64dbg MCP](https://github.com/Wasdubya/x64dbgMCP) | x64dbg/x32dbg and Python; install the downloaded debugger plugin | Local mode | Remote Windows HTTP bridge |
+| [Burp Suite MCP](https://github.com/PortSwigger/mcp-server) | Burp Suite; Java is also required for stdio proxy mode | SSE or proxy by target tool | SSE or proxy by target tool |
 
 Integration rules:
 
-- **IDA Pro MCP** uses `uv run --offline --no-sync`; it will not synchronize or download dependencies while configuring the integration.
+- Automatic acquisition verifies a pinned SHA-256 before use. A mismatched cache is downloaded again, and a failed verification never writes tool configuration. Sources and licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+- **IDA Pro MCP** runs `uv sync --locked` during initial acquisition, then uses `uv run --offline --no-sync` so runtime startup cannot synchronize dependencies.
 - **Cheat Engine and x64dbg** local modes are Windows-only. On macOS, connect to a Windows bridge that you operate.
 - **Burp Suite MCP** supports direct SSE only for Claude Code and ZCode. Codex and Grok Build use the official `mcp-proxy-all.jar` emitted by the Burp extension as a stdio proxy to avoid transport incompatibilities.
-- The application validates selected paths and expected file names. It does not download projects, install extensions, create Python environments, or run third-party installers for you.
+- Managed acquisition does not activate an IDA license, execute Lua inside Cheat Engine, copy plugins into x64dbg/x32dbg, or enable an extension inside Burp. The completion message provides the exact local file path for that final external-tool step. Failed writes remain visible in the dialog and restore the previous tool configuration.
 
 Connect only to MCP servers and remote bridges that you trust. For HTTP bridges, prefer a trusted network or `127.0.0.1`.
 
