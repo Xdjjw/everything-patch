@@ -795,10 +795,11 @@ dependencies = [
 
 [[package]]
 name = "everything-patch"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "chrono",
  "dirs 5.0.1",
+ "jsonc-parser",
  "percent-encoding",
  "reqwest",
  "rusqlite",
@@ -1760,6 +1761,15 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "jsonc-parser"
+version = "0.33.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0560e3f9a9a03ea6b6e90b41138c5db9e21526c99eb192c1a26c68176593285"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]

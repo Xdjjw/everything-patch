@@ -523,6 +523,57 @@ pub(crate) fn build_grok_state() -> Result<GrokState> {
     })
 }
 
+/// Kilo global instruction state for `~/.config/kilo/AGENTS.md`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct KiloState {
+    pub(crate) kilo_dir: String,
+    pub(crate) kilo_dir_exists: bool,
+    pub(crate) agents_path: String,
+    pub(crate) agents_md_exists: bool,
+    pub(crate) manifest_exists: bool,
+    pub(crate) original_snapshot_exists: bool,
+    pub(crate) instruction_enabled: bool,
+    pub(crate) instruction_injection_mode: Option<String>,
+    pub(crate) instruction_template_key: Option<String>,
+    pub(crate) active_instruction_title: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct KiloActionResult {
+    pub(crate) ok: bool,
+    pub(crate) message: String,
+    pub(crate) backup_id: Option<String>,
+    pub(crate) state: KiloState,
+}
+
+pub(crate) fn build_kilo_state() -> Result<KiloState> {
+    let status = crate::kilo::kilo_status()?;
+    let kilo_dir = crate::kilo::kilo_home_dir()?;
+    let agents_path = crate::kilo::kilo_agents_path()?;
+    let instruction_enabled = status.agents_md_exists && status.manifest_exists;
+    let (injection_mode, instruction_template_key, configured_title) =
+        crate::kilo::current_install_metadata()?;
+    let active_instruction_title = if instruction_enabled {
+        configured_title.or_else(|| Some(crate::constants::KILO_BUILTIN_TITLE.to_string()))
+    } else {
+        None
+    };
+    Ok(KiloState {
+        kilo_dir: kilo_dir.display().to_string(),
+        kilo_dir_exists: status.kilo_dir_exists,
+        agents_path: agents_path.display().to_string(),
+        agents_md_exists: status.agents_md_exists,
+        manifest_exists: status.manifest_exists,
+        original_snapshot_exists: status.original_snapshot_exists,
+        instruction_enabled,
+        instruction_injection_mode: injection_mode.map(|mode| mode.as_str().to_string()),
+        instruction_template_key,
+        active_instruction_title,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::codex_instruction_status;

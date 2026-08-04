@@ -893,6 +893,71 @@
   line-height: 1.35;
 }
 
+.cx-mcp-host-plan {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 11px 12px;
+  border: 1px solid #d9dee5;
+  border-radius: 7px;
+  background: #f8f9fb;
+}
+
+.cx-mcp-host-plan-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cx-mcp-host-plan-head strong {
+  color: #454b54;
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.cx-mcp-host-plan p,
+.cx-mcp-host-plan small {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #626a74;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.cx-mcp-host-plan code {
+  padding: 6px 7px;
+  border: 1px solid #e1e5ea;
+  border-radius: 5px;
+  overflow-wrap: anywhere;
+  color: #3e4650;
+  background: #ffffff;
+  font-size: 9px;
+}
+
+.cx-mcp-host-target {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 15px minmax(0, 1fr);
+  align-items: start;
+  gap: 6px;
+  color: #4e5864;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.cx-mcp-host-target svg {
+  margin-top: 1px;
+}
+
+.cx-mcp-host-target span {
+  overflow-wrap: anywhere;
+}
+
+.cx-mcp-host-plan > .ui-button {
+  width: fit-content;
+}
+
 .cx-mcp-no-download {
   display: grid;
   grid-template-columns: 19px minmax(0, 1fr);
@@ -2309,7 +2374,7 @@
   }
 }
 
-/* ─── Codex / Claude 引擎切换器 ────────────────────────────────────────── */
+/* ─── Prompt engine switcher ───────────────────────────────────────────── */
 .cx-prompts-engine-switch {
   display: inline-flex;
   align-items: center;
@@ -2363,4 +2428,19 @@
   background: #2a2d35;
   color: #f0f0f2;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+@media (max-width: 760px) {
+  .cx-prompts-engine-switch {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .cx-prompts-engine-button {
+    min-height: 42px;
+    padding: 5px 4px;
+    line-height: 1.2;
+    white-space: normal;
+  }
 }

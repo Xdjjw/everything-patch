@@ -8,7 +8,7 @@
 
   <h1>DevConduit</h1>
 
-  <p><strong>A local configuration and workflow console for Codex, Claude Code, Grok Build, and ZCode</strong></p>
+  <p><strong>A local configuration and workflow console for Codex, Claude Code, Grok Build, ZCode, and Kilo Code</strong></p>
 
   <p>
     <a href="https://github.com/Xdjjw/everything-patch/actions/workflows/main.yml"><img src="https://github.com/Xdjjw/everything-patch/actions/workflows/main.yml/badge.svg" alt="Build Package" /></a>
@@ -22,7 +22,7 @@
 
 DevConduit is a local desktop application for managing instructions, providers, configuration files, Skills, and MCP servers across several AI coding tools. It works with tools and configuration directories already present on your machine, making their current state visible and applying deliberate, traceable configuration changes after confirmation.
 
-It is not a model or account service. After explicit confirmation, the MCP catalog can download pinned upstream files, verify SHA-256, prepare isolated dependencies, and write the target configuration. Manual file selection remains available. DevConduit does not launch external tools or silently enable their plugins or scripts.
+It is not a model or account service. After explicit confirmation, the MCP catalog can download pinned upstream files, verify SHA-256, prepare isolated dependencies, and write the target configuration. In Windows local mode it also detects Cheat Engine and x64dbg/x32dbg installations, backs up existing files, and installs the bridge. Manual file selection remains available. DevConduit never rewrites tool configuration merely because the application started.
 
 The project was formerly named Codex-X and Everything Patch. Remaining `codexx`, `codex-x`, `everything-patch`, and legacy data-directory references exist only for backward compatibility; the product name and future releases are **DevConduit**.
 
@@ -34,6 +34,7 @@ The project was formerly named Codex-X and Everything Patch. Remaining `codexx`,
 | Claude Code | `CLAUDE.md`, settings, and providers | Supported | Burp MCP SSE connection |
 | Grok Build | `AGENTS.md`, TOML configuration, and providers | Supported | Burp MCP stdio proxy configuration |
 | ZCode | System role, JSON configuration, and providers | Supported | Burp MCP SSE connection |
+| [Kilo Code](https://kilo.ai/) | Global `AGENTS.md` and JSONC configuration | Supported | Native JSONC MCP, global Skills, and `/reload` workflow |
 
 Features are shown according to what is installed locally. Session synchronization, inspection, and deletion are Codex-only. Skin Center is also for Codex only.
 
@@ -42,15 +43,15 @@ Features are shown according to what is installed locally. Session synchronizati
 ### Instructions and Prompts
 
 - Manage bundled and custom Markdown instructions with categories, import, editing, enablement, and disablement.
-- Bundle the default Codex, Claude Code, and ZCode templates from their corresponding Keysmith projects for offline use. Enabling them still requires preview and confirmation; application startup never writes tool configuration automatically.
+- Bundle the default Codex, Claude Code, and ZCode templates from their corresponding Keysmith projects for offline use. Kilo also includes an offline default adapted to its global `AGENTS.md`. Enabling any template still requires preview and confirmation; application startup never writes tool configuration automatically.
 - Choose whether to preserve existing instructions or replace them, without overwriting content that DevConduit does not manage.
-- Create a backup before a managed write so changes can be reviewed or restored.
+- Create a backup before a managed write so changes can be reviewed or restored. Kilo preserves a fixed snapshot of the original `AGENTS.md` on first install and restores it exactly on uninstall.
 
 ### Providers and Configuration
 
 - View, edit, test, and switch providers from one place.
 - Manage Codex `config.toml` and `auth.json`, including importing existing providers from cc-switch.
-- Read the TOML or JSON configuration used by each tool and handle sensitive values appropriately in previews.
+- Read each tool's TOML, JSON, or JSONC configuration, redact sensitive values in previews, and preserve Kilo JSONC comments.
 
 ### Codex Session Management
 
@@ -77,17 +78,17 @@ From **Skills & MCP**, choose a target tool and integration. The default automat
 | Integration | Local prerequisites | Windows | macOS |
 | --- | --- | --- | --- |
 | [IDA Pro MCP](https://github.com/mrexodia/ida-pro-mcp) | IDA Pro 8.3+, Python 3.11+, `uv`, and activated idalib | Managed local runtime | Managed local runtime |
-| [Cheat Engine MCP](https://github.com/miscusi-peek/cheatengine-mcp-bridge) | Cheat Engine and Python; run the Lua bridge inside CE | Local Named Pipe mode | Remote Windows TCP bridge |
-| [x64dbg MCP](https://github.com/Wasdubya/x64dbgMCP) | x64dbg/x32dbg and Python; install the downloaded debugger plugin | Local mode | Remote Windows HTTP bridge |
+| [Cheat Engine MCP](https://github.com/miscusi-peek/cheatengine-mcp-bridge) | Cheat Engine and Python | Local Named Pipe mode with automatic Lua bridge installation | Remote Windows TCP bridge |
+| [x64dbg MCP](https://github.com/Wasdubya/x64dbgMCP) | x64dbg/x32dbg and Python | Automatic matching 32/64-bit plugin installation | Remote Windows HTTP bridge |
 | [Burp Suite MCP](https://github.com/PortSwigger/mcp-server) | Burp Suite; Java is also required for stdio proxy mode | SSE or proxy by target tool | SSE or proxy by target tool |
 
 Integration rules:
 
 - Automatic acquisition verifies a pinned SHA-256 before use. A mismatched cache is downloaded again, and a failed verification never writes tool configuration. Sources and licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - **IDA Pro MCP** runs `uv sync --locked` during initial acquisition, then uses `uv run --offline --no-sync` so runtime startup cannot synchronize dependencies.
-- **Cheat Engine and x64dbg** local modes are Windows-only. On macOS, connect to a Windows bridge that you operate.
-- **Burp Suite MCP** supports direct SSE only for Claude Code and ZCode. Codex and Grok Build use the official `mcp-proxy-all.jar` emitted by the Burp extension as a stdio proxy to avoid transport incompatibilities.
-- Managed acquisition does not activate an IDA license, execute Lua inside Cheat Engine, copy plugins into x64dbg/x32dbg, or enable an extension inside Burp. The completion message provides the exact local file path for that final external-tool step. Failed writes remain visible in the dialog and restore the previous tool configuration.
+- **Cheat Engine and x64dbg** local modes are Windows-only. DevConduit searches common install locations or accepts a portable root, creates a host-file backup, and offers a restore action for the latest install without overwriting plugins changed afterward. On macOS, it connects to a Windows bridge that you operate; a local Mac application cannot write files on that remote host.
+- **Burp Suite MCP** supports direct SSE for Claude Code, ZCode, and Kilo Code. Codex and Grok Build use the official `mcp-proxy-all.jar` emitted by the Burp extension as a stdio proxy to avoid transport incompatibilities.
+- Two first-time actions remain under the third-party application's control and cannot be reliably performed through an external API: activating IDA idalib and enabling the official extension in Burp's Extensions screen. Everything else, including download, verification, dependency preparation, target configuration, and Windows CE/x64dbg file installation, is automatic after confirmation. A failed write restores both the previous tool configuration and the host files installed by that action.
 
 Connect only to MCP servers and remote bridges that you trust. For HTTP bridges, prefer a trusted network or `127.0.0.1`.
 

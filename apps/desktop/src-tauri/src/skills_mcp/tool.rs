@@ -17,6 +17,7 @@ use crate::toml_utils::ensure_table;
 use crate::tools::ToolId;
 use crate::{now_rfc3339, open_db};
 use chrono::Local;
+use jsonc_parser::cst::{CstInputValue, CstRootNode};
 use rusqlite::{params, Connection, OpenFlags};
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
@@ -44,8 +45,159 @@ fn json_mcp_object(value: &Value, tool: ToolId) -> Option<&Map<String, Value>> {
     match tool {
         ToolId::Claude => value.get("mcpServers")?.as_object(),
         ToolId::Zcode => value.get("mcp")?.get("servers")?.as_object(),
+        ToolId::Kilo => value.get("mcp")?.as_object(),
         ToolId::Codex | ToolId::Grok => None,
     }
+}
+
+fn parse_jsonc_config(path: &Path, text: &str) -> Result<Value> {
+    if text.trim().is_empty() {
+        return Ok(Value::Object(Map::new()));
+    }
+    CstRootNode::parse(text, &Default::default())
+        .map_err(|error| {
+            CodexxError::Config(format!("JSONC 解析失败 {}: {error}", path.display()))
+        })?
+        .to_serde_value()
+        .ok_or_else(|| CodexxError::Config(format!("JSONC 配置没有有效根节点: {}", path.display())))
+}
+
+fn kilo_mcp_to_internal(config: &Value) -> Value {
+    let Some(server) = config.as_object() else {
+        return config.clone();
+    };
+    let mut normalized = Map::new();
+    if let Some(enabled) = server.get("enabled").and_then(Value::as_bool) {
+        normalized.insert("enabled".to_string(), Value::Bool(enabled));
+    }
+    if server.get("type").and_then(Value::as_str) == Some("remote") || server.get("url").is_some() {
+        if let Some(url) = server.get("url").cloned() {
+            let transport = url
+                .as_str()
+                .filter(|url| url.trim_end_matches('/').ends_with("/sse"))
+                .map(|_| "sse")
+                .unwrap_or("http");
+            normalized.insert("type".to_string(), Value::String(transport.to_string()));
+            normalized.insert("url".to_string(), url);
+        }
+        if let Some(headers) = server.get("headers").cloned() {
+            normalized.insert("headers".to_string(), headers);
+        }
+    } else if let Some(command) = server.get("command").and_then(Value::as_array) {
+        if let Some(executable) = command.first().and_then(Value::as_str) {
+            normalized.insert("command".to_string(), Value::String(executable.to_string()));
+            if command.len() > 1 {
+                normalized.insert("args".to_string(), Value::Array(command[1..].to_vec()));
+            }
+        }
+        if let Some(environment) = server.get("environment").cloned() {
+            normalized.insert("env".to_string(), environment);
+        }
+    }
+    if let Some(timeout) = server.get("timeout").cloned() {
+        normalized.insert("timeout".to_string(), timeout);
+    }
+    Value::Object(normalized)
+}
+
+fn kilo_mcp_from_internal(config: &Value) -> Result<Value> {
+    let server = config
+        .as_object()
+        .ok_or_else(|| CodexxError::Config("Kilo MCP 配置必须是 JSON object".to_string()))?;
+    let mut normalized = Map::new();
+    if let Some(url) = server.get("url").and_then(Value::as_str) {
+        normalized.insert("type".to_string(), Value::String("remote".to_string()));
+        normalized.insert("url".to_string(), Value::String(url.to_string()));
+        if let Some(headers) = server
+            .get("headers")
+            .or_else(|| server.get("http_headers"))
+            .cloned()
+        {
+            normalized.insert("headers".to_string(), headers);
+        }
+    } else {
+        let command = server
+            .get("command")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| CodexxError::Config("Kilo 本地 MCP 缺少 command".to_string()))?;
+        let mut command_line = vec![Value::String(command.to_string())];
+        if let Some(args) = server.get("args").and_then(Value::as_array) {
+            command_line.extend(args.iter().cloned());
+        }
+        normalized.insert("type".to_string(), Value::String("local".to_string()));
+        normalized.insert("command".to_string(), Value::Array(command_line));
+        if let Some(environment) = server
+            .get("env")
+            .or_else(|| server.get("environment"))
+            .cloned()
+        {
+            normalized.insert("environment".to_string(), environment);
+        }
+    }
+    normalized.insert("enabled".to_string(), Value::Bool(true));
+    if let Some(timeout) = server.get("timeout").cloned() {
+        normalized.insert("timeout".to_string(), timeout);
+    }
+    Ok(Value::Object(normalized))
+}
+
+fn json_to_cst_input(value: &Value) -> CstInputValue {
+    match value {
+        Value::Null => CstInputValue::Null,
+        Value::Bool(value) => CstInputValue::Bool(*value),
+        Value::Number(value) => CstInputValue::Number(value.to_string()),
+        Value::String(value) => CstInputValue::String(value.clone()),
+        Value::Array(values) => {
+            CstInputValue::Array(values.iter().map(json_to_cst_input).collect())
+        }
+        Value::Object(values) => CstInputValue::Object(
+            values
+                .iter()
+                .map(|(key, value)| (key.clone(), json_to_cst_input(value)))
+                .collect(),
+        ),
+    }
+}
+
+fn update_kilo_jsonc(text: &str, id: &str, config: Option<&Value>) -> Result<String> {
+    let source = if text.trim().is_empty() { "{}\n" } else { text };
+    let root = CstRootNode::parse(source, &Default::default())
+        .map_err(|error| CodexxError::Config(format!("Kilo JSONC 解析失败: {error}")))?;
+    let root_object = root
+        .object_value()
+        .ok_or_else(|| CodexxError::Config("Kilo JSONC 根节点必须是 object".to_string()))?;
+    let mcp = match root_object.get("mcp") {
+        Some(property) => property.object_value().ok_or_else(|| {
+            CodexxError::Config("Kilo JSONC 的 mcp 字段必须是 object".to_string())
+        })?,
+        None if config.is_none() => return Ok(source.to_string()),
+        None => root_object
+            .append("mcp", CstInputValue::Object(Vec::new()))
+            .object_value()
+            .expect("new mcp value is an object"),
+    };
+    match config {
+        Some(config) => {
+            let value = json_to_cst_input(&kilo_mcp_from_internal(config)?);
+            if let Some(property) = mcp.get(id) {
+                property.set_value(value);
+            } else {
+                mcp.append(id, value);
+            }
+        }
+        None => {
+            if let Some(property) = mcp.get(id) {
+                property.remove();
+            }
+        }
+    }
+    let mut output = root.to_string();
+    if !output.ends_with('\n') {
+        output.push('\n');
+    }
+    Ok(output)
 }
 
 fn list_tool_mcp(tool: ToolId, config_dir: Option<String>) -> Result<Vec<ManagedMcpServer>> {
@@ -68,14 +220,27 @@ fn list_tool_mcp(tool: ToolId, config_dir: Option<String>) -> Result<Vec<Managed
                 })
                 .collect::<Vec<_>>()
         }
-        ToolId::Claude | ToolId::Zcode => {
-            let value = serde_json::from_str::<Value>(&text)
-                .map_err(|error| crate::file_io::json_err(&config, error))?;
+        ToolId::Claude | ToolId::Zcode | ToolId::Kilo => {
+            let value = if tool == ToolId::Kilo {
+                parse_jsonc_config(&config, &text)?
+            } else {
+                serde_json::from_str::<Value>(&text)
+                    .map_err(|error| crate::file_io::json_err(&config, error))?
+            };
             json_mcp_object(&value, tool)
                 .map(|servers| {
                     servers
                         .iter()
-                        .map(|(id, config)| (id.clone(), config.clone()))
+                        .map(|(id, config)| {
+                            (
+                                id.clone(),
+                                if tool == ToolId::Kilo {
+                                    kilo_mcp_to_internal(config)
+                                } else {
+                                    config.clone()
+                                },
+                            )
+                        })
                         .collect::<Vec<_>>()
                 })
                 .unwrap_or_default()
@@ -89,7 +254,10 @@ fn list_tool_mcp(tool: ToolId, config_dir: Option<String>) -> Result<Vec<Managed
                 name: id.clone(),
                 id,
                 transport,
-                enabled: true,
+                enabled: config
+                    .get("enabled")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(true),
                 source: config
                     .get("_everythingPatchSource")
                     .and_then(Value::as_str)
@@ -410,6 +578,20 @@ fn set_json_mcp(root: &mut Map<String, Value>, tool: ToolId, id: &str, config: O
                 servers.remove(id);
             }
         }
+        ToolId::Kilo => {
+            let servers = root
+                .entry("mcp".to_string())
+                .or_insert_with(|| Value::Object(Map::new()));
+            if !servers.is_object() {
+                *servers = Value::Object(Map::new());
+            }
+            let servers = servers.as_object_mut().expect("mcp is an object");
+            if let Some(config) = config {
+                servers.insert(id.to_string(), config);
+            } else {
+                servers.remove(id);
+            }
+        }
         ToolId::Codex | ToolId::Grok => {}
     }
 }
@@ -438,7 +620,7 @@ fn toml_mcp_item_for_tool(tool: ToolId, config: &Value) -> Item {
                     server.remove("http_headers");
                 }
             }
-            ToolId::Claude | ToolId::Zcode => {}
+            ToolId::Claude | ToolId::Zcode | ToolId::Kilo => {}
         }
     }
     json_to_toml_item(&normalized)
@@ -487,6 +669,7 @@ fn write_tool_mcp(
             set_json_mcp(&mut root, tool, id, config);
             write_json(&path, &Value::Object(root))
         }
+        ToolId::Kilo => write_text(&path, &update_kilo_jsonc(&text, id, config.as_ref())?),
     }
 }
 
@@ -594,7 +777,7 @@ fn ccswitch_mcp_candidates(tool: ToolId) -> Result<Vec<ManagedMcpServer>> {
         ToolId::Codex => "enabled_codex",
         ToolId::Claude => "enabled_claude",
         ToolId::Grok => "enabled_grokbuild",
-        ToolId::Zcode => "",
+        ToolId::Zcode | ToolId::Kilo => "",
     };
     let enabled_expression = if columns.contains(enabled_column) {
         enabled_column
@@ -920,5 +1103,65 @@ mod tests {
 
         assert_eq!(sse["type"], "sse");
         assert_eq!(http["type"], "http");
+    }
+
+    #[test]
+    fn kilo_jsonc_update_preserves_unrelated_comments() {
+        let source = r#"{
+  // Keep this provider note.
+  "provider": { "enabled": true },
+  "mcp": {
+    // Keep this server too.
+    "existing": { "type": "remote", "url": "https://example.com/mcp" },
+  },
+}
+"#;
+        let updated = update_kilo_jsonc(
+            source,
+            "devconduit-test",
+            Some(&json!({
+                "command": "node",
+                "args": ["server.js"],
+                "env": { "MODE": "safe" }
+            })),
+        )
+        .expect("update Kilo JSONC");
+
+        assert!(updated.contains("// Keep this provider note."));
+        assert!(updated.contains("// Keep this server too."));
+        let parsed =
+            parse_jsonc_config(Path::new("kilo.jsonc"), &updated).expect("parse updated JSONC");
+        assert_eq!(
+            parsed
+                .pointer("/mcp/devconduit-test/type")
+                .and_then(Value::as_str),
+            Some("local")
+        );
+        assert_eq!(
+            parsed
+                .pointer("/mcp/devconduit-test/command/0")
+                .and_then(Value::as_str),
+            Some("node")
+        );
+        assert_eq!(
+            parsed
+                .pointer("/mcp/devconduit-test/command/1")
+                .and_then(Value::as_str),
+            Some("server.js")
+        );
+    }
+
+    #[test]
+    fn kilo_remote_mcp_uses_official_shape() {
+        let normalized = kilo_mcp_from_internal(&json!({
+            "type": "sse",
+            "url": "http://127.0.0.1:9876/sse",
+            "http_headers": { "Authorization": "Bearer token" }
+        }))
+        .expect("normalize remote MCP");
+
+        assert_eq!(normalized["type"], "remote");
+        assert_eq!(normalized["enabled"], true);
+        assert_eq!(normalized["headers"]["Authorization"], "Bearer token");
     }
 }

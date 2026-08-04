@@ -1,11 +1,15 @@
 mod catalog;
 mod catalog_download;
+mod host_install;
 mod mcp;
 mod skills;
 mod tool;
 mod types;
 
 pub(crate) use catalog::{install_mcp_integration_inner, McpIntegrationInstallInput};
+pub(crate) use host_install::{
+    detect_mcp_host_inner, restore_latest_mcp_host_install_inner, McpHostInstallPlan,
+};
 
 pub(crate) use mcp::{sort_managed_mcp_servers, toggle_codex_mcp_inner};
 pub(crate) use skills::{

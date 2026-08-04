@@ -9,6 +9,8 @@ import {
   FolderOpen,
   Network,
   Radar,
+  RotateCcw,
+  Search,
   ShieldCheck,
   Wrench,
 } from "lucide-react";
@@ -16,6 +18,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
 import type {
   Lang,
+  McpHostInstallPlan,
   ManagedMcpServer,
   McpIntegrationId,
   McpIntegrationInstallInput,
@@ -58,6 +61,7 @@ type InstallForm = {
   mode: InstallMode;
   sourceMode: SourceMode;
   sourcePath: string;
+  hostPath: string;
   command: string;
   endpoint: string;
   confirmed: boolean;
@@ -71,6 +75,12 @@ export type McpInstallCatalogProps = {
   busy: boolean;
   onClose: () => void;
   onInstall: (input: McpIntegrationInstallInput) => Promise<McpIntegrationInstallResult>;
+  onDetectHost: (
+    integrationId: McpIntegrationInstallInput["integrationId"],
+    mode: McpIntegrationInstallInput["mode"],
+    hostPath?: string | null,
+  ) => Promise<McpHostInstallPlan>;
+  onRestoreHost: (integrationId: McpIntegrationInstallInput["integrationId"]) => Promise<string>;
   onOpenExternalUrl: (url: string) => void;
 };
 
@@ -115,7 +125,7 @@ const integrations: readonly McpIntegrationDefinition[] = [
     requirements: [
       { zh: "Cheat Engine 运行于 Windows", en: "Cheat Engine on Windows" },
       { zh: "Python 3.10+", en: "Python 3.10+" },
-      { zh: "需在 CE 中加载下载的 Lua 桥", en: "Load the downloaded Lua bridge in CE" },
+      { zh: "Windows 自动安装 Lua 桥并保留备份", en: "Automatically installs and backs up the Lua bridge on Windows" },
       { zh: "自动模式创建独立 Python 环境", en: "Automatic mode creates an isolated Python environment" },
     ],
     defaultCommand: { windows: "python", other: "python3" },
@@ -140,7 +150,7 @@ const integrations: readonly McpIntegrationDefinition[] = [
     },
     requirements: [
       { zh: "Python 3.10+", en: "Python 3.10+" },
-      { zh: "需将下载的插件装入 x64dbg/x32dbg", en: "Install the downloaded plugin into x64dbg/x32dbg" },
+      { zh: "Windows 自动安装 32/64 位插件并保留备份", en: "Automatically installs and backs up the 32/64-bit plugins on Windows" },
       { zh: "自动模式创建独立 Python 环境", en: "Automatic mode creates an isolated Python environment" },
       { zh: "HTTP 仅绑定可信网络", en: "Bind HTTP only to trusted networks" },
     ],
@@ -194,7 +204,7 @@ function localized(text: LocalizedText, lang: Lang) {
 }
 
 function supportsBurpDirectSse(tool: ToolId) {
-  return tool === "claude" || tool === "zcode";
+  return tool === "claude" || tool === "zcode" || tool === "kilo";
 }
 
 function defaultMode(
@@ -218,6 +228,7 @@ function createForm(
     mode: defaultMode(integration, platform, tool),
     sourceMode: "managed",
     sourcePath: "",
+    hostPath: "",
     command: platform === "windows" ? integration.defaultCommand.windows : integration.defaultCommand.other,
     endpoint: integration.defaultEndpoint || "",
     confirmed: false,
@@ -245,8 +256,8 @@ function getCopy(lang: Lang, toolName: string) {
         project: "项目主页",
         back: "返回集成目录",
         install: `写入 ${toolName}`,
-        fetchInstall: "获取并配置",
-        installing: "正在获取并安装",
+        fetchInstall: "自动安装并配置",
+        installing: "正在自动安装",
         requirements: "前置条件",
         sourceMode: "文件来源",
         managedSource: "自动获取（推荐）",
@@ -265,9 +276,23 @@ function getCopy(lang: Lang, toolName: string) {
         runtimeCommand: "运行时命令",
         endpoint: "服务地址",
         tcpEndpoint: "TCP 桥接地址",
-        managedNotice: "DevConduit 将下载上述固定版本、核对 SHA-256，并在需要时创建独立 Python 环境。不会启动 IDA、CE、x64dbg 或 Burp，也不会静默启用其中的插件。",
+        hostSoftware: "宿主软件",
+        hostPath: "安装目录",
+        hostPathPlaceholder: "留空自动检测",
+        chooseHost: "选择安装目录",
+        detectingHost: "正在检测宿主软件",
+        hostReady: "可自动安装",
+        hostDetected: "已检测",
+        hostMissing: "未找到",
+        hostRemote: "远程模式",
+        hostManual: "需要确认目录",
+        restoreHost: "恢复上次安装",
+        restoringHost: "正在恢复",
+        hostDetectFailed: "宿主软件检测失败",
+        hostRestoreFailed: "恢复宿主文件失败",
+        managedNotice: "DevConduit 将下载固定版本、核对 SHA-256，并在需要时创建独立 Python 环境。Windows 上会自动检测 CE/x64dbg、备份原文件并安装桥接插件；IDA 激活和 Burp 首次启用仍由对应软件控制。",
         manualNotice: "DevConduit 只校验你选择的本地文件并修改配置，不会下载或运行第三方文件。",
-        confirmManaged: "我已确认来源、固定版本和许可证，同意下载依赖并将该 MCP 写入当前工具配置。",
+        confirmManaged: "我已确认来源、固定版本、许可证和安装预览，同意下载依赖、备份宿主文件并写入当前工具配置。",
         confirmManual: "我已检查所选本地文件，同意将该 MCP 写入当前工具配置。",
         pickerFailed: "无法打开文件选择器",
         installFailed: "写入 MCP 配置失败",
@@ -289,8 +314,8 @@ function getCopy(lang: Lang, toolName: string) {
         project: "Project page",
         back: "Back to integrations",
         install: `Write to ${toolName}`,
-        fetchInstall: "Fetch and configure",
-        installing: "Fetching and installing",
+        fetchInstall: "Install and configure",
+        installing: "Installing automatically",
         requirements: "Requirements",
         sourceMode: "File source",
         managedSource: "Automatic (recommended)",
@@ -309,9 +334,23 @@ function getCopy(lang: Lang, toolName: string) {
         runtimeCommand: "Runtime command",
         endpoint: "Service endpoint",
         tcpEndpoint: "TCP bridge endpoint",
-        managedNotice: "DevConduit downloads the pinned version, verifies SHA-256, and creates an isolated Python environment when needed. It does not launch IDA, CE, x64dbg, or Burp, or silently enable their plugins.",
+        hostSoftware: "Host application",
+        hostPath: "Installation directory",
+        hostPathPlaceholder: "Leave empty to detect automatically",
+        chooseHost: "Choose installation directory",
+        detectingHost: "Detecting host application",
+        hostReady: "Ready for automatic install",
+        hostDetected: "Detected",
+        hostMissing: "Not found",
+        hostRemote: "Remote mode",
+        hostManual: "Directory needs attention",
+        restoreHost: "Restore previous install",
+        restoringHost: "Restoring",
+        hostDetectFailed: "Host application detection failed",
+        hostRestoreFailed: "Could not restore host files",
+        managedNotice: "DevConduit downloads the pinned version, verifies SHA-256, and creates an isolated Python environment when needed. On Windows it detects CE/x64dbg, backs up existing files, and installs the bridge plugins. IDA activation and Burp's first enable remain controlled by those applications.",
         manualNotice: "DevConduit only validates the local files you choose and updates configuration. It does not download or run third-party files.",
-        confirmManaged: "I reviewed the source, pinned version, and license and agree to download dependencies and write this MCP into the active tool configuration.",
+        confirmManaged: "I reviewed the source, pinned version, license, and installation preview and agree to download dependencies, back up host files, and update the active tool configuration.",
         confirmManual: "I reviewed the selected local files and agree to write this MCP into the active tool configuration.",
         pickerFailed: "Could not open the file picker",
         installFailed: "Could not write the MCP configuration",
@@ -329,14 +368,20 @@ export function McpInstallCatalog({
   busy,
   onClose,
   onInstall,
+  onDetectHost,
+  onRestoreHost,
   onOpenExternalUrl,
 }: McpInstallCatalogProps) {
   const platform = useMemo(currentPlatform, []);
-  const copy = getCopy(lang, toolLabel(tool));
+  const copy = useMemo(() => getCopy(lang, toolLabel(tool)), [lang, tool]);
   const [selectedId, setSelectedId] = useState<McpIntegrationId | null>(null);
   const [form, setForm] = useState<InstallForm | null>(null);
   const [pickerError, setPickerError] = useState("");
   const [installError, setInstallError] = useState("");
+  const [hostPlan, setHostPlan] = useState<McpHostInstallPlan | null>(null);
+  const [hostPlanBusy, setHostPlanBusy] = useState(false);
+  const [hostPlanError, setHostPlanError] = useState("");
+  const [restoreBusy, setRestoreBusy] = useState(false);
   const selected = integrations.find((integration) => integration.id === selectedId) || null;
   const sourceKind = selected && form ? sourceKindFor(selected, form.mode) : "none";
 
@@ -346,6 +391,9 @@ export function McpInstallCatalog({
     setForm(null);
     setPickerError("");
     setInstallError("");
+    setHostPlan(null);
+    setHostPlanError("");
+    setRestoreBusy(false);
   }, [open]);
 
   useEffect(() => {
@@ -353,7 +401,40 @@ export function McpInstallCatalog({
     setForm(createForm(selected, platform, tool));
     setPickerError("");
     setInstallError("");
+    setHostPlan(null);
+    setHostPlanError("");
   }, [platform, selectedId, tool]);
+
+  useEffect(() => {
+    if (!open || !selected || !form || form.sourceMode !== "managed") {
+      setHostPlan(null);
+      setHostPlanBusy(false);
+      setHostPlanError("");
+      return;
+    }
+    let cancelled = false;
+    setHostPlanBusy(true);
+    setHostPlanError("");
+    const timer = window.setTimeout(() => {
+      void onDetectHost(selected.id, form.mode, form.hostPath.trim() || null)
+        .then((plan) => {
+          if (!cancelled) setHostPlan(plan);
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            setHostPlan(null);
+            setHostPlanError(`${copy.hostDetectFailed}: ${String(error)}`);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setHostPlanBusy(false);
+        });
+    }, form.hostPath.trim() ? 300 : 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [copy.hostDetectFailed, form?.hostPath, form?.mode, form?.sourceMode, onDetectHost, open, selected?.id]);
 
   const selectIntegration = (integration: McpIntegrationDefinition) => {
     setSelectedId(integration.id);
@@ -369,6 +450,8 @@ export function McpInstallCatalog({
     setForm(null);
     setPickerError("");
     setInstallError("");
+    setHostPlan(null);
+    setHostPlanError("");
   };
 
   const updateForm = (patch: Partial<InstallForm>) => {
@@ -421,10 +504,50 @@ export function McpInstallCatalog({
     }
   };
 
+  const chooseHost = async () => {
+    if (!selected || !form) return;
+    setHostPlanError("");
+    try {
+      const result = await openDialog({
+        multiple: false,
+        directory: true,
+        title: copy.chooseHost,
+      });
+      const path = Array.isArray(result) ? result[0] : result;
+      if (path) updateForm({ hostPath: path, confirmed: false });
+    } catch (error) {
+      setHostPlanError(`${copy.pickerFailed}: ${String(error)}`);
+    }
+  };
+
+  const restoreHost = async () => {
+    if (!selected || restoreBusy || busy) return;
+    setRestoreBusy(true);
+    setHostPlanError("");
+    try {
+      const message = await onRestoreHost(selected.id);
+      setHostPlan((current) => current ? { ...current, message, canRestore: false } : current);
+    } catch (error) {
+      setHostPlanError(`${copy.hostRestoreFailed}: ${String(error)}`);
+    } finally {
+      setRestoreBusy(false);
+    }
+  };
+
+  const localBridgeNeedsHost = Boolean(
+    selected
+      && form
+      && form.sourceMode === "managed"
+      && form.mode === "local"
+      && (selected.id === "cheatengine-mcp" || selected.id === "x64dbg-mcp"),
+  );
+  const hostReady = !localBridgeNeedsHost || hostPlan?.status === "ready";
+
   const canInstall = Boolean(
     selected
       && form
       && form.confirmed
+      && hostReady
       && (form.sourceMode === "managed" || sourceKind === "none" || form.sourcePath.trim())
       && (selected.id === "burp-suite-mcp" && form.mode === "direct" || form.command.trim())
       && (!selected.defaultEndpoint || form.endpoint.trim()),
@@ -437,6 +560,7 @@ export function McpInstallCatalog({
       const result = await onInstall({
         integrationId: selected.id,
         sourcePath: form.sourceMode === "managed" || sourceKind === "none" ? null : form.sourcePath.trim(),
+        hostPath: form.hostPath.trim() || null,
         command: selected.id === "burp-suite-mcp" && form.mode === "direct" ? null : form.command.trim(),
         endpoint: selected.defaultEndpoint ? form.endpoint.trim() : null,
         mode: form.mode,
@@ -621,6 +745,27 @@ export function McpInstallCatalog({
                 </label>
               )}
 
+              {form.sourceMode === "managed" && form.mode !== "remote" && (
+                <label className="cx-mcp-installer-field">
+                  <span>{copy.hostPath}</span>
+                  <div className="cx-mcp-path-control">
+                    <input
+                      value={form.hostPath}
+                      placeholder={copy.hostPathPlaceholder}
+                      onChange={(event) => updateForm({ hostPath: event.target.value, confirmed: false })}
+                      disabled={busy}
+                      spellCheck={false}
+                    />
+                    <IconButton
+                      icon={<FolderOpen size={17} />}
+                      label={copy.chooseHost}
+                      onClick={() => void chooseHost()}
+                      disabled={busy}
+                    />
+                  </div>
+                </label>
+              )}
+
               {!(selected.id === "burp-suite-mcp" && form.mode === "direct") && (
                 <label className="cx-mcp-installer-field">
                   <span>{copy.runtimeCommand}</span>
@@ -645,9 +790,9 @@ export function McpInstallCatalog({
                 </label>
               )}
 
-              {(pickerError || installError) && (
+              {(pickerError || installError || hostPlanError) && (
                 <p className="cx-mcp-picker-error" role="alert">
-                  {pickerError || installError}
+                  {pickerError || installError || hostPlanError}
                 </p>
               )}
             </section>
@@ -664,6 +809,52 @@ export function McpInstallCatalog({
                   )}
                 </div>
               </div>
+              {form.sourceMode === "managed" && (
+                <div className="cx-mcp-host-plan" aria-live="polite">
+                  <div className="cx-mcp-host-plan-head">
+                    <strong>{copy.hostSoftware}</strong>
+                    {hostPlanBusy ? (
+                      <StatusBadge tone="info">{copy.detectingHost}</StatusBadge>
+                    ) : hostPlan ? (
+                      <StatusBadge tone={hostPlan.status === "ready" || hostPlan.status === "detected" ? "success" : hostPlan.status === "remote" ? "info" : "warning"}>
+                        {hostPlan.status === "ready"
+                          ? copy.hostReady
+                          : hostPlan.status === "detected"
+                            ? copy.hostDetected
+                            : hostPlan.status === "remote"
+                              ? copy.hostRemote
+                              : hostPlan.status === "missing"
+                                ? copy.hostMissing
+                                : copy.hostManual}
+                      </StatusBadge>
+                    ) : null}
+                  </div>
+                  {hostPlan && (
+                    <>
+                      <p>{hostPlan.message}</p>
+                      {hostPlan.hostPath && <code>{hostPlan.hostPath}</code>}
+                      {hostPlan.targets.map((target) => (
+                        <div className="cx-mcp-host-target" key={target.path}>
+                          <Search size={14} aria-hidden="true" />
+                          <span>{target.path}</span>
+                        </div>
+                      ))}
+                      {hostPlan.nextStep && <small>{hostPlan.nextStep}</small>}
+                      {hostPlan.canRestore && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon={<RotateCcw size={15} />}
+                          onClick={() => void restoreHost()}
+                          disabled={busy || restoreBusy}
+                        >
+                          {restoreBusy ? copy.restoringHost : copy.restoreHost}
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
               <div className="cx-mcp-no-download">
                 <ShieldCheck size={18} aria-hidden="true" />
                 <p>

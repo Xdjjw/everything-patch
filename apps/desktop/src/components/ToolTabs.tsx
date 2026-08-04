@@ -1,13 +1,14 @@
 import type { ToolId, ToolStatus } from "../types";
 import "../styles/tool-tabs.css";
 
-export const TOOL_ORDER: ToolId[] = ["codex", "claude", "grok", "zcode"];
+export const TOOL_ORDER: ToolId[] = ["codex", "claude", "grok", "zcode", "kilo"];
 
 const TOOL_LABELS: Record<ToolId, string> = {
   codex: "Codex",
   claude: "Claude Code",
   grok: "Grok Build",
   zcode: "ZCode",
+  kilo: "Kilo Code",
 };
 
 export type ToolTabsProps = {

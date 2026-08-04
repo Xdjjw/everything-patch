@@ -11,6 +11,8 @@ pub(crate) const ENGINE_CLAUDE: &str = "claude";
 pub(crate) const ENGINE_ZCODE: &str = "zcode";
 /// Grok engine 标识。
 pub(crate) const ENGINE_GROK: &str = "grok";
+/// Kilo engine 标识。
+pub(crate) const ENGINE_KILO: &str = "kilo";
 
 pub(crate) fn normalize_prompt_filename(input: &str, fallback: &str) -> String {
     let raw = input.trim().trim_end_matches(".md");

@@ -975,6 +975,24 @@
   border-color: var(--cx-dark-border);
 }
 
+:root[data-theme="dark"] .cx-mcp-host-plan {
+  border-color: #3c4149;
+  background: #262a30;
+}
+
+:root[data-theme="dark"] .cx-mcp-host-plan-head strong,
+:root[data-theme="dark"] .cx-mcp-host-plan p,
+:root[data-theme="dark"] .cx-mcp-host-plan small,
+:root[data-theme="dark"] .cx-mcp-host-target {
+  color: #bdc4ce;
+}
+
+:root[data-theme="dark"] .cx-mcp-host-plan code {
+  border-color: #414750;
+  color: #d4d9e1;
+  background: #202329;
+}
+
 :root[data-theme="dark"] .cx-mcp-no-download {
   color: #9ed7c1;
   background: #183129;

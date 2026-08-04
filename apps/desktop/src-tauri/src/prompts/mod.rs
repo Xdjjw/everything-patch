@@ -21,7 +21,7 @@ pub(crate) use managed_agents::{
 pub(crate) use store::{
     delete_prompt_inner, get_saved_prompt_inner, list_saved_prompts_inner,
     normalize_prompt_filename, save_prompt_inner, ENGINE_CLAUDE, ENGINE_CODEX, ENGINE_GROK,
-    ENGINE_ZCODE,
+    ENGINE_KILO, ENGINE_ZCODE,
 };
 pub(crate) use types::{BuiltinPromptStatus, PromptInjectionMode, SavedPrompt};
 

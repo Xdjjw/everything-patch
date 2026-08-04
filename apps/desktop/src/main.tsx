@@ -34,10 +34,13 @@ import type {
   CodexState,
   GrokActionResult,
   GrokState,
+  KiloActionResult,
+  KiloState,
   ImportResult,
   InstructionMode,
   InstructionTemplate,
   Lang,
+  McpHostInstallPlan,
   McpIntegrationInstallInput,
   McpIntegrationInstallResult,
   ZcodeActionResult,
@@ -97,14 +100,16 @@ function storedPromptInjectionMode(engine: PromptEngine): PromptInjectionMode {
 
 function storedPromptEngine(): PromptEngine {
   const stored = localStorage.getItem(PROMPT_ENGINE_KEY);
-  return stored === "claude" || stored === "zcode" || stored === "grok"
+  return stored === "claude" || stored === "zcode" || stored === "grok" || stored === "kilo"
     ? stored
     : "codex";
 }
 
 function storedTool(): ToolId {
   const stored = localStorage.getItem(ACTIVE_TOOL_KEY);
-  return stored === "claude" || stored === "grok" || stored === "zcode" ? stored : "codex";
+  return stored === "claude" || stored === "grok" || stored === "zcode" || stored === "kilo"
+    ? stored
+    : "codex";
 }
 
 type ThemeTransitionDocument = Document & {
@@ -281,7 +286,7 @@ const dict = {
       en: "English",
       languageDesc: "默认中文，可随时切换。设置会保存在浏览器本地存储。",
       productName: "产品名",
-      productDesc: "面向 Codex、Claude、ZCode 与 Grok 的多工具配置和提示词管理器。",
+      productDesc: "面向 Codex、Claude、ZCode、Grok 与 Kilo 的多工具配置和提示词管理器。",
     },
     loadingConfig: "正在读取 Codex 配置...",
     noAuth: "无 auth",
@@ -383,7 +388,7 @@ const dict = {
       en: "English",
       languageDesc: "Chinese is the default. You can switch at any time; the setting is saved locally.",
       productName: "Product name",
-      productDesc: "A multi-tool configuration and prompt manager for Codex, Claude, ZCode, and Grok.",
+      productDesc: "A multi-tool configuration and prompt manager for Codex, Claude, ZCode, Grok, and Kilo.",
     },
     loadingConfig: "Reading Codex config...",
     noAuth: "No auth",
@@ -399,6 +404,8 @@ function getProviderPageCopy(lang: Lang, tool: ToolId): ProviderCopy {
     ? "settings.json (JSON)"
     : tool === "zcode"
       ? "cli/config.json (JSON)"
+      : tool === "kilo"
+        ? "kilo.jsonc (JSONC)"
       : "config.toml (TOML)";
   return {
     eyebrow: "Provider",
@@ -878,6 +885,7 @@ function App() {
     claude: storedPromptInjectionMode("claude"),
     zcode: storedPromptInjectionMode("zcode"),
     grok: storedPromptInjectionMode("grok"),
+    kilo: storedPromptInjectionMode("kilo"),
   }));
   const [skillsMcpTab, setSkillsMcpTab] = React.useState<"mcp" | "skills">("mcp");
   const [editingProviderId, setEditingProviderId] = React.useState<string | null>(null);
@@ -942,6 +950,9 @@ function App() {
   const [grokState, setGrokState] = React.useState<GrokState | null>(null);
   const [grokSavedPrompts, setGrokSavedPrompts] = React.useState<SavedPrompt[]>([]);
   const [grokBuiltinStatus, setGrokBuiltinStatus] = React.useState<BuiltinPromptStatus[]>([]);
+  const [kiloState, setKiloState] = React.useState<KiloState | null>(null);
+  const [kiloSavedPrompts, setKiloSavedPrompts] = React.useState<SavedPrompt[]>([]);
+  const [kiloBuiltinStatus, setKiloBuiltinStatus] = React.useState<BuiltinPromptStatus[]>([]);
   const activeToolRef = React.useRef(activeTool);
   activeToolRef.current = activeTool;
   const autoUpdateCheckedRef = React.useRef(false);
@@ -1164,6 +1175,7 @@ function App() {
       { engine: "claude", scope: claudeState?.claudeDir, mode: claudeState?.instructionInjectionMode },
       { engine: "zcode", scope: zcodeState?.managedDir, mode: zcodeState?.instructionInjectionMode },
       { engine: "grok", scope: grokState?.grokDir, mode: grokState?.instructionInjectionMode },
+      { engine: "kilo", scope: kiloState?.kiloDir, mode: kiloState?.instructionInjectionMode },
     ];
     const pending = engines.filter(({ engine, scope }) =>
       Boolean(scope) && promptModeSyncedRef.current[engine] !== scope,
@@ -1188,6 +1200,8 @@ function App() {
     claudeState?.instructionInjectionMode,
     grokState?.grokDir,
     grokState?.instructionInjectionMode,
+    kiloState?.instructionInjectionMode,
+    kiloState?.kiloDir,
     state?.codexDir,
     state?.instructionInjectionMode,
     zcodeState?.instructionInjectionMode,
@@ -1317,13 +1331,29 @@ function App() {
   const grokManagedSavedPromptId = grokState?.instructionTemplateKey?.startsWith("saved:")
     ? grokState.instructionTemplateKey.slice("saved:".length)
     : null;
+  // ─── Kilo 派生值 ──────────────────────────────────────────────────────
+  const kiloInstructionTemplates = React.useMemo<InstructionTemplate[]>(() => {
+    return kiloBuiltinStatus
+      .filter((item) => item.contentSource !== "removed")
+      .map(({ id, filename, title, subtitle, badge }) => ({ id, filename, title, subtitle, badge }));
+  }, [kiloBuiltinStatus]);
+  const kiloActiveInstructionTitle = kiloState?.activeInstructionTitle
+    || (lang === "zh" ? "当前提示词" : "Current prompt");
+  const kiloActiveBuiltinTemplateId = kiloState?.instructionTemplateKey?.startsWith("builtin:")
+    ? kiloState.instructionTemplateKey.slice("builtin:".length)
+    : "";
+  const kiloManagedSavedPromptId = kiloState?.instructionTemplateKey?.startsWith("saved:")
+    ? kiloState.instructionTemplateKey.slice("saved:".length)
+    : null;
   const activePromptInjectionMode = promptEngine === "claude"
     ? claudeState?.instructionInjectionMode
     : promptEngine === "zcode"
       ? zcodeState?.instructionInjectionMode
       : promptEngine === "grok"
         ? grokState?.instructionInjectionMode
-        : state?.instructionInjectionMode;
+        : promptEngine === "kilo"
+          ? kiloState?.instructionInjectionMode
+          : state?.instructionInjectionMode;
 
   const canonicalSavedProviders = React.useMemo(() => {
     const groups = new Map<string, SavedProvider[]>();
@@ -1590,6 +1620,9 @@ function App() {
       grokNext,
       grokPromptList,
       grokBuiltin,
+      kiloNext,
+      kiloPromptList,
+      kiloBuiltin,
       nextToolStatuses,
     ] = await Promise.all([
       settleLoad(invoke<CodexState>("get_codex_state", { configDir: resolvedConfigDir })),
@@ -1606,6 +1639,9 @@ function App() {
       settleLoad(invoke<GrokState>("get_grok_state")),
       settleLoad(invoke<SavedPrompt[]>("list_grok_prompts")),
       settleLoad(invoke<BuiltinPromptStatus[]>("get_grok_builtin_prompt_status")),
+      settleLoad(invoke<KiloState>("get_kilo_state")),
+      settleLoad(invoke<SavedPrompt[]>("list_kilo_prompts")),
+      settleLoad(invoke<BuiltinPromptStatus[]>("get_kilo_builtin_prompt_status")),
       settleLoad(invoke<ToolStatus[]>("get_tool_statuses", { configDir: resolvedConfigDir })),
     ]);
 
@@ -1627,6 +1663,9 @@ function App() {
     if (grokNext.ok) setGrokState(grokNext.data);
     if (grokPromptList.ok) setGrokSavedPrompts(grokPromptList.data);
     if (grokBuiltin.ok) setGrokBuiltinStatus(grokBuiltin.data);
+    if (kiloNext.ok) setKiloState(kiloNext.data);
+    if (kiloPromptList.ok) setKiloSavedPrompts(kiloPromptList.data);
+    if (kiloBuiltin.ok) setKiloBuiltinStatus(kiloBuiltin.data);
     if (nextToolStatuses.ok) setToolStatuses(nextToolStatuses.data);
 
     const failures = [
@@ -1644,6 +1683,9 @@ function App() {
       grokNext,
       grokPromptList,
       grokBuiltin,
+      kiloNext,
+      kiloPromptList,
+      kiloBuiltin,
       nextToolStatuses,
     ].flatMap((result) => result.ok ? [] : [result.error]);
     if (failures.length) {
@@ -2292,6 +2334,117 @@ function App() {
     }
   };
 
+  // ─── Kilo 指令回调 ────────────────────────────────────────────────────
+  const handleKiloActionResult = (result: KiloActionResult) => {
+    setKiloState(result.state);
+    setToast(result.message);
+    void Promise.all([
+      invoke<SavedPrompt[]>("list_kilo_prompts"),
+      invoke<BuiltinPromptStatus[]>("get_kilo_builtin_prompt_status"),
+    ])
+      .then(([promptList, builtin]) => {
+        setKiloSavedPrompts(promptList);
+        setKiloBuiltinStatus(builtin);
+      })
+      .catch(() => undefined);
+  };
+
+  const installKiloInstruction = (templateId: string) =>
+    call(
+      () => invoke<KiloActionResult>("install_kilo_instruction", {
+        templateId,
+        injectionMode: promptInjectionModes.kilo,
+      }),
+      handleKiloActionResult,
+    );
+
+  const uninstallKiloInstruction = () =>
+    call(
+      () => invoke<KiloActionResult>("uninstall_kilo_instruction"),
+      handleKiloActionResult,
+    );
+
+  const installKiloSavedPrompt = (id: string) =>
+    call(
+      () => invoke<KiloActionResult>("install_kilo_saved_prompt", {
+        id,
+        injectionMode: promptInjectionModes.kilo,
+      }),
+      handleKiloActionResult,
+    );
+
+  const normalizedKiloPromptForm = (): SavedPrompt => {
+    const existing = kiloSavedPrompts.filter((item) => item.id !== editingPromptId);
+    const requestedFilename = promptForm.filename.trim() || `${providerId(promptForm.title || "prompt")}.md`;
+    const filename = editingPromptId ? requestedFilename : uniquePromptFilename(requestedFilename, existing.map((item) => item.filename));
+    return {
+      ...promptForm,
+      id: editingPromptId || uniqueId(promptForm.id || promptForm.title || filename, existing.map((item) => item.id)),
+      title: promptForm.title.trim(),
+      filename,
+      content: promptForm.content,
+    };
+  };
+
+  const saveKiloPromptOnly = () =>
+    call(
+      async () => {
+        await invoke<SavedPrompt>("save_kilo_prompt", { prompt: normalizedKiloPromptForm() });
+        return invoke<SavedPrompt[]>("list_kilo_prompts");
+      },
+      (promptList) => {
+        setKiloSavedPrompts(promptList);
+        setInstructionMode("list");
+        setEditingPromptId(null);
+        setToast(lang === "zh" ? "Kilo 提示词已保存" : "Kilo prompt saved");
+      },
+    );
+
+  const removeKiloSavedPrompt = (id: string) =>
+    call(
+      async () => {
+        await invoke<void>("delete_kilo_prompt", { id });
+        return invoke<SavedPrompt[]>("list_kilo_prompts");
+      },
+      (promptList) => {
+        setKiloSavedPrompts(promptList);
+        setToast(lang === "zh" ? "提示词已删除" : "Prompt deleted");
+      },
+    );
+
+  const importKiloPromptMd = async (file?: File | null) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".md")) {
+      setError(lang === "zh" ? "请选择 .md 提示词文件" : "Please choose a .md prompt file");
+      return;
+    }
+    setActionBusy("importPrompt");
+    setLoading(true);
+    setError("");
+    try {
+      const content = await file.text();
+      const title = file.name.replace(/\.md$/i, "");
+      const filename = uniquePromptFilename(file.name, kiloSavedPrompts.map((item) => item.filename));
+      await invoke<SavedPrompt>("save_kilo_prompt", {
+        prompt: {
+          id: uniqueId(title, kiloSavedPrompts.map((item) => item.id)),
+          title: filename.replace(/\.md$/i, ""),
+          filename,
+          content,
+        },
+      });
+      const promptList = await invoke<SavedPrompt[]>("list_kilo_prompts");
+      setKiloSavedPrompts(promptList);
+      setToast(lang === "zh" ? `已导入提示词：${file.name}` : `Prompt imported: ${file.name}`);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+      setActionBusy("");
+      if (promptImportRef.current) promptImportRef.current.value = "";
+    }
+  };
+
   const normalizedProviderForm = (): SavedProvider => ({
     ...providerForm,
     appType: activeTool,
@@ -2722,6 +2875,20 @@ function App() {
       setActionBusy("");
     }
   };
+
+  const detectMcpHost = React.useCallback(async (
+    integrationId: McpIntegrationInstallInput["integrationId"],
+    mode: McpIntegrationInstallInput["mode"],
+    hostPath?: string | null,
+  ): Promise<McpHostInstallPlan> => invoke<McpHostInstallPlan>("detect_mcp_host", {
+    integrationId,
+    mode: mode || null,
+    hostPath: hostPath || null,
+  }), []);
+
+  const restoreMcpHost = React.useCallback(async (
+    integrationId: McpIntegrationInstallInput["integrationId"],
+  ): Promise<string> => invoke<string>("restore_mcp_host_install", { integrationId }), []);
 
   const installSkillZipFile = async (file?: File | null) => {
     if (!file) return;
@@ -3300,6 +3467,8 @@ function App() {
                 onToggleSkill={toggleSkillEnabled}
                 onToggleMcp={toggleMcpEnabled}
                 onInstallMcpIntegration={installMcpIntegration}
+                onDetectMcpHost={detectMcpHost}
+                onRestoreMcpHost={restoreMcpHost}
                 onOpenExternalUrl={openExternalUrl}
               />
             )}
@@ -3351,6 +3520,7 @@ function App() {
                 claudeRuntime={claudeState?.runtime}
                 zcodeRuntime={zcodeState}
                 grokRuntime={grokState}
+                kiloRuntime={kiloState}
                 promptBackups={promptBackups}
                 promptBackupsOpen={promptBackupsOpen}
                 promptBackupsLoading={promptBackupsLoading}
@@ -3451,6 +3621,20 @@ function App() {
                 onDeleteGrokPrompt={removeGrokSavedPrompt}
                 onImportGrokPrompt={importGrokPromptMd}
                 onSaveGrokPrompt={saveGrokPromptOnly}
+                kiloInstructionEnabled={Boolean(kiloState?.instructionEnabled)}
+                kiloActiveInstructionTitle={kiloActiveInstructionTitle}
+                kiloInstructionTemplates={kiloInstructionTemplates}
+                kiloBuiltinPromptStatuses={kiloBuiltinStatus}
+                kiloActiveBuiltinTemplateId={kiloActiveBuiltinTemplateId}
+                kiloSavedPrompts={kiloSavedPrompts}
+                kiloManagedSavedPromptId={kiloManagedSavedPromptId}
+                onEnableKiloBuiltinPrompt={installKiloInstruction}
+                onDisableKiloInstruction={uninstallKiloInstruction}
+                onEnableKiloSavedPrompt={installKiloSavedPrompt}
+                onEditKiloPrompt={openEditPrompt}
+                onDeleteKiloPrompt={removeKiloSavedPrompt}
+                onImportKiloPrompt={importKiloPromptMd}
+                onSaveKiloPrompt={saveKiloPromptOnly}
               />
             )}
 

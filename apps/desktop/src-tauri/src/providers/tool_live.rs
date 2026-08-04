@@ -305,6 +305,11 @@ pub(crate) fn activate_saved_provider_inner(
     model: Option<String>,
     config_dir: Option<String>,
 ) -> Result<ToolProviderActionResult> {
+    if tool == ToolId::Kilo {
+        return Err(CodexxError::Config(
+            "Kilo 供应商请使用 Kilo 的 /connect 或原生设置界面管理".to_string(),
+        ));
+    }
     if tool == ToolId::Zcode {
         let result = activate_zcode_provider_inner(id, model.as_deref())?;
         return Ok(ToolProviderActionResult {
@@ -326,6 +331,7 @@ pub(crate) fn activate_saved_provider_inner(
         ToolId::Claude => activate_claude_provider(&provider),
         ToolId::Grok => activate_grok_provider(&provider),
         ToolId::Zcode => unreachable!("ZCode is handled before the local provider lookup"),
+        ToolId::Kilo => unreachable!("Kilo is rejected before provider lookup"),
     }
 }
 
@@ -339,7 +345,7 @@ pub(crate) fn provider_template_text(provider: &SavedProvider) -> Result<String>
         return Ok(match tool {
             ToolId::Claude => redacted_json_text(template),
             ToolId::Codex | ToolId::Grok => redacted_toml_text(template),
-            ToolId::Zcode => String::new(),
+            ToolId::Zcode | ToolId::Kilo => String::new(),
         });
     }
     match tool {
@@ -377,7 +383,7 @@ pub(crate) fn provider_template_text(provider: &SavedProvider) -> Result<String>
                 wire_api = provider.wire_api,
             ))
         }
-        ToolId::Zcode => Ok(String::new()),
+        ToolId::Zcode | ToolId::Kilo => Ok(String::new()),
     }
 }
 

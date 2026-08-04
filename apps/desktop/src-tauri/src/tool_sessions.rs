@@ -488,6 +488,17 @@ fn sort_sessions(sessions: &mut [ToolSession]) {
     });
 }
 
+fn kilo_sessions() -> Result<ToolSessionList> {
+    let root = home_dir()?.join(".local").join("share").join("kilo");
+    Ok(ToolSessionList {
+        tool: ToolId::Kilo,
+        root: root.display().to_string(),
+        read_only: true,
+        sessions: Vec::new(),
+        warnings: vec!["Kilo 会话数据库暂不由 DevConduit 读取".to_string()],
+    })
+}
+
 pub(crate) fn get_tool_sessions_inner(
     tool: ToolId,
     codex_override: Option<String>,
@@ -497,6 +508,7 @@ pub(crate) fn get_tool_sessions_inner(
         ToolId::Claude => claude_sessions(),
         ToolId::Grok => grok_sessions(),
         ToolId::Zcode => zcode_sessions(),
+        ToolId::Kilo => kilo_sessions(),
     }
 }
 

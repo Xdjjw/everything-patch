@@ -4,8 +4,8 @@ export type Lang = "zh" | "en";
 export type ProviderMode = "list" | "form" | "official";
 export type InstructionMode = "list" | "form";
 export type PromptInjectionMode = "append" | "replace";
-export type PromptEngine = "codex" | "claude" | "zcode" | "grok";
-export type ToolId = "codex" | "claude" | "grok" | "zcode";
+export type PromptEngine = "codex" | "claude" | "zcode" | "grok" | "kilo";
+export type ToolId = "codex" | "claude" | "grok" | "zcode" | "kilo";
 export type CodexInstructionStatus = "active" | "external" | "inactive" | "none";
 
 export type ToolCapabilitySet = {
@@ -293,6 +293,26 @@ export type GrokActionResult = {
   state: GrokState;
 };
 
+export type KiloState = {
+  kiloDir: string;
+  kiloDirExists: boolean;
+  agentsPath: string;
+  agentsMdExists: boolean;
+  manifestExists: boolean;
+  originalSnapshotExists: boolean;
+  instructionEnabled: boolean;
+  instructionInjectionMode?: PromptInjectionMode;
+  instructionTemplateKey?: string;
+  activeInstructionTitle?: string;
+};
+
+export type KiloActionResult = {
+  ok: boolean;
+  message: string;
+  backupId?: string;
+  state: KiloState;
+};
+
 export type ImportResult = {
   imported: number;
   added: number;
@@ -451,10 +471,29 @@ export type McpIntegrationId =
 export type McpIntegrationInstallInput = {
   integrationId: McpIntegrationId;
   sourcePath?: string | null;
+  hostPath?: string | null;
   command?: string | null;
   endpoint?: string | null;
   mode?: "local" | "remote" | "direct" | "proxy" | null;
   sourceMode?: "managed" | "manual" | null;
+};
+
+export type McpHostInstallTarget = {
+  path: string;
+  source: string;
+  operation: string;
+  exists: boolean;
+};
+
+export type McpHostInstallPlan = {
+  integrationId: McpIntegrationId;
+  status: "ready" | "detected" | "missing" | "manual" | "remote" | string;
+  hostName: string;
+  hostPath?: string | null;
+  targets: McpHostInstallTarget[];
+  canRestore: boolean;
+  message: string;
+  nextStep?: string | null;
 };
 
 export type McpIntegrationInstallResult =

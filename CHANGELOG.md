@@ -4,6 +4,15 @@ All notable changes to DevConduit will be documented here.
 
 ## [Unreleased]
 
+## [v0.4.3] - 2026-08-04
+
+### 更新
+
+- 新增 Kilo Code：识别 `~/.config/kilo/kilo.jsonc`、`~/.config/kilo/AGENTS.md` 与 `~/.kilo/skills`，支持全局 Prompt、自定义 Prompt、Skills、原生 JSONC MCP 配置和状态预览；JSONC 写入保留无关注释与字段。
+- Kilo Prompt 支持“保留/替换”、操作前快照、失败即时回滚与卸载恢复。首次安装会固定保存原始 `AGENTS.md`，应用启动和状态检测保持只读。
+- Windows 自动获取模式会检测 Cheat Engine、x64dbg/x32dbg 的安装目录，将 Lua 桥或对应架构插件写入宿主目录，并在覆盖前创建可恢复备份；目标工具配置失败时同步回滚宿主文件，恢复前会拒绝覆盖安装后被用户修改的插件。
+- MCP 目录支持为 Kilo 写入 IDA、Cheat Engine、x64dbg 与 Burp 配置；Burp 在 Kilo 中使用官方远程 SSE 结构。
+
 ## [v0.4.2] - 2026-08-03
 
 ### 更新

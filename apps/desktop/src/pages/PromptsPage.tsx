@@ -33,6 +33,7 @@ import type {
   ClaudeRuntimeState,
   CodexInstructionStatus,
   GrokState,
+  KiloState,
   InstructionMode,
   InstructionTemplate,
   Lang,
@@ -87,6 +88,7 @@ export type PromptsPageProps = {
   claudeRuntime?: ClaudeRuntimeState;
   zcodeRuntime?: ZcodeState | null;
   grokRuntime?: GrokState | null;
+  kiloRuntime?: KiloState | null;
   promptBackups: PromptBackupEntry[];
   promptBackupsOpen: boolean;
   promptBackupsLoading: boolean;
@@ -164,6 +166,21 @@ export type PromptsPageProps = {
   onDeleteGrokPrompt: (id: string) => void | Promise<void>;
   onImportGrokPrompt: (file?: File | null) => void | Promise<void>;
   onSaveGrokPrompt: MaybeAsyncAction;
+  // ─── Kilo parallel props ───────────────────────────────────────────────
+  kiloInstructionEnabled: boolean;
+  kiloActiveInstructionTitle: string;
+  kiloInstructionTemplates: InstructionTemplate[];
+  kiloBuiltinPromptStatuses: BuiltinPromptStatus[];
+  kiloActiveBuiltinTemplateId?: string | null;
+  kiloSavedPrompts: SavedPrompt[];
+  kiloManagedSavedPromptId?: string | null;
+  onEnableKiloBuiltinPrompt: (id: string) => void | Promise<void>;
+  onDisableKiloInstruction: MaybeAsyncAction;
+  onEnableKiloSavedPrompt: (id: string) => void | Promise<void>;
+  onEditKiloPrompt: (prompt: SavedPrompt) => void;
+  onDeleteKiloPrompt: (id: string) => void | Promise<void>;
+  onImportKiloPrompt: (file?: File | null) => void | Promise<void>;
+  onSaveKiloPrompt: MaybeAsyncAction;
 };
 
 function getCopy(lang: Lang) {
@@ -211,6 +228,7 @@ function getCopy(lang: Lang) {
         engineClaude: "Claude Code",
         engineZcode: "ZCode",
         engineGrok: "Grok Build",
+        engineKilo: "Kilo Code",
         engineSwitchLabel: "指令引擎",
         claudeMode: "写入 ~/.claude/CLAUDE.md import 区块",
         claudeModeDetail: "当前模板写入 ~/.claude/keysmith/ 并在 CLAUDE.md 注入受管 import 区块。",
@@ -221,6 +239,9 @@ function getCopy(lang: Lang) {
         grokMode: "写入 ~/.grok/AGENTS.md + compat 隔离",
         grokModeDetail: "当前模板写入 AGENTS.md，注入 compat 隔离块并隔离 hooks。",
         grokActiveMemory: "AGENTS.md",
+        kiloMode: "写入 ~/.config/kilo/AGENTS.md",
+        kiloModeDetail: "通过 Kilo 官方全局指令文件加载；首次写入前保留原文件快照。",
+        kiloActiveMemory: "AGENTS.md",
         backups: "备份与还原",
         backupsDescription: "每次启用、停用和还原前都会自动创建当前工具的完整提示词快照。",
         backupsEmpty: "当前工具还没有提示词备份。",
@@ -293,6 +314,7 @@ function getCopy(lang: Lang) {
         engineClaude: "Claude Code",
         engineZcode: "ZCode",
         engineGrok: "Grok Build",
+        engineKilo: "Kilo Code",
         engineSwitchLabel: "Instruction engine",
         claudeMode: "Write import block to ~/.claude/CLAUDE.md",
         claudeModeDetail: "The current template is written to ~/.claude/keysmith/ and a managed import block is injected into CLAUDE.md.",
@@ -303,6 +325,9 @@ function getCopy(lang: Lang) {
         grokMode: "Write ~/.grok/AGENTS.md + compat isolation",
         grokModeDetail: "The current template is written to AGENTS.md, compat isolation block is injected and hooks are isolated.",
         grokActiveMemory: "AGENTS.md",
+        kiloMode: "Write ~/.config/kilo/AGENTS.md",
+        kiloModeDetail: "Uses Kilo's official global instruction file and preserves the original file before the first write.",
+        kiloActiveMemory: "AGENTS.md",
         backups: "Backups & restore",
         backupsDescription: "A complete prompt snapshot for the current tool is created before every enable, disable, and restore.",
         backupsEmpty: "No prompt backups for this tool yet.",
@@ -393,6 +418,21 @@ function getEngineModeCopy(
           title: "用当前模板替换 Grok AGENTS.md",
         };
     }
+    if (engine === "kilo") {
+      return isAppend
+        ? {
+          label: "追加到 AGENTS.md",
+          detail: "只在 Kilo 全局 AGENTS.md 中增加受管区块，原有规则继续生效。",
+          help: "保留 Kilo 的全局 AGENTS.md，只追加 DevConduit 管理的提示词区块。",
+          title: "保留 Kilo AGENTS.md，并追加当前提示词",
+        }
+        : {
+          label: "替换 AGENTS.md",
+          detail: "当前模板成为完整的 Kilo 全局 AGENTS.md，原文件已保存为可恢复快照。",
+          help: "用当前模板替换 Kilo 全局 AGENTS.md；首次替换前会完整保留原文件。",
+          title: "用当前模板替换 Kilo AGENTS.md",
+        };
+    }
     return isAppend
       ? {
         label: "追加到 AGENTS.md",
@@ -453,6 +493,21 @@ function getEngineModeCopy(
         title: "Replace Grok AGENTS.md with the current template",
       };
   }
+  if (engine === "kilo") {
+    return isAppend
+      ? {
+        label: "Append to AGENTS.md",
+        detail: "Only a managed block is added to Kilo's global AGENTS.md, preserving existing rules.",
+        help: "Keeps Kilo's global AGENTS.md and appends a DevConduit-managed prompt block.",
+        title: "Keep Kilo AGENTS.md and append the current prompt",
+      }
+      : {
+        label: "Replace AGENTS.md",
+        detail: "The current template becomes Kilo's complete global AGENTS.md after preserving the original file.",
+        help: "Replaces Kilo's global AGENTS.md after keeping an exact restorable snapshot.",
+        title: "Replace Kilo AGENTS.md with the current template",
+      };
+  }
   return isAppend
     ? {
       label: "Append to AGENTS.md",
@@ -496,6 +551,7 @@ function getRuntimeCopy(lang: Lang) {
       nativeClaude: "原生 CLAUDE.md 入口",
       nativeZcode: "运行时 launcher 入口",
       nativeGrok: "全局规则入口",
+      nativeKilo: "Kilo 全局指令入口",
       cliRuntime: "Claude CLI runtime",
       cliRuntimeDetail: "在新终端中追加当前 DevConduit 指令",
       cliRuntimeUnavailable: "当前平台只支持 macOS zsh 或 Windows PowerShell。",
@@ -526,6 +582,7 @@ function getRuntimeCopy(lang: Lang) {
       nativeClaude: "Native CLAUDE.md entry",
       nativeZcode: "Runtime launcher entry",
       nativeGrok: "Global rules entry",
+      nativeKilo: "Kilo global instruction entry",
       cliRuntime: "Claude CLI runtime",
       cliRuntimeDetail: "Append the current DevConduit instruction in new terminals",
       cliRuntimeUnavailable: "Only macOS zsh and Windows PowerShell are supported on this platform.",
@@ -649,6 +706,7 @@ type RuntimeDeploymentPanelProps = {
   claudeRuntime?: ClaudeRuntimeState;
   zcodeRuntime?: ZcodeState | null;
   grokRuntime?: GrokState | null;
+  kiloRuntime?: KiloState | null;
   loading: boolean;
   previewLoading: boolean;
   onPreview: () => void;
@@ -664,6 +722,7 @@ function RuntimeDeploymentPanel({
   claudeRuntime,
   zcodeRuntime,
   grokRuntime,
+  kiloRuntime,
   loading,
   previewLoading,
   onPreview,
@@ -681,12 +740,19 @@ function RuntimeDeploymentPanel({
           active: instructionEnabled,
           attention: Boolean(zcodeRuntime?.zcodeApp && !zcodeRuntime.runtimePatchable),
         }
-        : {
+        : engine === "grok"
+          ? {
           title: copy.nativeGrok,
           path: grokRuntime?.grokDir,
           active: instructionEnabled,
           attention: Boolean(grokRuntime?.grokDirExists && !grokRuntime.configTomlExists),
-        };
+          }
+          : {
+            title: copy.nativeKilo,
+            path: kiloRuntime?.agentsPath,
+            active: instructionEnabled,
+            attention: Boolean(kiloRuntime?.manifestExists && !kiloRuntime.agentsMdExists),
+          };
   const nativeTone = native.attention ? "warning" : native.active ? "success" : "neutral";
   const nativeLabel = native.attention ? copy.attention : native.active ? copy.active : copy.inactive;
   const runtimeStatus = claudeRuntime?.status;
@@ -1057,6 +1123,7 @@ export function PromptsPage({
   claudeRuntime,
   zcodeRuntime,
   grokRuntime,
+  kiloRuntime,
   promptBackups,
   promptBackupsOpen,
   promptBackupsLoading,
@@ -1131,12 +1198,27 @@ export function PromptsPage({
   onDeleteGrokPrompt,
   onImportGrokPrompt,
   onSaveGrokPrompt,
+  kiloInstructionEnabled,
+  kiloActiveInstructionTitle,
+  kiloInstructionTemplates,
+  kiloBuiltinPromptStatuses,
+  kiloActiveBuiltinTemplateId,
+  kiloSavedPrompts,
+  kiloManagedSavedPromptId,
+  onEnableKiloBuiltinPrompt,
+  onDisableKiloInstruction,
+  onEnableKiloSavedPrompt,
+  onEditKiloPrompt,
+  onDeleteKiloPrompt,
+  onImportKiloPrompt,
+  onSaveKiloPrompt,
 }: PromptsPageProps) {
   const copy = getCopy(lang);
   const helpId = useId();
   const isClaude = promptEngine === "claude";
   const isZcode = promptEngine === "zcode";
   const isGrok = promptEngine === "grok";
+  const isKilo = promptEngine === "kilo";
   const isCodex = promptEngine === "codex";
   const appendModeCopy = getEngineModeCopy(lang, promptEngine, "append");
   const replaceModeCopy = getEngineModeCopy(lang, promptEngine, "replace");
@@ -1154,20 +1236,22 @@ export function PromptsPage({
   const [runtimePreviewBusy, setRuntimePreviewBusy] = useState(false);
   const [runtimePreviewError, setRuntimePreviewError] = useState("");
   const promptCategories = usePromptCategories(lang);
-  // 当前引擎下的派生值：四引擎共享列表交互，各自保留后端写入语义。
-  const activeTemplates = isGrok ? grokInstructionTemplates : isZcode ? zcodeInstructionTemplates : isClaude ? claudeInstructionTemplates : instructionTemplates;
-  const activeBuiltinStatuses = isGrok ? grokBuiltinPromptStatuses : isZcode ? zcodeBuiltinPromptStatuses : isClaude ? claudeBuiltinPromptStatuses : builtinPromptStatuses;
-  const activeBuiltinId = isGrok
-    ? grokActiveBuiltinTemplateId
+  // All engines share the same list interactions while keeping native backend semantics.
+  const activeTemplates = isKilo ? kiloInstructionTemplates : isGrok ? grokInstructionTemplates : isZcode ? zcodeInstructionTemplates : isClaude ? claudeInstructionTemplates : instructionTemplates;
+  const activeBuiltinStatuses = isKilo ? kiloBuiltinPromptStatuses : isGrok ? grokBuiltinPromptStatuses : isZcode ? zcodeBuiltinPromptStatuses : isClaude ? claudeBuiltinPromptStatuses : builtinPromptStatuses;
+  const activeBuiltinId = isKilo
+    ? kiloActiveBuiltinTemplateId
+    : isGrok
+      ? grokActiveBuiltinTemplateId
     : isZcode
       ? zcodeActiveBuiltinTemplateId
       : isClaude
         ? claudeActiveBuiltinTemplateId
         : activeBuiltinTemplateId;
-  const activeSavedPrompts = isGrok ? grokSavedPrompts : isZcode ? zcodeSavedPrompts : isClaude ? claudeSavedPrompts : savedPrompts;
-  const activeManagedSavedPromptId = isGrok ? grokManagedSavedPromptId : isZcode ? zcodeManagedSavedPromptId : isClaude ? claudeManagedSavedPromptId : managedSavedPromptId;
-  const activeInstructionEnabled = isGrok ? grokInstructionEnabled : isZcode ? zcodeInstructionEnabled : isClaude ? claudeInstructionEnabled : instructionEnabled;
-  const activeInstructionTitleResolved = isGrok ? grokActiveInstructionTitle : isZcode ? zcodeActiveInstructionTitle : isClaude ? claudeActiveInstructionTitle : activeInstructionTitle;
+  const activeSavedPrompts = isKilo ? kiloSavedPrompts : isGrok ? grokSavedPrompts : isZcode ? zcodeSavedPrompts : isClaude ? claudeSavedPrompts : savedPrompts;
+  const activeManagedSavedPromptId = isKilo ? kiloManagedSavedPromptId : isGrok ? grokManagedSavedPromptId : isZcode ? zcodeManagedSavedPromptId : isClaude ? claudeManagedSavedPromptId : managedSavedPromptId;
+  const activeInstructionEnabled = isKilo ? kiloInstructionEnabled : isGrok ? grokInstructionEnabled : isZcode ? zcodeInstructionEnabled : isClaude ? claudeInstructionEnabled : instructionEnabled;
+  const activeInstructionTitleResolved = isKilo ? kiloActiveInstructionTitle : isGrok ? grokActiveInstructionTitle : isZcode ? zcodeActiveInstructionTitle : isClaude ? claudeActiveInstructionTitle : activeInstructionTitle;
   const codexInstructionInactive = isCodex && codexInstructionStatus === "inactive";
   const modePending = Boolean(activeInstructionEnabled && activeInjectionMode && activeInjectionMode !== promptInjectionMode);
   const categoryItems = useMemo<PromptCategoryItem[]>(() => [
@@ -1184,7 +1268,7 @@ export function PromptsPage({
     promptCategories.categoryForPrompt(key) === promptCategories.activeCategoryId;
   const visiblePromptCount = categoryItems.filter((item) => promptIsVisible(item.key)).length;
   const deleteSavedPrompt = async (prompt: SavedPrompt) => {
-    const handler = isGrok ? onDeleteGrokPrompt : isZcode ? onDeleteZcodePrompt : isClaude ? onDeleteClaudePrompt : onDeletePrompt;
+    const handler = isKilo ? onDeleteKiloPrompt : isGrok ? onDeleteGrokPrompt : isZcode ? onDeleteZcodePrompt : isClaude ? onDeleteClaudePrompt : onDeletePrompt;
     await handler(prompt.id);
     promptCategories.forgetPrompt(savedPromptCategoryKey(promptEngine, prompt));
   };
@@ -1200,7 +1284,7 @@ export function PromptsPage({
             loading={loading}
             onInstructionModeChange={onInstructionModeChange}
             onPromptFormFieldChange={onPromptFormFieldChange}
-            onSavePrompt={isGrok ? onSaveGrokPrompt : isZcode ? onSaveZcodePrompt : isClaude ? onSaveClaudePrompt : onSavePrompt}
+            onSavePrompt={isKilo ? onSaveKiloPrompt : isGrok ? onSaveGrokPrompt : isZcode ? onSaveZcodePrompt : isClaude ? onSaveClaudePrompt : onSavePrompt}
           />
         </section>
       </PageTransition>
@@ -1208,15 +1292,15 @@ export function PromptsPage({
   }
 
   const handlePromptFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const handler = isGrok ? onImportGrokPrompt : isZcode ? onImportZcodePrompt : isClaude ? onImportClaudePrompt : onImportPrompt;
+    const handler = isKilo ? onImportKiloPrompt : isGrok ? onImportGrokPrompt : isZcode ? onImportZcodePrompt : isClaude ? onImportClaudePrompt : onImportPrompt;
     void handler(event.currentTarget.files?.[0]);
   };
 
   // 当前引擎下启用/禁用内置模板与自定义提示词的回调。
-  const enableBuiltinHandler = isGrok ? onEnableGrokBuiltinPrompt : isZcode ? onEnableZcodeBuiltinPrompt : isClaude ? onEnableClaudeBuiltinPrompt : onEnableBuiltinPrompt;
-  const disableHandler = isGrok ? onDisableGrokInstruction : isZcode ? onDisableZcodeInstruction : isClaude ? onDisableClaudeInstruction : onDisableInstruction;
-  const enableSavedHandler = isGrok ? onEnableGrokSavedPrompt : isZcode ? onEnableZcodeSavedPrompt : isClaude ? onEnableClaudeSavedPrompt : onEnableSavedPrompt;
-  const editHandler = isGrok ? onEditGrokPrompt : isZcode ? onEditZcodePrompt : isClaude ? onEditClaudePrompt : onEditPrompt;
+  const enableBuiltinHandler = isKilo ? onEnableKiloBuiltinPrompt : isGrok ? onEnableGrokBuiltinPrompt : isZcode ? onEnableZcodeBuiltinPrompt : isClaude ? onEnableClaudeBuiltinPrompt : onEnableBuiltinPrompt;
+  const disableHandler = isKilo ? onDisableKiloInstruction : isGrok ? onDisableGrokInstruction : isZcode ? onDisableZcodeInstruction : isClaude ? onDisableClaudeInstruction : onDisableInstruction;
+  const enableSavedHandler = isKilo ? onEnableKiloSavedPrompt : isGrok ? onEnableGrokSavedPrompt : isZcode ? onEnableZcodeSavedPrompt : isClaude ? onEnableClaudeSavedPrompt : onEnableSavedPrompt;
+  const editHandler = isKilo ? onEditKiloPrompt : isGrok ? onEditGrokPrompt : isZcode ? onEditZcodePrompt : isClaude ? onEditClaudePrompt : onEditPrompt;
   const requestRuntimePreview = async (operation: "install" | "uninstall", apply?: MaybeAsyncAction) => {
     setRuntimePreviewLoading(true);
     setRuntimePreviewError("");
@@ -1341,6 +1425,15 @@ export function PromptsPage({
             >
               {copy.engineGrok}
             </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={promptEngine === "kilo"}
+              className={cx("cx-prompts-engine-button", promptEngine === "kilo" && "cx-prompts-engine-button--active")}
+              onClick={() => onPromptEngineChange("kilo")}
+            >
+              {copy.engineKilo}
+            </button>
           </div>
           <input
             ref={promptImportRef}
@@ -1462,6 +1555,7 @@ export function PromptsPage({
         claudeRuntime={claudeRuntime}
         zcodeRuntime={zcodeRuntime}
         grokRuntime={grokRuntime}
+        kiloRuntime={kiloRuntime}
         loading={loading}
         previewLoading={runtimePreviewLoading}
         onPreview={() => void requestRuntimePreview(activeInstructionEnabled ? "uninstall" : "install")}

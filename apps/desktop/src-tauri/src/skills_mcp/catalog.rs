@@ -1,4 +1,5 @@
 use super::catalog_download::{acquire_mcp_source, AcquiredMcpSource};
+use super::host_install::{apply_mcp_host_install, rollback_mcp_host_install, HostInstallReport};
 use super::tool::install_tool_mcp_config_inner;
 use super::types::{SkillsMcpActionResult, SkillsMcpState};
 use crate::error::{CodexxError, Result};
@@ -17,6 +18,7 @@ const MAX_ENDPOINT_LENGTH: usize = 2048;
 pub(crate) struct McpIntegrationInstallInput {
     pub(crate) integration_id: String,
     pub(crate) source_path: Option<String>,
+    pub(crate) host_path: Option<String>,
     pub(crate) command: Option<String>,
     pub(crate) endpoint: Option<String>,
     pub(crate) mode: Option<String>,
@@ -174,7 +176,7 @@ fn managed_acquisition_settings(
             Ok((mode.to_string(), command))
         }
         "burp-suite-mcp" => {
-            let fallback = if matches!(tool, ToolId::Claude | ToolId::Zcode) {
+            let fallback = if matches!(tool, ToolId::Claude | ToolId::Zcode | ToolId::Kilo) {
                 "direct"
             } else {
                 "proxy"
@@ -466,6 +468,7 @@ pub(crate) fn install_mcp_integration_inner(
     let acquired: Option<AcquiredMcpSource> = if source_mode(&input)? == "managed" {
         let (mode, command) = managed_acquisition_settings(tool, &input)?;
         let source = acquire_mcp_source(input.integration_id.trim(), &mode, &command)?;
+        input.mode = Some(mode);
         input.source_path = source
             .source_path
             .as_ref()
@@ -478,13 +481,36 @@ pub(crate) fn install_mcp_integration_inner(
         None
     };
     let prepared = prepare_integration(tool, &input)?;
-    let state: SkillsMcpState = install_tool_mcp_config_inner(
+    let host_report: Option<HostInstallReport> = acquired
+        .as_ref()
+        .map(|source| {
+            apply_mcp_host_install(
+                input.integration_id.trim(),
+                clean_optional(input.mode.as_deref()).unwrap_or(if cfg!(target_os = "windows") {
+                    "local"
+                } else {
+                    "remote"
+                }),
+                input.host_path.as_deref(),
+                &source.managed_root,
+            )
+        })
+        .transpose()?;
+    let state: SkillsMcpState = match install_tool_mcp_config_inner(
         tool,
         config_dir,
         prepared.id,
         prepared.name,
         prepared.config,
-    )?;
+    ) {
+        Ok(state) => state,
+        Err(error) => {
+            if let Some(report) = host_report.as_ref() {
+                rollback_mcp_host_install(report);
+            }
+            return Err(error);
+        }
+    };
     Ok(SkillsMcpActionResult {
         imported_skills: 0,
         imported_mcp: 1,
@@ -496,7 +522,21 @@ pub(crate) fn install_mcp_integration_inner(
                 prepared.name,
                 source.managed_root.display()
             );
-            if let Some(next_step) = source.next_step {
+            if let Some(report) = host_report.as_ref() {
+                message.push_str("；");
+                message.push_str(&report.plan.message);
+                if report.installed > 0 {
+                    message.push_str(&format!("（{} 个宿主文件）", report.installed));
+                }
+                if let Some(backup) = report.backup_location.as_ref() {
+                    message.push_str(&format!("；宿主文件备份位于 {}", backup.display()));
+                }
+            }
+            if let Some(next_step) = host_report
+                .as_ref()
+                .and_then(|report| report.plan.next_step.clone())
+                .or(source.next_step)
+            {
                 message.push_str("；");
                 message.push_str(&next_step);
             }
@@ -533,6 +573,7 @@ mod tests {
         McpIntegrationInstallInput {
             integration_id: id.to_string(),
             source_path: None,
+            host_path: None,
             command: None,
             endpoint: None,
             mode: None,

@@ -3,7 +3,9 @@ use crate::file_io::read_to_string_if_exists;
 use crate::paths::home_dir;
 use crate::platform;
 use crate::resolve_codex_dir;
-use crate::state::{build_claude_state, build_grok_state, build_state, build_zcode_state};
+use crate::state::{
+    build_claude_state, build_grok_state, build_kilo_state, build_state, build_zcode_state,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::collections::HashSet;
@@ -22,11 +24,18 @@ pub(crate) enum ToolId {
     Grok,
     #[serde(alias = "z-code")]
     Zcode,
+    #[serde(alias = "kilo-code", alias = "kilocode")]
+    Kilo,
 }
 
 impl ToolId {
-    pub(crate) const ALL: [ToolId; 4] =
-        [ToolId::Codex, ToolId::Claude, ToolId::Grok, ToolId::Zcode];
+    pub(crate) const ALL: [ToolId; 5] = [
+        ToolId::Codex,
+        ToolId::Claude,
+        ToolId::Grok,
+        ToolId::Zcode,
+        ToolId::Kilo,
+    ];
 
     pub(crate) fn as_str(self) -> &'static str {
         match self {
@@ -34,6 +43,7 @@ impl ToolId {
             ToolId::Claude => "claude",
             ToolId::Grok => "grok",
             ToolId::Zcode => "zcode",
+            ToolId::Kilo => "kilo",
         }
     }
 
@@ -43,6 +53,7 @@ impl ToolId {
             ToolId::Claude => "Claude Code",
             ToolId::Grok => "Grok Build",
             ToolId::Zcode => "ZCode",
+            ToolId::Kilo => "Kilo Code",
         }
     }
 
@@ -52,6 +63,7 @@ impl ToolId {
             ToolId::Claude => "claude",
             ToolId::Grok => "grokbuild",
             ToolId::Zcode => "zcode",
+            ToolId::Kilo => "kilo",
         }
     }
 
@@ -61,6 +73,7 @@ impl ToolId {
             "claude" | "claude-code" | "claudecode" => Ok(ToolId::Claude),
             "grok" | "grok-build" | "grokbuild" => Ok(ToolId::Grok),
             "zcode" | "z-code" => Ok(ToolId::Zcode),
+            "kilo" | "kilo-code" | "kilocode" => Ok(ToolId::Kilo),
             other => Err(CodexxError::Config(format!("不支持的工具: {other}"))),
         }
     }
@@ -71,6 +84,7 @@ impl ToolId {
             ToolId::Claude => Ok(home_dir()?.join(".claude")),
             ToolId::Grok => Ok(home_dir()?.join(".grok")),
             ToolId::Zcode => Ok(home_dir()?.join(".zcode")),
+            ToolId::Kilo => Ok(home_dir()?.join(".config").join("kilo")),
         }
     }
 
@@ -80,10 +94,14 @@ impl ToolId {
             ToolId::Codex | ToolId::Grok => root.join("config.toml"),
             ToolId::Claude => root.join("settings.json"),
             ToolId::Zcode => root.join("cli").join("config.json"),
+            ToolId::Kilo => root.join("kilo.jsonc"),
         })
     }
 
     pub(crate) fn skills_dir(self, codex_override: Option<String>) -> Result<PathBuf> {
+        if self == ToolId::Kilo {
+            return Ok(home_dir()?.join(".kilo").join("skills"));
+        }
         Ok(self.home_dir(codex_override)?.join("skills"))
     }
 }
@@ -110,8 +128,8 @@ pub(crate) struct ToolCapabilities {
 impl ToolCapabilities {
     fn for_tool(tool: ToolId) -> Self {
         Self {
-            providers: true,
-            sessions: true,
+            providers: tool != ToolId::Kilo,
+            sessions: tool != ToolId::Kilo,
             session_sync: tool == ToolId::Codex,
             session_delete: tool == ToolId::Codex,
             skills: true,
@@ -297,6 +315,7 @@ pub(crate) fn redacted_config_text(path: &Path, text: &str) -> String {
         .as_deref()
     {
         Some("json") => redacted_json_text(text),
+        Some("jsonc") => redacted_jsonc_text(text),
         Some("toml") => redacted_toml_text(text),
         Some("md") | Some("markdown") | Some("txt") => truncate_preview(text),
         Some("yaml") | Some("yml") | Some("ini") | Some("env") | Some("conf") => {
@@ -304,6 +323,25 @@ pub(crate) fn redacted_config_text(path: &Path, text: &str) -> String {
         }
         _ => String::new(),
     }
+}
+
+fn parse_jsonc_value(text: &str) -> Option<JsonValue> {
+    if text.trim().is_empty() {
+        return Some(JsonValue::Object(Default::default()));
+    }
+    jsonc_parser::cst::CstRootNode::parse(text, &Default::default())
+        .ok()?
+        .to_serde_value()
+}
+
+fn redacted_jsonc_text(text: &str) -> String {
+    let Some(mut value) = parse_jsonc_value(text) else {
+        return "// Preview hidden because this JSONC is invalid.\n".to_string();
+    };
+    redact_json_value(&mut value);
+    serde_json::to_string_pretty(&value)
+        .map(|value| format!("{value}\n"))
+        .unwrap_or_default()
 }
 
 /// 预览文本上限，避免把超大文件整个塞进 IPC 负载。
@@ -331,7 +369,11 @@ fn redacted_line_text(text: &str) -> String {
             if key.is_empty() || !is_sensitive_key(key) {
                 return line.to_string();
             }
-            format!("{}{} {REDACTED_VALUE}", &line[..separator], &line[separator..separator + 1])
+            format!(
+                "{}{} {REDACTED_VALUE}",
+                &line[..separator],
+                &line[separator..separator + 1]
+            )
         })
         .collect::<Vec<_>>()
         .join("\n")
@@ -414,6 +456,20 @@ fn grok_model_provider(path: &Path) -> (Option<String>, Option<String>) {
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(ToString::to_string)
+    });
+    (model, provider)
+}
+
+fn kilo_model_provider(path: &Path) -> (Option<String>, Option<String>) {
+    let text = read_to_string_if_exists(path).unwrap_or_default();
+    let Some(value) = parse_jsonc_value(&text) else {
+        return (None, None);
+    };
+    let model = json_string_at(&value, &["/model", "/small_model"]);
+    let provider = model.as_deref().and_then(|model| {
+        model
+            .split_once('/')
+            .map(|(provider, _)| provider.to_string())
     });
     (model, provider)
 }
@@ -504,6 +560,9 @@ fn tool_version(tool: ToolId) -> Option<String> {
                 .ok()
                 .map(|_| "installed".to_string())
         }),
+        ToolId::Kilo => command_version(&generic_command_candidates(&[
+            "kilo", "kilo.exe", "kilo.cmd",
+        ])),
     }
 }
 
@@ -564,9 +623,8 @@ const CONFIG_SCAN_SKIP_DIRS: &[&str] = &[
 ];
 
 /// 会被收录进配置列表的扩展名。
-const CONFIG_SCAN_EXTENSIONS: &[&str] = &[
-    "json", "toml", "yaml", "yml", "md", "ini", "conf", "env",
-];
+const CONFIG_SCAN_EXTENSIONS: &[&str] =
+    &["json", "toml", "yaml", "yml", "md", "ini", "conf", "env"];
 
 /// 结构化存储：列出但不做文本预览（`read_to_string` 会在二进制上直接失败）。
 const CONFIG_SCAN_BINARY_EXTENSIONS: &[&str] = &["sqlite", "sqlite3", "db"];
@@ -652,9 +710,16 @@ fn scan_rank(relative: &str) -> u8 {
     ) {
         return 0;
     }
-    if ["provider", "model", "auth", "account", "credential", "channel"]
-        .iter()
-        .any(|needle| name.contains(needle))
+    if [
+        "provider",
+        "model",
+        "auth",
+        "account",
+        "credential",
+        "channel",
+    ]
+    .iter()
+    .any(|needle| name.contains(needle))
     {
         return 1;
     }
@@ -800,7 +865,14 @@ fn zcode_config_files(tool_home: &Path, home: &Path) -> Result<Vec<ToolConfigFil
 
     let managed_dir = home.join(crate::constants::ZCODE_KEYSMITH_DIRNAME);
     if managed_dir.is_dir() {
-        scan_config_dir(&managed_dir, &managed_dir, "keysmith", false, 1, &mut scanned);
+        scan_config_dir(
+            &managed_dir,
+            &managed_dir,
+            "keysmith",
+            false,
+            1,
+            &mut scanned,
+        );
     }
 
     // 去重（同一路径可能被多个根目录覆盖）后按权重与标签排序。
@@ -933,6 +1005,26 @@ pub(crate) fn get_tool_config_inner(
                  以及 keysmith/ 前缀的 DevConduit 注入产物（诊断用，不是 ZCode 主配置）。凭据均已脱敏。"
             ))
         }
+        ToolId::Kilo => {
+            files.push(config_file(
+                "config",
+                "kilo.jsonc",
+                tool_home.join("kilo.jsonc"),
+                "jsonc",
+                true,
+            )?);
+            files.push(config_file(
+                "instructions",
+                "AGENTS.md",
+                tool_home.join("AGENTS.md"),
+                "markdown",
+                true,
+            )?);
+            Some(
+                "Kilo Code 的全局配置位于 ~/.config/kilo，全局 Skills 位于 ~/.kilo/skills；预览中的凭据已脱敏。"
+                    .to_string(),
+            )
+        }
     };
     let primary_file_id = files
         .first()
@@ -1017,6 +1109,22 @@ fn status_for_tool(tool: ToolId, codex_override: Option<String>) -> Result<ToolS
                 ),
             )
         }
+        ToolId::Kilo => {
+            let state = build_kilo_state()?;
+            let instruction = PathBuf::from(&state.agents_path);
+            (
+                None,
+                instruction.clone(),
+                instruction.clone(),
+                None,
+                state.instruction_enabled,
+                instruction.is_file(),
+                Some(
+                    "Kilo Code 使用 ~/.config/kilo/AGENTS.md 作为全局提示词，修改后可在 Kilo 中执行 /reload。"
+                        .to_string(),
+                ),
+            )
+        }
     };
     let (model, provider, provider_id) = match tool {
         ToolId::Codex => {
@@ -1039,6 +1147,10 @@ fn status_for_tool(tool: ToolId, codex_override: Option<String>) -> Result<ToolS
             ),
             None => (None, None, None),
         },
+        ToolId::Kilo => {
+            let (model, provider) = kilo_model_provider(&config);
+            (model, provider, None)
+        }
     };
     let version = tool_version(tool);
     let installed = root.is_dir()
@@ -1055,6 +1167,7 @@ fn status_for_tool(tool: ToolId, codex_override: Option<String>) -> Result<ToolS
         config_format: match tool {
             ToolId::Codex | ToolId::Grok => "toml",
             ToolId::Claude | ToolId::Zcode => "json",
+            ToolId::Kilo => "jsonc",
         }
         .to_string(),
         config_exists: config.is_file(),
@@ -1115,6 +1228,10 @@ fn fallback_status(
             root.join("AGENTS.md"),
             Some(home.join(".zcode-keysmith").join("config.json")),
         ),
+        ToolId::Kilo => {
+            let instruction = root.join("AGENTS.md");
+            (None, instruction.clone(), instruction, None)
+        }
     };
     let version = tool_version(tool);
     let installed = root.is_dir()
@@ -1132,6 +1249,7 @@ fn fallback_status(
         config_format: match tool {
             ToolId::Codex | ToolId::Grok => "toml",
             ToolId::Claude | ToolId::Zcode => "json",
+            ToolId::Kilo => "jsonc",
         }
         .to_string(),
         config_exists: config.is_file(),
@@ -1173,6 +1291,7 @@ mod tests {
         assert_eq!(ToolId::parse("Claude-Code").unwrap(), ToolId::Claude);
         assert_eq!(ToolId::parse("grokbuild").unwrap(), ToolId::Grok);
         assert_eq!(ToolId::parse("z-code").unwrap(), ToolId::Zcode);
+        assert_eq!(ToolId::parse("kilo-code").unwrap(), ToolId::Kilo);
     }
 
     #[test]

@@ -15,13 +15,14 @@ use std::process::Command;
 
 mod app_db;
 mod backups;
-mod claude_runtime;
 mod ccswitch;
+mod claude_runtime;
 mod config_migration;
 mod constants;
 mod error;
 mod file_io;
 mod grok;
+mod kilo;
 mod paths;
 mod platform;
 mod prompt_backups;
@@ -56,7 +57,8 @@ use paths::app_home;
 use paths::home_dir;
 use prompt_backups::{
     create_claude_prompt_backup, create_claude_runtime_backup, create_codex_prompt_backup,
-    create_grok_prompt_backup, create_zcode_prompt_backup, list_prompt_backups as prompt_backup_entries,
+    create_grok_prompt_backup, create_kilo_prompt_backup, create_zcode_prompt_backup,
+    list_prompt_backups as prompt_backup_entries,
     restore_prompt_backup as restore_prompt_backup_snapshot, PromptBackupEntry,
 };
 use prompts::{
@@ -68,7 +70,7 @@ use prompts::{
     refresh_builtin_prompts_with_active, remember_current_instruction_prompt,
     resolve_instruction_path, save_prompt_inner, uninstall_managed_agents_block,
     uninstall_managed_claude_block, BuiltinPromptStatus, PromptInjectionMode, SavedPrompt,
-    ENGINE_CLAUDE, ENGINE_CODEX, ENGINE_GROK, ENGINE_ZCODE,
+    ENGINE_CLAUDE, ENGINE_CODEX, ENGINE_GROK, ENGINE_KILO, ENGINE_ZCODE,
 };
 #[cfg(test)]
 use prompts::{
@@ -112,11 +114,12 @@ use sessions::{
 };
 use skills_mcp::{
     build_skills_mcp_state_inner, build_tool_state_inner, check_skill_updates_inner,
-    check_tool_skill_updates_inner, import_existing_skills_mcp_inner, import_tool_resources_inner,
-    install_mcp_integration_inner, install_skill_zip_inner, install_tool_skill_zip_inner,
-    preview_existing_skills_mcp_inner, preview_tool_import_inner, toggle_codex_mcp_inner,
-    toggle_codex_skill_inner, toggle_tool_mcp_inner, toggle_tool_skill_inner,
-    McpIntegrationInstallInput, SkillsMcpActionResult, SkillsMcpImportPreview, SkillsMcpState,
+    check_tool_skill_updates_inner, detect_mcp_host_inner, import_existing_skills_mcp_inner,
+    import_tool_resources_inner, install_mcp_integration_inner, install_skill_zip_inner,
+    install_tool_skill_zip_inner, preview_existing_skills_mcp_inner, preview_tool_import_inner,
+    restore_latest_mcp_host_install_inner, toggle_codex_mcp_inner, toggle_codex_skill_inner,
+    toggle_tool_mcp_inner, toggle_tool_skill_inner, McpHostInstallPlan, McpIntegrationInstallInput,
+    SkillsMcpActionResult, SkillsMcpImportPreview, SkillsMcpState,
 };
 #[cfg(test)]
 use skills_mcp::{
@@ -132,9 +135,10 @@ use skins::{
 #[cfg(test)]
 use state::active_saved_provider_id_from_config;
 use state::{
-    auth_has_material, build_claude_state, build_grok_state, build_state, build_zcode_state,
-    ActionResult, ClaudeActionResult, ClaudeState, CodexState, GrokActionResult, GrokState,
-    ZcodeActionResult, ZcodeDoctor, ZcodeState, ZcodeVerify,
+    auth_has_material, build_claude_state, build_grok_state, build_kilo_state, build_state,
+    build_zcode_state, ActionResult, ClaudeActionResult, ClaudeState, CodexState, GrokActionResult,
+    GrokState, KiloActionResult, KiloState, ZcodeActionResult, ZcodeDoctor, ZcodeState,
+    ZcodeVerify,
 };
 use toml_edit::{value, DocumentMut};
 pub(crate) use toml_utils::string_value;
@@ -549,6 +553,28 @@ async fn install_mcp_integration(
     })
     .await
     .map_err(|e| CodexxError::Config(format!("配置 MCP 集成失败: {e}")))?
+}
+
+#[tauri::command]
+async fn detect_mcp_host(
+    integration_id: String,
+    mode: Option<String>,
+    host_path: Option<String>,
+) -> Result<McpHostInstallPlan> {
+    tauri::async_runtime::spawn_blocking(move || {
+        detect_mcp_host_inner(integration_id, mode, host_path)
+    })
+    .await
+    .map_err(|e| CodexxError::Config(format!("检测 MCP 宿主软件失败: {e}")))?
+}
+
+#[tauri::command]
+async fn restore_mcp_host_install(integration_id: String) -> Result<String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        restore_latest_mcp_host_install_inner(integration_id)
+    })
+    .await
+    .map_err(|e| CodexxError::Config(format!("恢复 MCP 宿主文件失败: {e}")))?
 }
 
 #[tauri::command]
@@ -1638,8 +1664,7 @@ fn install_claude_runtime_inner() -> Result<ClaudeActionResult> {
     let state = build_claude_state()?;
     Ok(ClaudeActionResult {
         ok: true,
-        message: "已安装 Claude CLI runtime；新开的终端会自动追加当前 DevConduit 指令"
-            .to_string(),
+        message: "已安装 Claude CLI runtime；新开的终端会自动追加当前 DevConduit 指令".to_string(),
         backup_id,
         state,
     })
@@ -2119,6 +2144,191 @@ async fn restore_grok_hooks_command() -> Result<GrokActionResult> {
     .map_err(|e| CodexxError::Config(format!("恢复 Grok hooks 失败: {e}")))?
 }
 
+// ─── Kilo 指令管理命令 ────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_kilo_state() -> Result<KiloState> {
+    tauri::async_runtime::spawn_blocking(build_kilo_state)
+        .await
+        .map_err(|error| CodexxError::Config(format!("Kilo 状态查询失败: {error}")))?
+}
+
+#[tauri::command]
+async fn list_kilo_prompts() -> Result<Vec<SavedPrompt>> {
+    tauri::async_runtime::spawn_blocking(move || list_saved_prompts_inner(ENGINE_KILO))
+        .await
+        .map_err(|error| CodexxError::Config(format!("Kilo 提示词列表失败: {error}")))?
+}
+
+#[tauri::command]
+async fn get_kilo_builtin_prompt_status() -> Result<Vec<BuiltinPromptStatus>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = build_kilo_state()?;
+        let active_key = state.instruction_template_key.as_deref();
+        Ok(vec![BuiltinPromptStatus {
+            id: KILO_BUILTIN_ID.to_string(),
+            filename: KILO_BUILTIN_FILENAME.to_string(),
+            title: KILO_BUILTIN_TITLE.to_string(),
+            subtitle: KILO_BUILTIN_SUBTITLE.to_string(),
+            badge: KILO_BUILTIN_BADGE.to_string(),
+            source_url: String::new(),
+            cached: false,
+            updated: false,
+            content_source: "打包内置".to_string(),
+            sync_issue: None,
+            checked_at: None,
+            message: if active_key == Some("builtin:kilo-keysmith") {
+                "已启用".to_string()
+            } else {
+                "未启用".to_string()
+            },
+        }])
+    })
+    .await
+    .map_err(|error| CodexxError::Config(format!("Kilo 内置模板状态失败: {error}")))?
+}
+
+fn save_kilo_prompt_command_inner(prompt: SavedPrompt) -> Result<SavedPrompt> {
+    let filename = normalize_prompt_filename(&prompt.filename, KILO_BUILTIN_FILENAME);
+    save_prompt_inner(
+        SavedPrompt {
+            id: prompt.id,
+            title: prompt.title,
+            filename,
+            content: prompt.content,
+        },
+        ENGINE_KILO,
+    )
+}
+
+#[tauri::command]
+async fn save_kilo_prompt(prompt: SavedPrompt) -> Result<SavedPrompt> {
+    tauri::async_runtime::spawn_blocking(move || save_kilo_prompt_command_inner(prompt))
+        .await
+        .map_err(|error| CodexxError::Config(format!("保存 Kilo 提示词失败: {error}")))?
+}
+
+#[tauri::command]
+async fn delete_kilo_prompt(id: String) -> Result<()> {
+    tauri::async_runtime::spawn_blocking(move || delete_prompt_inner(id.trim(), ENGINE_KILO))
+        .await
+        .map_err(|error| CodexxError::Config(format!("删除 Kilo 提示词失败: {error}")))?
+}
+
+fn install_kilo_instruction_inner(
+    template_id: &str,
+    injection_mode: Option<String>,
+) -> Result<KiloActionResult> {
+    let resolved_id = if template_id.trim().is_empty() {
+        KILO_BUILTIN_ID
+    } else {
+        template_id.trim()
+    };
+    let (_filename, _relative, content, content_source) = kilo::kilo_builtin_content(resolved_id)?;
+    let mode = PromptInjectionMode::parse(injection_mode.as_deref())?;
+    let backup_id = create_kilo_prompt_backup("install-kilo-instruct")?;
+    kilo::install_kilo(
+        &content,
+        mode,
+        &format!("builtin:{resolved_id}"),
+        KILO_BUILTIN_TITLE,
+    )?;
+    let state = build_kilo_state()?;
+    Ok(KiloActionResult {
+        ok: true,
+        message: format!(
+            "已用{}模式安装 Kilo AGENTS.md（来源：{content_source}）",
+            if mode == PromptInjectionMode::Append {
+                "保留"
+            } else {
+                "替换"
+            }
+        ),
+        backup_id,
+        state,
+    })
+}
+
+#[tauri::command]
+async fn install_kilo_instruction(
+    template_id: Option<String>,
+    injection_mode: Option<String>,
+) -> Result<KiloActionResult> {
+    tauri::async_runtime::spawn_blocking(move || {
+        install_kilo_instruction_inner(
+            template_id.as_deref().unwrap_or(KILO_BUILTIN_ID),
+            injection_mode,
+        )
+    })
+    .await
+    .map_err(|error| CodexxError::Config(format!("安装 Kilo 指令失败: {error}")))?
+}
+
+fn install_kilo_saved_prompt_inner(
+    id: String,
+    injection_mode: Option<String>,
+) -> Result<KiloActionResult> {
+    let prompt = get_saved_prompt_inner(id.trim(), ENGINE_KILO)?;
+    let mode = PromptInjectionMode::parse(injection_mode.as_deref())?;
+    let backup_id = create_kilo_prompt_backup("install-kilo-custom-prompt")?;
+    kilo::install_kilo(
+        &prompt.content,
+        mode,
+        &format!("saved:{}", prompt.id),
+        &prompt.title,
+    )?;
+    let state = build_kilo_state()?;
+    Ok(KiloActionResult {
+        ok: true,
+        message: format!(
+            "已用{}模式安装 Kilo AGENTS.md：{}",
+            if mode == PromptInjectionMode::Append {
+                "保留"
+            } else {
+                "替换"
+            },
+            prompt.title
+        ),
+        backup_id,
+        state,
+    })
+}
+
+#[tauri::command]
+async fn install_kilo_saved_prompt(
+    id: String,
+    injection_mode: Option<String>,
+) -> Result<KiloActionResult> {
+    tauri::async_runtime::spawn_blocking(move || {
+        install_kilo_saved_prompt_inner(id, injection_mode)
+    })
+    .await
+    .map_err(|error| CodexxError::Config(format!("安装 Kilo 自定义提示词失败: {error}")))?
+}
+
+fn uninstall_kilo_instruction_inner() -> Result<KiloActionResult> {
+    let backup_id = create_kilo_prompt_backup("uninstall-kilo-instruct")?;
+    let removed = kilo::uninstall_kilo()?;
+    let state = build_kilo_state()?;
+    Ok(KiloActionResult {
+        ok: true,
+        message: if removed {
+            "已卸载 Kilo 受管入口并恢复原始 AGENTS.md".to_string()
+        } else {
+            "当前没有安装 Kilo 受管入口".to_string()
+        },
+        backup_id,
+        state,
+    })
+}
+
+#[tauri::command]
+async fn uninstall_kilo_instruction() -> Result<KiloActionResult> {
+    tauri::async_runtime::spawn_blocking(uninstall_kilo_instruction_inner)
+        .await
+        .map_err(|error| CodexxError::Config(format!("卸载 Kilo 指令失败: {error}")))?
+}
+
 #[tauri::command]
 fn open_url(url: String) -> std::result::Result<(), String> {
     let trimmed = url.trim().to_string();
@@ -2173,6 +2383,8 @@ pub fn run() {
             toggle_tool_mcp,
             install_tool_skill_zip,
             install_mcp_integration,
+            detect_mcp_host,
+            restore_mcp_host_install,
             check_tool_skill_updates,
             preview_existing_skills_mcp,
             import_existing_skills_mcp,
@@ -2252,6 +2464,14 @@ pub fn run() {
             install_grok_saved_prompt,
             uninstall_grok_instruction,
             restore_grok_hooks_command,
+            get_kilo_state,
+            list_kilo_prompts,
+            get_kilo_builtin_prompt_status,
+            save_kilo_prompt,
+            delete_kilo_prompt,
+            install_kilo_instruction,
+            install_kilo_saved_prompt,
+            uninstall_kilo_instruction,
             open_url,
         ])
         .run(tauri::generate_context!())

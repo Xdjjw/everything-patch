@@ -20,6 +20,7 @@ import { ToolTabs, toolLabel } from "../components/ToolTabs";
 import { Button, ModalShell, StatusBadge, Toggle, cx } from "../components/ui";
 import type {
   Lang,
+  McpHostInstallPlan,
   ManagedMcpServer,
   ManagedSkill,
   McpIntegrationInstallInput,
@@ -57,6 +58,12 @@ export type SkillsMcpPageProps = {
   onToggleSkill: (id: string, enabled: boolean) => void | Promise<void>;
   onToggleMcp: (id: string, enabled: boolean) => void | Promise<void>;
   onInstallMcpIntegration: (input: McpIntegrationInstallInput) => Promise<McpIntegrationInstallResult>;
+  onDetectMcpHost: (
+    integrationId: McpIntegrationInstallInput["integrationId"],
+    mode: McpIntegrationInstallInput["mode"],
+    hostPath?: string | null,
+  ) => Promise<McpHostInstallPlan>;
+  onRestoreMcpHost: (integrationId: McpIntegrationInstallInput["integrationId"]) => Promise<string>;
   onOpenExternalUrl: (url: string) => void;
 };
 
@@ -292,6 +299,8 @@ export function SkillsMcpPage({
   onToggleSkill,
   onToggleMcp,
   onInstallMcpIntegration,
+  onDetectMcpHost,
+  onRestoreMcpHost,
   onOpenExternalUrl,
 }: SkillsMcpPageProps) {
   const copy = getCopy(lang, toolLabel(activeTool));
@@ -514,6 +523,8 @@ export function SkillsMcpPage({
         busy={mcpInstallBusy}
         onClose={() => setMcpCatalogOpen(false)}
         onInstall={onInstallMcpIntegration}
+        onDetectHost={onDetectMcpHost}
+        onRestoreHost={onRestoreMcpHost}
         onOpenExternalUrl={onOpenExternalUrl}
       />
     </section>

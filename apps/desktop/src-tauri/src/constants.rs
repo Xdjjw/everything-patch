@@ -125,3 +125,19 @@ pub(crate) const GROK_BUILTIN_BADGE: &str = "默认";
 pub(crate) const GROK_BUILTIN_FILENAME: &str = "grok-unrestricted.md";
 pub(crate) const GROK_BUILTIN_CONTENT: &str =
     include_str!("../../../../examples/grok-unrestricted.md");
+
+// Kilo Code 全局指令位于 ~/.config/kilo/AGENTS.md。
+pub(crate) const KILO_AGENTS_FILENAME: &str = "AGENTS.md";
+pub(crate) const KILO_MANIFEST_FILENAME: &str = ".devconduit-kilo-manifest.json";
+pub(crate) const KILO_ORIGINAL_AGENTS_FILENAME: &str = ".devconduit-kilo-original-agents.md";
+pub(crate) const KILO_PROMPT_BEGIN: &str = "<!-- DEVCONDUIT:KILO:BEGIN -->";
+pub(crate) const KILO_PROMPT_END: &str = "<!-- DEVCONDUIT:KILO:END -->";
+pub(crate) const KILO_PROMPT_TEMPLATE_PREFIX: &str = "<!-- DEVCONDUIT:KILO:TEMPLATE:";
+pub(crate) const KILO_PROMPT_MODE_PREFIX: &str = "<!-- DEVCONDUIT:KILO:MODE:";
+pub(crate) const KILO_BUILTIN_ID: &str = "kilo-keysmith";
+pub(crate) const KILO_BUILTIN_TITLE: &str = "Kilo Keysmith 默认 Prompt";
+pub(crate) const KILO_BUILTIN_SUBTITLE: &str = "适配 Kilo 全局 AGENTS.md，离线内置";
+pub(crate) const KILO_BUILTIN_BADGE: &str = "默认";
+pub(crate) const KILO_BUILTIN_FILENAME: &str = "kilo-keysmith.md";
+pub(crate) const KILO_BUILTIN_CONTENT: &str =
+    include_str!("../../../../examples/codex-keysmith.md");

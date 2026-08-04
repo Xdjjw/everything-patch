@@ -568,7 +568,7 @@ pub(crate) fn import_ccswitch_providers_inner(
         let provider = match tool {
             ToolId::Claude => ccswitch_claude_provider(&row),
             ToolId::Grok => ccswitch_grok_provider(&row),
-            ToolId::Codex | ToolId::Zcode => None,
+            ToolId::Codex | ToolId::Zcode | ToolId::Kilo => None,
         };
         let Some(provider) = provider else {
             skipped += 1;

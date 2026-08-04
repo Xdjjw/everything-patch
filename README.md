@@ -8,7 +8,7 @@
 
   <h1>DevConduit</h1>
 
-  <p><strong>Codex、Claude Code、Grok Build 与 ZCode 的本地配置与工作流控制台</strong></p>
+  <p><strong>Codex、Claude Code、Grok Build、ZCode 与 Kilo Code 的本地配置与工作流控制台</strong></p>
 
   <p>
     <a href="https://github.com/Xdjjw/everything-patch/actions/workflows/main.yml"><img src="https://github.com/Xdjjw/everything-patch/actions/workflows/main.yml/badge.svg" alt="Build Package" /></a>
@@ -22,7 +22,7 @@
 
 DevConduit 是一个本地桌面工具，用于集中管理多种 AI 编程工具的指令、Provider、配置文件、Skills 与 MCP。它直接对接你已经安装在本机的工具和配置目录，帮助你看清当前状态，并在确认后完成可追溯的配置写入。
 
-它不是模型服务或账号服务。MCP 目录可在你明确确认后下载固定版本的上游文件、校验 SHA-256、准备隔离依赖环境并写入配置；也可切换为手动选择文件。DevConduit 不会启动外部工具，也不会静默启用其中的插件或脚本。
+它不是模型服务或账号服务。MCP 目录可在你明确确认后下载固定版本的上游文件、校验 SHA-256、准备隔离依赖环境并写入配置；Windows 本地模式还会检测 Cheat Engine、x64dbg/x32dbg 的安装目录，备份后安装桥接文件。也可随时切换为手动选择文件。DevConduit 不会在应用启动时自动改写任何工具配置。
 
 项目此前使用过 Codex-X 和 Everything Patch。仓库中仍可见的 `codexx`、`codex-x`、`everything-patch` 和旧数据目录仅用于兼容已有配置；产品名称与后续发布均以 **DevConduit** 为准。
 
@@ -34,6 +34,7 @@ DevConduit 是一个本地桌面工具，用于集中管理多种 AI 编程工�
 | Claude Code | `CLAUDE.md`、设置与 Provider | 支持 | Burp MCP 的 SSE 直连 |
 | Grok Build | `AGENTS.md`、TOML 配置与 Provider | 支持 | Burp MCP 的 stdio 代理配置 |
 | ZCode | system role、JSON 配置与 Provider | 支持 | Burp MCP 的 SSE 直连 |
+| [Kilo Code](https://kilo.ai/) | 全局 `AGENTS.md`、JSONC 配置 | 支持 | 原生 JSONC MCP、全局 Skills 与 `/reload` 工作流 |
 
 功能会根据本机实际安装状态显示。会话同步、检查和删除只适用于 Codex；皮肤中心也只面向 Codex。
 
@@ -42,15 +43,15 @@ DevConduit 是一个本地桌面工具，用于集中管理多种 AI 编程工�
 ### 指令与提示词
 
 - 管理内置与自定义 Markdown 指令，支持分类、导入、编辑、启用和禁用。
-- Codex、Claude Code 与 ZCode 的默认模板分别同步自对应 Keysmith 项目并离线内置；启用仍需用户预览确认，应用启动不会自动写入工具配置。
+- Codex、Claude Code 与 ZCode 的默认模板分别同步自对应 Keysmith 项目并离线内置；Kilo 也提供适配其全局 `AGENTS.md` 的离线默认模板。启用仍需用户预览确认，应用启动不会自动写入工具配置。
 - 在“保留原提示词”和“替换原提示词”之间切换，避免覆盖不属于 DevConduit 管理的内容。
-- 写入前创建备份，便于检查和恢复。
+- 写入前创建备份，便于检查和恢复；Kilo 首次安装会保留原始 `AGENTS.md` 的固定快照，卸载时精确恢复。
 
 ### Provider 与配置
 
 - 在一个界面中查看、编辑、测试和切换 Provider。
 - 管理 Codex 的 `config.toml` 与 `auth.json`，并支持从 cc-switch 导入已有 Provider。
-- 按工具读取对应的 TOML 或 JSON 配置，预览时对敏感信息进行处理。
+- 按工具读取对应的 TOML、JSON 或 JSONC 配置，预览时对敏感信息进行处理并保留 Kilo JSONC 注释。
 
 ### Codex 会话管理
 
@@ -77,17 +78,17 @@ DevConduit 是一个本地桌面工具，用于集中管理多种 AI 编程工�
 | 集成 | 本地条件 | Windows | macOS |
 | --- | --- | --- | --- |
 | [IDA Pro MCP](https://github.com/mrexodia/ida-pro-mcp) | IDA Pro 8.3+、Python 3.11+、`uv`，且已激活 idalib | 自动准备并本地运行 | 自动准备并本地运行 |
-| [Cheat Engine MCP](https://github.com/miscusi-peek/cheatengine-mcp-bridge) | Cheat Engine 与 Python；Lua 桥需在 CE 内执行 | Named Pipe 本地模式 | 远程 Windows TCP 桥接 |
-| [x64dbg MCP](https://github.com/Wasdubya/x64dbgMCP) | x64dbg/x32dbg 与 Python；下载后的插件需装入调试器 | 本地模式 | 远程 Windows HTTP 桥接 |
+| [Cheat Engine MCP](https://github.com/miscusi-peek/cheatengine-mcp-bridge) | Cheat Engine 与 Python | 自动安装 Lua 桥的 Named Pipe 本地模式 | 远程 Windows TCP 桥接 |
+| [x64dbg MCP](https://github.com/Wasdubya/x64dbgMCP) | x64dbg/x32dbg 与 Python | 自动安装对应 32/64 位插件 | 远程 Windows HTTP 桥接 |
 | [Burp Suite MCP](https://github.com/PortSwigger/mcp-server) | Burp Suite；stdio 代理模式还需要 Java | 依目标工具选择 SSE 或代理 | 依目标工具选择 SSE 或代理 |
 
 接入规则：
 
 - 每次自动获取都先校验固定 SHA-256；缓存不匹配时会重新下载，校验失败不会写入工具配置。固定来源与许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 - **IDA Pro MCP** 首次自动获取会执行 `uv sync --locked`；之后使用 `uv run --offline --no-sync`，避免运行时自行同步依赖。
-- **Cheat Engine 与 x64dbg** 的本地模式仅适用于 Windows；在 macOS 上使用时，连接到你自己维护的远程 Windows 桥接端。
-- **Burp Suite MCP** 的传统 SSE 直连仅用于 Claude Code 和 ZCode。Codex 与 Grok Build 使用 Burp 扩展提供的官方 `mcp-proxy-all.jar` 作为 stdio 代理，以避免传输协议不兼容。
-- 自动获取不会替你激活 IDA 许可证、在 Cheat Engine 中执行 Lua、把插件复制进 x64dbg/x32dbg，或在 Burp 中启用扩展；完成提示会给出对应文件的准确路径。任何写入失败都会显示在弹窗内并恢复原工具配置。
+- **Cheat Engine 与 x64dbg** 的本地模式仅适用于 Windows。DevConduit 会自动搜索常见安装位置，也可由你指定便携版目录；安装前创建宿主文件备份，恢复入口可还原最近一次安装，且不会覆盖安装后被你另行修改的插件。在 macOS 上使用时，连接到你自己维护的远程 Windows 桥接端，本机无法越过网络替远程主机写文件。
+- **Burp Suite MCP** 的传统 SSE 直连用于 Claude Code、ZCode 和 Kilo Code。Codex 与 Grok Build 使用 Burp 扩展提供的官方 `mcp-proxy-all.jar` 作为 stdio 代理，以避免传输协议不兼容。
+- 第三方软件自身仍有两项无法由外部应用可靠代办：IDA 首次 idalib 激活，以及 Burp 首次在 Extensions 中启用官方扩展。其余下载、校验、依赖准备、目标配置和 Windows CE/x64dbg 文件安装均在确认后自动完成。任何写入失败都会显示在弹窗内，并恢复原工具配置与本次宿主安装。
 
 请只连接自己信任的 MCP 服务和远程桥接地址。对于 HTTP 桥接，建议始终限制在受信任网络或 `127.0.0.1`。
 

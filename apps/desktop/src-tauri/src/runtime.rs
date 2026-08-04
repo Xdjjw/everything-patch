@@ -35,6 +35,7 @@ fn validate_engine(engine: &str) -> Result<&str> {
         "claude" => Ok("claude"),
         "zcode" => Ok("zcode"),
         "grok" => Ok("grok"),
+        "kilo" => Ok("kilo"),
         _ => Err(CodexxError::Config(format!("未知的运行时引擎: {engine}"))),
     }
 }
@@ -42,7 +43,9 @@ fn validate_engine(engine: &str) -> Result<&str> {
 fn validate_operation(operation: &str) -> Result<&str> {
     match operation.trim() {
         "install" | "uninstall" => Ok(operation.trim()),
-        _ => Err(CodexxError::Config(format!("未知的运行时操作: {operation}"))),
+        _ => Err(CodexxError::Config(format!(
+            "未知的运行时操作: {operation}"
+        ))),
     }
 }
 
@@ -59,11 +62,17 @@ fn target(label: &str, path: impl AsRef<Path>, operation: &str) -> RuntimePrevie
 fn profile_restart_hint() -> Option<String> {
     #[cfg(target_os = "macos")]
     {
-        Some("Open a new zsh terminal or run source ~/.zshrc to reload the Claude wrapper.".to_string())
+        Some(
+            "Open a new zsh terminal or run source ~/.zshrc to reload the Claude wrapper."
+                .to_string(),
+        )
     }
     #[cfg(target_os = "windows")]
     {
-        Some("Open a new PowerShell window or reload $PROFILE to apply the Claude wrapper.".to_string())
+        Some(
+            "Open a new PowerShell window or reload $PROFILE to apply the Claude wrapper."
+                .to_string(),
+        )
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
@@ -71,26 +80,47 @@ fn profile_restart_hint() -> Option<String> {
     }
 }
 
-fn preview_codex(operation: &str, codex_dir: Option<&Path>) -> Result<(String, String, Vec<RuntimePreviewTarget>, Option<String>)> {
+fn preview_codex(
+    operation: &str,
+    codex_dir: Option<&Path>,
+) -> Result<(String, String, Vec<RuntimePreviewTarget>, Option<String>)> {
     let codex_dir = codex_dir.ok_or_else(|| {
         CodexxError::Config("预览 Codex 运行时部署时缺少当前 CODEX_HOME".to_string())
     })?;
-    let file_operation = if operation == "install" { "update" } else { "restore/remove" };
+    let file_operation = if operation == "install" {
+        "update"
+    } else {
+        "restore/remove"
+    };
     Ok((
         "Native config deployment".to_string(),
         "Codex uses config.toml and its managed AGENTS.md block; no shell command is replaced."
             .to_string(),
         vec![
-            target("Codex config", crate::config_path(codex_dir), file_operation),
+            target(
+                "Codex config",
+                crate::config_path(codex_dir),
+                file_operation,
+            ),
             target("Managed AGENTS.md", agents_path(codex_dir), file_operation),
         ],
         None,
     ))
 }
 
-fn preview_claude(operation: &str) -> Result<(String, String, Vec<RuntimePreviewTarget>, Option<String>)> {
-    let file_operation = if operation == "install" { "update" } else { "restore/remove" };
-    let mut targets = vec![target("Claude memory", claude_memory_path()?, file_operation)];
+fn preview_claude(
+    operation: &str,
+) -> Result<(String, String, Vec<RuntimePreviewTarget>, Option<String>)> {
+    let file_operation = if operation == "install" {
+        "update"
+    } else {
+        "restore/remove"
+    };
+    let mut targets = vec![target(
+        "Claude memory",
+        claude_memory_path()?,
+        file_operation,
+    )];
     if let Some(filename) = managed_claude_instruction_filename()? {
         targets.push(target(
             "Managed Claude instruction",
@@ -121,9 +151,15 @@ fn preview_claude(operation: &str) -> Result<(String, String, Vec<RuntimePreview
     ))
 }
 
-fn preview_zcode(operation: &str) -> Result<(String, String, Vec<RuntimePreviewTarget>, Option<String>)> {
+fn preview_zcode(
+    operation: &str,
+) -> Result<(String, String, Vec<RuntimePreviewTarget>, Option<String>)> {
     let paths = crate::zcode::build_paths()?;
-    let file_operation = if operation == "install" { "write" } else { "remove" };
+    let file_operation = if operation == "install" {
+        "write"
+    } else {
+        "remove"
+    };
     Ok((
         "Launcher runtime deployment".to_string(),
         "ZCode uses a managed launcher and environment bridge instead of changing the application bundle."
@@ -138,8 +174,14 @@ fn preview_zcode(operation: &str) -> Result<(String, String, Vec<RuntimePreviewT
     ))
 }
 
-fn preview_grok(operation: &str) -> Result<(String, String, Vec<RuntimePreviewTarget>, Option<String>)> {
-    let file_operation = if operation == "install" { "update" } else { "restore/remove" };
+fn preview_grok(
+    operation: &str,
+) -> Result<(String, String, Vec<RuntimePreviewTarget>, Option<String>)> {
+    let file_operation = if operation == "install" {
+        "update"
+    } else {
+        "restore/remove"
+    };
     Ok((
         "Native global rules deployment".to_string(),
         "Grok uses its AGENTS.md, config compatibility block, hook isolation, and a deployment manifest."
@@ -151,6 +193,39 @@ fn preview_grok(operation: &str) -> Result<(String, String, Vec<RuntimePreviewTa
             target("Deployment manifest", crate::grok::grok_manifest_path()?, file_operation),
         ],
         Some("Restart Grok after changing global rules or hook isolation.".to_string()),
+    ))
+}
+
+fn preview_kilo(
+    operation: &str,
+) -> Result<(String, String, Vec<RuntimePreviewTarget>, Option<String>)> {
+    let file_operation = if operation == "install" {
+        "update"
+    } else {
+        "restore/remove"
+    };
+    Ok((
+        "Native global AGENTS.md deployment".to_string(),
+        "Kilo uses its official global AGENTS.md path. DevConduit keeps the first original file in a fixed local snapshot for uninstall and recovery."
+            .to_string(),
+        vec![
+            target(
+                "Kilo AGENTS.md",
+                crate::kilo::kilo_agents_path()?,
+                file_operation,
+            ),
+            target(
+                "Original AGENTS.md snapshot",
+                crate::kilo::kilo_original_agents_path()?,
+                "preserve/restore",
+            ),
+            target(
+                "Deployment manifest",
+                crate::kilo::kilo_manifest_path()?,
+                file_operation,
+            ),
+        ],
+        Some("Restart Kilo or run /reload after changing global instructions.".to_string()),
     ))
 }
 
@@ -166,6 +241,7 @@ pub(crate) fn preview_prompt_runtime(
         "claude" => preview_claude(operation)?,
         "zcode" => preview_zcode(operation)?,
         "grok" => preview_grok(operation)?,
+        "kilo" => preview_kilo(operation)?,
         _ => unreachable!(),
     };
     let action_title = if operation == "install" {
@@ -195,12 +271,17 @@ pub(crate) fn preview_claude_runtime() -> Result<PromptRuntimePreview> {
             "当前平台不支持 Claude CLI runtime（仅支持 macOS 和 Windows）".to_string(),
         ));
     }
-    let operation = if runtime.active || runtime.status == "partial" || runtime.status == "needs-repair" {
-        "uninstall"
+    let operation =
+        if runtime.active || runtime.status == "partial" || runtime.status == "needs-repair" {
+            "uninstall"
+        } else {
+            "install"
+        };
+    let target_operation = if operation == "install" {
+        "write"
     } else {
-        "install"
+        "remove"
     };
-    let target_operation = if operation == "install" { "write" } else { "remove" };
     let mut targets = vec![target(
         "Claude runtime prompt",
         Path::new(&runtime.prompt_path),
