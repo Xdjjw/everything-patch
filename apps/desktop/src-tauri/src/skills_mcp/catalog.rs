@@ -176,7 +176,10 @@ fn managed_acquisition_settings(
             Ok((mode.to_string(), command))
         }
         "burp-suite-mcp" => {
-            let fallback = if matches!(tool, ToolId::Claude | ToolId::Zcode | ToolId::Kilo) {
+            let fallback = if matches!(
+                tool,
+                ToolId::Claude | ToolId::Zcode | ToolId::Kilo | ToolId::Pi
+            ) {
                 "direct"
             } else {
                 "proxy"
@@ -401,13 +404,21 @@ fn burp_integration(
     tool: ToolId,
     input: &McpIntegrationInstallInput,
 ) -> Result<PreparedIntegration> {
-    let fallback = if matches!(tool, ToolId::Claude | ToolId::Zcode) {
+    let fallback = if matches!(
+        tool,
+        ToolId::Claude | ToolId::Zcode | ToolId::Kilo | ToolId::Pi
+    ) {
         "direct"
     } else {
         "proxy"
     };
     let mode = mode_or_default(input, fallback, &["direct", "proxy"])?;
-    if mode == "direct" && !matches!(tool, ToolId::Claude | ToolId::Zcode) {
+    if mode == "direct"
+        && !matches!(
+            tool,
+            ToolId::Claude | ToolId::Zcode | ToolId::Kilo | ToolId::Pi
+        )
+    {
         return Err(CodexxError::Config(format!(
             "{} 不支持 Burp 的传统 SSE 直连，请使用官方 stdio 代理 mcp-proxy-all.jar",
             tool.label()
@@ -650,10 +661,14 @@ mod tests {
 
         let claude = prepare_integration(ToolId::Claude, &request).expect("prepare Claude Burp");
         let zcode = prepare_integration(ToolId::Zcode, &request).expect("prepare ZCode Burp");
+        let kilo = prepare_integration(ToolId::Kilo, &request).expect("prepare Kilo Burp");
+        let pi = prepare_integration(ToolId::Pi, &request).expect("prepare Pi Burp");
 
         assert_eq!(claude.config["url"], "http://127.0.0.1:9876/sse");
         assert_eq!(claude.config["type"], "sse");
         assert_eq!(zcode.config, claude.config);
+        assert_eq!(kilo.config, claude.config);
+        assert_eq!(pi.config, claude.config);
     }
 
     #[test]

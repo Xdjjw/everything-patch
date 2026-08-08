@@ -113,6 +113,7 @@ pub(crate) fn build_skills_mcp_state_inner(config_dir: Option<String>) -> Result
         codex_dir: codex_dir.display().to_string(),
         codex_skills_dir: skills_dir.display().to_string(),
         disabled_skills_dir: disabled_dir.display().to_string(),
+        mcp_adapter_installed: None,
         skills,
         mcp_servers,
         warnings,

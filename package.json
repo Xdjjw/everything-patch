@@ -1,7 +1,7 @@
 {
   "name": "everything-patch-workspace",
   "private": true,
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "Multi-tool desktop configuration and prompt manager",
   "scripts": {
     "dev": "pnpm --dir apps/desktop tauri dev",

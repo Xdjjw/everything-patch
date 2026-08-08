@@ -128,12 +128,22 @@ pub(crate) fn is_zcode_running() -> bool {
 fn command_line_starts_with_executable(line: &str, executable: &Path) -> bool {
     let expected = executable.to_string_lossy();
     let trimmed = line.trim_start();
-    let remainder = trimmed.strip_prefix(expected.as_ref()).or_else(|| {
+    let Some(remainder) = trimmed.strip_prefix(expected.as_ref()).or_else(|| {
         let quoted = format!("\"{expected}\"");
         trimmed.strip_prefix(quoted.as_str())
-    });
-    remainder
-        .is_some_and(|rest| rest.is_empty() || rest.chars().next().is_some_and(char::is_whitespace))
+    }) else {
+        return false;
+    };
+
+    if remainder.is_empty() {
+        return true;
+    }
+    if !remainder.chars().next().is_some_and(char::is_whitespace) {
+        return false;
+    }
+
+    let first_arg = remainder.trim_start().split_whitespace().next();
+    first_arg.is_none_or(|arg| arg.starts_with('-'))
 }
 
 /// 构建环境变量键值表（command 使用 ZCode 内置 Electron，launcher 路径放在 args 中）。

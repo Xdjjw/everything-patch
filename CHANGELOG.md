@@ -2,7 +2,19 @@
 
 All notable changes to DevConduit will be documented here.
 
-## [Unreleased]
+## [v0.4.4] - 2026-08-08
+
+### 更新
+
+- 新增 Pi：兼容 Windows 与 macOS，识别 `~/.pi/agent` 和 Pi CLI，支持全局 `AGENTS.md` 提示词、自定义 Provider、配置预览、Skills、JSONL 会话只读浏览及备份恢复；启动检测不会写入 Pi 配置，`auth.json` 不进入预览。
+- Pi Prompt 支持保留/替换模式、首次原文件固定快照、操作前备份、失败即时回滚与卸载恢复，并离线内置由 Codex Keysmith 完整复制、仅适配 Pi 产品标识的默认模板。
+- Pi Provider 会保留 JSONC 注释、尾逗号、同名 Provider 的额外字段与已有密钥，再合并写入官方 `models.json.providers` 并同步更新 `settings.json` 默认模型；两个文件在写入前共同快照，任一步失败都会完整恢复。
+- Pi MCP 通过独立确认后安装的固定版本 `pi-mcp-adapter@2.21.0` 接入，并使用 `~/.pi/agent/mcp.json` 的 `mcpServers` 格式；写入时保留 JSONC 注释与其他服务器，配置文件和 SQLite 纳管状态失败时会恢复原 `mcp.json` 与 adapter 设置。
+- IDA Pro、Cheat Engine、x64dbg/x32dbg 和 Burp Suite 的 MCP 目录现可写入 Pi；Burp 在 Pi 中使用 adapter 的 SSE 传输字段。
+
+### 界面
+
+- 工具与提示词选择器扩展为六个工具，窄屏使用三列两行布局；Pi Provider 可选择 OpenAI Responses、Chat Completions、Anthropic Messages 与 Google Generative AI 协议。
 
 ## [v0.4.3] - 2026-08-04
 

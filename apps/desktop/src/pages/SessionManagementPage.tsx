@@ -20,6 +20,7 @@ export type Lang = "zh" | "en";
 export type SessionPreview = {
   id: string;
   title: string;
+  summary?: string | null;
   modelProvider?: string | null;
   model?: string | null;
   cwd?: string | null;
@@ -483,7 +484,14 @@ export function SessionManagementPage({
                               {item.isSubagent && <span className="cx-session-state">{copy.internal}</span>}
                               {item.needsSync && <span className="cx-session-state cx-session-state--warn">{copy.pending}</span>}
                             </div>
-                            {!sessionGroupByCwd && <p title={item.cwd || item.rolloutPath || undefined}>{compactPath(item.cwd || item.rolloutPath, 72, isChinese ? "未记录路径" : "No path recorded")}</p>}
+                            {(item.summary || !sessionGroupByCwd) && (
+                              <p
+                                className={item.summary ? "cx-session-row-summary" : undefined}
+                                title={item.summary || item.cwd || item.rolloutPath || undefined}
+                              >
+                                {item.summary || compactPath(item.cwd || item.rolloutPath, 72, isChinese ? "未记录路径" : "No path recorded")}
+                              </p>
+                            )}
                           </div>
                           <span className="cx-session-meta cx-session-meta--time" title={item.updatedAtMs ? new Date(item.updatedAtMs).toLocaleString() : undefined}>{formatSessionTime(item.updatedAtMs, lang)}</span>
                           <code className="cx-session-meta cx-session-meta--provider" title={item.modelProvider || undefined}>{item.modelProvider || copy.unknownProvider}</code>

@@ -36,6 +36,8 @@ import type {
   GrokState,
   KiloActionResult,
   KiloState,
+  PiActionResult,
+  PiState,
   ImportResult,
   InstructionMode,
   InstructionTemplate,
@@ -100,14 +102,14 @@ function storedPromptInjectionMode(engine: PromptEngine): PromptInjectionMode {
 
 function storedPromptEngine(): PromptEngine {
   const stored = localStorage.getItem(PROMPT_ENGINE_KEY);
-  return stored === "claude" || stored === "zcode" || stored === "grok" || stored === "kilo"
+  return stored === "claude" || stored === "zcode" || stored === "grok" || stored === "kilo" || stored === "pi"
     ? stored
     : "codex";
 }
 
 function storedTool(): ToolId {
   const stored = localStorage.getItem(ACTIVE_TOOL_KEY);
-  return stored === "claude" || stored === "grok" || stored === "zcode" || stored === "kilo"
+  return stored === "claude" || stored === "grok" || stored === "zcode" || stored === "kilo" || stored === "pi"
     ? stored
     : "codex";
 }
@@ -286,7 +288,7 @@ const dict = {
       en: "English",
       languageDesc: "默认中文，可随时切换。设置会保存在浏览器本地存储。",
       productName: "产品名",
-      productDesc: "面向 Codex、Claude、ZCode、Grok 与 Kilo 的多工具配置和提示词管理器。",
+      productDesc: "面向 Codex、Claude、ZCode、Grok、Kilo 与 Pi 的多工具配置和提示词管理器。",
     },
     loadingConfig: "正在读取 Codex 配置...",
     noAuth: "无 auth",
@@ -388,7 +390,7 @@ const dict = {
       en: "English",
       languageDesc: "Chinese is the default. You can switch at any time; the setting is saved locally.",
       productName: "Product name",
-      productDesc: "A multi-tool configuration and prompt manager for Codex, Claude, ZCode, Grok, and Kilo.",
+      productDesc: "A multi-tool configuration and prompt manager for Codex, Claude, ZCode, Grok, Kilo, and Pi.",
     },
     loadingConfig: "Reading Codex config...",
     noAuth: "No auth",
@@ -406,7 +408,9 @@ function getProviderPageCopy(lang: Lang, tool: ToolId): ProviderCopy {
       ? "cli/config.json (JSON)"
       : tool === "kilo"
         ? "kilo.jsonc (JSONC)"
-      : "config.toml (TOML)";
+        : tool === "pi"
+          ? "models.json + settings.json (JSON)"
+          : "config.toml (TOML)";
   return {
     eyebrow: "Provider",
     title: isChinese ? `${activeToolLabel} 供应商` : `${activeToolLabel} providers`,
@@ -453,13 +457,23 @@ function getProviderPageCopy(lang: Lang, tool: ToolId): ProviderCopy {
     formEyebrow: "Provider",
     formAddTitle: t.provider.formAdd,
     formEditTitle: t.provider.formEdit,
-    formHint: t.provider.formHint,
+    formHint: tool === "pi"
+      ? (isChinese
+        ? "先保存到 DevConduit 供应商列表；只有点击启用时才会合并写入 Pi 配置，任一文件写入失败都会恢复原状态。"
+        : "Save to DevConduit first. Pi configuration is merged only when you enable the provider, and any failed file write restores the original state.")
+      : t.provider.formHint,
     apiConfigTitle: isChinese ? "供应商 API 配置" : "Provider API configuration",
-    apiConfigDescription: isChinese
-      ? `在同一个页面管理 API、认证信息和 ${configName}。`
-      : `Manage API, authentication, and ${configName} in one place.`,
+    apiConfigDescription: tool === "pi"
+      ? (isChinese
+        ? "配置 Pi Provider、模型和 API Key；密钥不会从 auth.json 读取，也不会在预览中显示明文。"
+        : "Configure the Pi provider, model, and API key. auth.json is never read, and previews never reveal the key.")
+      : (isChinese
+        ? `在同一个页面管理 API、认证信息和 ${configName}。`
+        : `Manage API, authentication, and ${configName} in one place.`),
     apiKeyLabel: t.provider.apiKey,
-    apiKeyPlaceholder: t.provider.apiKeyPlaceholder,
+    apiKeyPlaceholder: tool === "pi"
+      ? (isChinese ? "留空则保留已保存的 API Key" : "Leave blank to keep the saved API key")
+      : t.provider.apiKeyPlaceholder,
     showApiKeyLabel: isChinese ? "显示 API Key" : "Show API key",
     hideApiKeyLabel: isChinese ? "隐藏 API Key" : "Hide API key",
     baseUrlLabel: isChinese ? "API 请求地址" : t.provider.baseUrl,
@@ -470,16 +484,28 @@ function getProviderPageCopy(lang: Lang, tool: ToolId): ProviderCopy {
     chooseModelLabel: (count) => isChinese ? `选择已获取的模型（${count}）` : `Choose a fetched model (${count})`,
     wireApiLabel: t.provider.wireApi,
     requiresAuthLabel: t.provider.requiresAuth,
-    authPreviewTitle: tool === "claude" ? "env (JSON)" : tool === "grok" ? "api_key" : "auth.json (JSON)",
+    authPreviewTitle: tool === "claude"
+      ? "env (JSON)"
+      : tool === "grok"
+        ? "api_key"
+        : tool === "pi"
+          ? "models.json (JSON)"
+          : "auth.json (JSON)",
     authPreviewDescription: isChinese
       ? "预览保存时写入或保留的认证配置；API Key 留空不会覆盖现有认证。"
       : "Preview the authentication data. An empty API key keeps the current auth file.",
     tomlTitle: configName,
-    tomlDescription: isChinese
-      ? `这里保存供应商模板，只有启用供应商时才会写入 ${activeToolLabel} 当前配置。`
-      : `This stores the provider template and writes it to ${activeToolLabel}'s live config only when enabled.`,
+    tomlDescription: tool === "pi"
+      ? (isChinese
+        ? "只读预览启用后合并到 Pi 的字段；现有其他配置会保留，API Key 始终脱敏显示。"
+        : "Read-only preview of the fields merged into Pi when enabled. Other settings are preserved and the API key is always redacted.")
+      : (isChinese
+        ? `这里保存供应商模板，只有启用供应商时才会写入 ${activeToolLabel} 当前配置。`
+        : `This stores the provider template and writes it to ${activeToolLabel}'s live config only when enabled.`),
     resetTomlLabel: isChinese ? "重置生成" : "Reset",
-    saveLabel: t.provider.saveAndSwitch,
+    saveLabel: tool === "pi"
+      ? (isChinese ? "保存供应商" : "Save provider")
+      : t.provider.saveAndSwitch,
     savingLabel: isChinese ? "保存中..." : "Saving...",
   };
 }
@@ -644,6 +670,34 @@ function buildProviderTomlPreview(provider: SavedProvider, state: CodexState | n
       `${apiKey}api_backend = "${tomlEscape(provider.wireApi || "responses")}"`,
       "context_window = 500000",
     ].join("\n");
+  }
+  if (provider.appType === "pi") {
+    const model = provider.model.trim() || "gpt-5.5";
+    const id = provider.id.trim() || providerId(provider.providerName || "devconduit-provider");
+    const normalizedWireApi = (provider.wireApi || "responses").toLowerCase();
+    const api = normalizedWireApi.includes("anthropic")
+      ? "anthropic-messages"
+      : normalizedWireApi.includes("google") || normalizedWireApi.includes("gemini")
+        ? "google-generative-ai"
+        : normalizedWireApi.includes("response")
+          ? "openai-responses"
+          : "openai-completions";
+    return JSON.stringify({
+      "models.json": {
+        providers: {
+          [id]: {
+            baseUrl: provider.baseUrl.trim().replace(/\/+$/, "") || "https://example.com/v1",
+            api,
+            ...(provider.apiKey?.trim() || provider.hasApiKey ? { apiKey: "[REDACTED]" } : {}),
+            models: [{ id: model, name: model }],
+          },
+        },
+      },
+      "settings.json": {
+        defaultProvider: id,
+        defaultModel: model,
+      },
+    }, null, 2);
   }
   const model = provider.model.trim() || "gpt-5.5";
   const name = provider.providerName.trim() || "your-provider";
@@ -886,6 +940,7 @@ function App() {
     zcode: storedPromptInjectionMode("zcode"),
     grok: storedPromptInjectionMode("grok"),
     kilo: storedPromptInjectionMode("kilo"),
+    pi: storedPromptInjectionMode("pi"),
   }));
   const [skillsMcpTab, setSkillsMcpTab] = React.useState<"mcp" | "skills">("mcp");
   const [editingProviderId, setEditingProviderId] = React.useState<string | null>(null);
@@ -953,6 +1008,9 @@ function App() {
   const [kiloState, setKiloState] = React.useState<KiloState | null>(null);
   const [kiloSavedPrompts, setKiloSavedPrompts] = React.useState<SavedPrompt[]>([]);
   const [kiloBuiltinStatus, setKiloBuiltinStatus] = React.useState<BuiltinPromptStatus[]>([]);
+  const [piState, setPiState] = React.useState<PiState | null>(null);
+  const [piSavedPrompts, setPiSavedPrompts] = React.useState<SavedPrompt[]>([]);
+  const [piBuiltinStatus, setPiBuiltinStatus] = React.useState<BuiltinPromptStatus[]>([]);
   const activeToolRef = React.useRef(activeTool);
   activeToolRef.current = activeTool;
   const autoUpdateCheckedRef = React.useRef(false);
@@ -1176,6 +1234,7 @@ function App() {
       { engine: "zcode", scope: zcodeState?.managedDir, mode: zcodeState?.instructionInjectionMode },
       { engine: "grok", scope: grokState?.grokDir, mode: grokState?.instructionInjectionMode },
       { engine: "kilo", scope: kiloState?.kiloDir, mode: kiloState?.instructionInjectionMode },
+      { engine: "pi", scope: piState?.piDir, mode: piState?.instructionInjectionMode },
     ];
     const pending = engines.filter(({ engine, scope }) =>
       Boolean(scope) && promptModeSyncedRef.current[engine] !== scope,
@@ -1202,6 +1261,8 @@ function App() {
     grokState?.instructionInjectionMode,
     kiloState?.instructionInjectionMode,
     kiloState?.kiloDir,
+    piState?.instructionInjectionMode,
+    piState?.piDir,
     state?.codexDir,
     state?.instructionInjectionMode,
     zcodeState?.instructionInjectionMode,
@@ -1345,6 +1406,20 @@ function App() {
   const kiloManagedSavedPromptId = kiloState?.instructionTemplateKey?.startsWith("saved:")
     ? kiloState.instructionTemplateKey.slice("saved:".length)
     : null;
+  // ─── Pi 派生值 ────────────────────────────────────────────────────────
+  const piInstructionTemplates = React.useMemo<InstructionTemplate[]>(() => {
+    return piBuiltinStatus
+      .filter((item) => item.contentSource !== "removed")
+      .map(({ id, filename, title, subtitle, badge }) => ({ id, filename, title, subtitle, badge }));
+  }, [piBuiltinStatus]);
+  const piActiveInstructionTitle = piState?.activeInstructionTitle
+    || (lang === "zh" ? "当前提示词" : "Current prompt");
+  const piActiveBuiltinTemplateId = piState?.instructionTemplateKey?.startsWith("builtin:")
+    ? piState.instructionTemplateKey.slice("builtin:".length)
+    : "";
+  const piManagedSavedPromptId = piState?.instructionTemplateKey?.startsWith("saved:")
+    ? piState.instructionTemplateKey.slice("saved:".length)
+    : null;
   const activePromptInjectionMode = promptEngine === "claude"
     ? claudeState?.instructionInjectionMode
     : promptEngine === "zcode"
@@ -1353,7 +1428,9 @@ function App() {
         ? grokState?.instructionInjectionMode
         : promptEngine === "kilo"
           ? kiloState?.instructionInjectionMode
-          : state?.instructionInjectionMode;
+          : promptEngine === "pi"
+            ? piState?.instructionInjectionMode
+            : state?.instructionInjectionMode;
 
   const canonicalSavedProviders = React.useMemo(() => {
     const groups = new Map<string, SavedProvider[]>();
@@ -1398,6 +1475,7 @@ function App() {
         : activeTool === "codex"
           ? effectiveActiveProviderId === p.id
           : activeProviderId === p.id
+            || activeStatus?.providerId === p.id
             || activeStatus?.provider === p.providerName
             || activeStatus?.provider === p.baseUrl,
     }));
@@ -1483,6 +1561,7 @@ function App() {
     const sessions: SessionPreview[] = toolSessionList.sessions.map((item) => ({
       id: item.id,
       title: item.title,
+      summary: item.summary,
       modelProvider: toolLabel(activeTool),
       model: null,
       cwd: item.cwd,
@@ -1520,7 +1599,7 @@ function App() {
   const filteredSessions = React.useMemo(() => {
     const query = deferredSessionQuery.trim().toLowerCase();
     if (!query) return visibleSessions;
-    return visibleSessions.filter((item) => [item.title, item.cwd, item.rolloutPath, item.modelProvider, item.model, item.id]
+    return visibleSessions.filter((item) => [item.title, item.summary, item.cwd, item.rolloutPath, item.modelProvider, item.model, item.id]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(query)));
   }, [deferredSessionQuery, visibleSessions]);
@@ -1623,6 +1702,9 @@ function App() {
       kiloNext,
       kiloPromptList,
       kiloBuiltin,
+      piNext,
+      piPromptList,
+      piBuiltin,
       nextToolStatuses,
     ] = await Promise.all([
       settleLoad(invoke<CodexState>("get_codex_state", { configDir: resolvedConfigDir })),
@@ -1642,6 +1724,9 @@ function App() {
       settleLoad(invoke<KiloState>("get_kilo_state")),
       settleLoad(invoke<SavedPrompt[]>("list_kilo_prompts")),
       settleLoad(invoke<BuiltinPromptStatus[]>("get_kilo_builtin_prompt_status")),
+      settleLoad(invoke<PiState>("get_pi_state")),
+      settleLoad(invoke<SavedPrompt[]>("list_pi_prompts")),
+      settleLoad(invoke<BuiltinPromptStatus[]>("get_pi_builtin_prompt_status")),
       settleLoad(invoke<ToolStatus[]>("get_tool_statuses", { configDir: resolvedConfigDir })),
     ]);
 
@@ -1666,6 +1751,9 @@ function App() {
     if (kiloNext.ok) setKiloState(kiloNext.data);
     if (kiloPromptList.ok) setKiloSavedPrompts(kiloPromptList.data);
     if (kiloBuiltin.ok) setKiloBuiltinStatus(kiloBuiltin.data);
+    if (piNext.ok) setPiState(piNext.data);
+    if (piPromptList.ok) setPiSavedPrompts(piPromptList.data);
+    if (piBuiltin.ok) setPiBuiltinStatus(piBuiltin.data);
     if (nextToolStatuses.ok) setToolStatuses(nextToolStatuses.data);
 
     const failures = [
@@ -1686,6 +1774,9 @@ function App() {
       kiloNext,
       kiloPromptList,
       kiloBuiltin,
+      piNext,
+      piPromptList,
+      piBuiltin,
       nextToolStatuses,
     ].flatMap((result) => result.ok ? [] : [result.error]);
     if (failures.length) {
@@ -2435,6 +2526,117 @@ function App() {
       });
       const promptList = await invoke<SavedPrompt[]>("list_kilo_prompts");
       setKiloSavedPrompts(promptList);
+      setToast(lang === "zh" ? `已导入提示词：${file.name}` : `Prompt imported: ${file.name}`);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+      setActionBusy("");
+      if (promptImportRef.current) promptImportRef.current.value = "";
+    }
+  };
+
+  // ─── Pi 指令回调 ──────────────────────────────────────────────────────
+  const handlePiActionResult = (result: PiActionResult) => {
+    setPiState(result.state);
+    setToast(result.message);
+    void Promise.all([
+      invoke<SavedPrompt[]>("list_pi_prompts"),
+      invoke<BuiltinPromptStatus[]>("get_pi_builtin_prompt_status"),
+    ])
+      .then(([promptList, builtin]) => {
+        setPiSavedPrompts(promptList);
+        setPiBuiltinStatus(builtin);
+      })
+      .catch(() => undefined);
+  };
+
+  const installPiInstruction = (templateId: string) =>
+    call(
+      () => invoke<PiActionResult>("install_pi_instruction", {
+        templateId,
+        injectionMode: promptInjectionModes.pi,
+      }),
+      handlePiActionResult,
+    );
+
+  const uninstallPiInstruction = () =>
+    call(
+      () => invoke<PiActionResult>("uninstall_pi_instruction"),
+      handlePiActionResult,
+    );
+
+  const installPiSavedPrompt = (id: string) =>
+    call(
+      () => invoke<PiActionResult>("install_pi_saved_prompt", {
+        id,
+        injectionMode: promptInjectionModes.pi,
+      }),
+      handlePiActionResult,
+    );
+
+  const normalizedPiPromptForm = (): SavedPrompt => {
+    const existing = piSavedPrompts.filter((item) => item.id !== editingPromptId);
+    const requestedFilename = promptForm.filename.trim() || `${providerId(promptForm.title || "prompt")}.md`;
+    const filename = editingPromptId ? requestedFilename : uniquePromptFilename(requestedFilename, existing.map((item) => item.filename));
+    return {
+      ...promptForm,
+      id: editingPromptId || uniqueId(promptForm.id || promptForm.title || filename, existing.map((item) => item.id)),
+      title: promptForm.title.trim(),
+      filename,
+      content: promptForm.content,
+    };
+  };
+
+  const savePiPromptOnly = () =>
+    call(
+      async () => {
+        await invoke<SavedPrompt>("save_pi_prompt", { prompt: normalizedPiPromptForm() });
+        return invoke<SavedPrompt[]>("list_pi_prompts");
+      },
+      (promptList) => {
+        setPiSavedPrompts(promptList);
+        setInstructionMode("list");
+        setEditingPromptId(null);
+        setToast(lang === "zh" ? "Pi 提示词已保存" : "Pi prompt saved");
+      },
+    );
+
+  const removePiSavedPrompt = (id: string) =>
+    call(
+      async () => {
+        await invoke<void>("delete_pi_prompt", { id });
+        return invoke<SavedPrompt[]>("list_pi_prompts");
+      },
+      (promptList) => {
+        setPiSavedPrompts(promptList);
+        setToast(lang === "zh" ? "提示词已删除" : "Prompt deleted");
+      },
+    );
+
+  const importPiPromptMd = async (file?: File | null) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".md")) {
+      setError(lang === "zh" ? "请选择 .md 提示词文件" : "Please choose a .md prompt file");
+      return;
+    }
+    setActionBusy("importPrompt");
+    setLoading(true);
+    setError("");
+    try {
+      const content = await file.text();
+      const title = file.name.replace(/\.md$/i, "");
+      const filename = uniquePromptFilename(file.name, piSavedPrompts.map((item) => item.filename));
+      await invoke<SavedPrompt>("save_pi_prompt", {
+        prompt: {
+          id: uniqueId(title, piSavedPrompts.map((item) => item.id)),
+          title: filename.replace(/\.md$/i, ""),
+          filename,
+          content,
+        },
+      });
+      const promptList = await invoke<SavedPrompt[]>("list_pi_prompts");
+      setPiSavedPrompts(promptList);
       setToast(lang === "zh" ? `已导入提示词：${file.name}` : `Prompt imported: ${file.name}`);
     } catch (e) {
       setError(String(e));
@@ -3521,6 +3723,7 @@ function App() {
                 zcodeRuntime={zcodeState}
                 grokRuntime={grokState}
                 kiloRuntime={kiloState}
+                piRuntime={piState}
                 promptBackups={promptBackups}
                 promptBackupsOpen={promptBackupsOpen}
                 promptBackupsLoading={promptBackupsLoading}
@@ -3635,6 +3838,20 @@ function App() {
                 onDeleteKiloPrompt={removeKiloSavedPrompt}
                 onImportKiloPrompt={importKiloPromptMd}
                 onSaveKiloPrompt={saveKiloPromptOnly}
+                piInstructionEnabled={Boolean(piState?.instructionEnabled)}
+                piActiveInstructionTitle={piActiveInstructionTitle}
+                piInstructionTemplates={piInstructionTemplates}
+                piBuiltinPromptStatuses={piBuiltinStatus}
+                piActiveBuiltinTemplateId={piActiveBuiltinTemplateId}
+                piSavedPrompts={piSavedPrompts}
+                piManagedSavedPromptId={piManagedSavedPromptId}
+                onEnablePiBuiltinPrompt={installPiInstruction}
+                onDisablePiInstruction={uninstallPiInstruction}
+                onEnablePiSavedPrompt={installPiSavedPrompt}
+                onEditPiPrompt={openEditPrompt}
+                onDeletePiPrompt={removePiSavedPrompt}
+                onImportPiPrompt={importPiPromptMd}
+                onSavePiPrompt={savePiPromptOnly}
               />
             )}
 
@@ -3646,7 +3863,7 @@ function App() {
                 config={toolConfig}
                 selectedFileId={configFileId}
                 loading={actionBusy === "loadToolConfig"}
-                preview={selectedToolConfigFile?.format === "json"
+                preview={selectedToolConfigFile?.format === "json" || selectedToolConfigFile?.format === "jsonc"
                   ? <JsonPreview text={selectedToolConfigFile.text || "{\n}"} />
                   : selectedToolConfigFile && selectedToolConfigFile.format !== "toml"
                     ? <PlainPreview text={selectedToolConfigFile.text || (lang === "zh" ? "# 未找到配置文件。" : "# Configuration file not found.")} />

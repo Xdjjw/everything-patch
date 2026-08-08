@@ -204,7 +204,7 @@ function localized(text: LocalizedText, lang: Lang) {
 }
 
 function supportsBurpDirectSse(tool: ToolId) {
-  return tool === "claude" || tool === "zcode" || tool === "kilo";
+  return tool === "claude" || tool === "zcode" || tool === "kilo" || tool === "pi";
 }
 
 function defaultMode(
@@ -240,7 +240,13 @@ function sourceKindFor(integration: McpIntegrationDefinition, mode: InstallMode)
   return integration.sourceKind;
 }
 
-function getCopy(lang: Lang, toolName: string) {
+function getCopy(lang: Lang, tool: ToolId) {
+  const toolName = toolLabel(tool);
+  const piAdapterNotice = tool === "pi"
+    ? (lang === "zh"
+      ? "首次写入时还会通过 Pi 安装固定版本 pi-mcp-adapter@2.21.0，并先备份 settings.json。"
+      : "The first write also installs pinned pi-mcp-adapter@2.21.0 through Pi after backing up settings.json.")
+    : "";
   return lang === "zh"
     ? {
         title: "接入工具 MCP",
@@ -290,8 +296,8 @@ function getCopy(lang: Lang, toolName: string) {
         restoringHost: "正在恢复",
         hostDetectFailed: "宿主软件检测失败",
         hostRestoreFailed: "恢复宿主文件失败",
-        managedNotice: "DevConduit 将下载固定版本、核对 SHA-256，并在需要时创建独立 Python 环境。Windows 上会自动检测 CE/x64dbg、备份原文件并安装桥接插件；IDA 激活和 Burp 首次启用仍由对应软件控制。",
-        manualNotice: "DevConduit 只校验你选择的本地文件并修改配置，不会下载或运行第三方文件。",
+        managedNotice: `DevConduit 将下载固定版本、核对 SHA-256，并在需要时创建独立 Python 环境。Windows 上会自动检测 CE/x64dbg、备份原文件并安装桥接插件；IDA 激活和 Burp 首次启用仍由对应软件控制。${piAdapterNotice}`,
+        manualNotice: `DevConduit 只校验你选择的本地文件并修改配置，不会下载或运行第三方 MCP 文件。${piAdapterNotice}`,
         confirmManaged: "我已确认来源、固定版本、许可证和安装预览，同意下载依赖、备份宿主文件并写入当前工具配置。",
         confirmManual: "我已检查所选本地文件，同意将该 MCP 写入当前工具配置。",
         pickerFailed: "无法打开文件选择器",
@@ -348,8 +354,8 @@ function getCopy(lang: Lang, toolName: string) {
         restoringHost: "Restoring",
         hostDetectFailed: "Host application detection failed",
         hostRestoreFailed: "Could not restore host files",
-        managedNotice: "DevConduit downloads the pinned version, verifies SHA-256, and creates an isolated Python environment when needed. On Windows it detects CE/x64dbg, backs up existing files, and installs the bridge plugins. IDA activation and Burp's first enable remain controlled by those applications.",
-        manualNotice: "DevConduit only validates the local files you choose and updates configuration. It does not download or run third-party files.",
+        managedNotice: `DevConduit downloads the pinned version, verifies SHA-256, and creates an isolated Python environment when needed. On Windows it detects CE/x64dbg, backs up existing files, and installs the bridge plugins. IDA activation and Burp's first enable remain controlled by those applications. ${piAdapterNotice}`,
+        manualNotice: `DevConduit only validates the local MCP files you choose and updates configuration. It does not download or run those files. ${piAdapterNotice}`,
         confirmManaged: "I reviewed the source, pinned version, license, and installation preview and agree to download dependencies, back up host files, and update the active tool configuration.",
         confirmManual: "I reviewed the selected local files and agree to write this MCP into the active tool configuration.",
         pickerFailed: "Could not open the file picker",
@@ -373,7 +379,7 @@ export function McpInstallCatalog({
   onOpenExternalUrl,
 }: McpInstallCatalogProps) {
   const platform = useMemo(currentPlatform, []);
-  const copy = useMemo(() => getCopy(lang, toolLabel(tool)), [lang, tool]);
+  const copy = useMemo(() => getCopy(lang, tool), [lang, tool]);
   const [selectedId, setSelectedId] = useState<McpIntegrationId | null>(null);
   const [form, setForm] = useState<InstallForm | null>(null);
   const [pickerError, setPickerError] = useState("");

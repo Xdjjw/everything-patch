@@ -11,6 +11,7 @@ use crate::paths::app_home;
 use crate::toml_utils::ensure_table;
 use crate::tools::{redacted_json_text, redacted_toml_text, ToolId};
 use crate::{now_rfc3339, open_db};
+use jsonc_parser::cst::{CstInputValue, CstRootNode};
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::fs;
@@ -264,6 +265,256 @@ fn activate_grok_provider(provider: &SavedProvider) -> Result<ToolProviderAction
     })
 }
 
+#[derive(Debug)]
+struct OptionalFileSnapshot {
+    path: PathBuf,
+    bytes: Option<Vec<u8>>,
+}
+
+fn capture_optional_file(path: PathBuf) -> Result<OptionalFileSnapshot> {
+    let bytes = match fs::symlink_metadata(&path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+            return Err(CodexxError::Config(format!(
+                "Pi Provider 目标不是普通文件: {}",
+                path.display()
+            )));
+        }
+        Ok(_) => Some(fs::read(&path).map_err(|error| crate::file_io::io_err(&path, error))?),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(crate::file_io::io_err(&path, error)),
+    };
+    Ok(OptionalFileSnapshot { path, bytes })
+}
+
+fn restore_optional_files(snapshots: &[OptionalFileSnapshot]) -> Result<()> {
+    let mut failures = Vec::new();
+    for snapshot in snapshots.iter().rev() {
+        let result = match &snapshot.bytes {
+            Some(bytes) => crate::file_io::atomic_write(&snapshot.path, bytes),
+            None => match fs::symlink_metadata(&snapshot.path) {
+                Ok(metadata) if metadata.file_type().is_symlink() || metadata.is_file() => {
+                    fs::remove_file(&snapshot.path)
+                        .map_err(|error| crate::file_io::io_err(&snapshot.path, error))
+                }
+                Ok(_) => Err(CodexxError::Config(format!(
+                    "Pi Provider 回滚目标被目录占用: {}",
+                    snapshot.path.display()
+                ))),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                Err(error) => Err(crate::file_io::io_err(&snapshot.path, error)),
+            },
+        };
+        if let Err(error) = result {
+            failures.push(error.to_string());
+        }
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(CodexxError::Config(format!(
+            "Pi Provider 回滚不完整: {}",
+            failures.join("；")
+        )))
+    }
+}
+
+fn pi_api_type(wire_api: &str) -> &'static str {
+    let normalized = wire_api.trim().to_ascii_lowercase();
+    if normalized.contains("anthropic") {
+        "anthropic-messages"
+    } else if normalized.contains("google") || normalized.contains("gemini") {
+        "google-generative-ai"
+    } else if normalized.contains("response") {
+        "openai-responses"
+    } else {
+        "openai-completions"
+    }
+}
+
+fn json_to_cst_input(value: &Value) -> CstInputValue {
+    match value {
+        Value::Null => CstInputValue::Null,
+        Value::Bool(value) => CstInputValue::Bool(*value),
+        Value::Number(value) => CstInputValue::Number(value.to_string()),
+        Value::String(value) => CstInputValue::String(value.clone()),
+        Value::Array(values) => {
+            CstInputValue::Array(values.iter().map(json_to_cst_input).collect())
+        }
+        Value::Object(values) => CstInputValue::Object(
+            values
+                .iter()
+                .map(|(key, value)| (key.clone(), json_to_cst_input(value)))
+                .collect(),
+        ),
+    }
+}
+
+fn update_pi_models_jsonc(text: &str, provider: &SavedProvider) -> Result<String> {
+    let source = if text.trim().is_empty() { "{}\n" } else { text };
+    let root = CstRootNode::parse(source, &Default::default())
+        .map_err(|error| CodexxError::Config(format!("Pi models.json 解析失败: {error}")))?;
+    let root_object = root
+        .object_value()
+        .ok_or_else(|| CodexxError::Config("Pi models.json 根节点必须是 object".to_string()))?;
+    let providers = match root_object.get("providers") {
+        Some(property) => property.object_value().ok_or_else(|| {
+            CodexxError::Config("Pi models.json 的 providers 字段必须是 object".to_string())
+        })?,
+        None => root_object
+            .append("providers", CstInputValue::Object(Vec::new()))
+            .object_value()
+            .expect("new providers value is an object"),
+    };
+    let definition = match providers.get(&provider.id) {
+        Some(property) => property.object_value().ok_or_else(|| {
+            CodexxError::Config(format!(
+                "Pi models.json 的 Provider {} 必须是 object",
+                provider.id
+            ))
+        })?,
+        None => providers
+            .append(&provider.id, CstInputValue::Object(Vec::new()))
+            .object_value()
+            .expect("new provider value is an object"),
+    };
+
+    let values = [
+        (
+            "baseUrl",
+            Value::String(provider.base_url.trim_end_matches('/').to_string()),
+        ),
+        (
+            "api",
+            Value::String(pi_api_type(&provider.wire_api).to_string()),
+        ),
+        (
+            "models",
+            serde_json::json!([{
+                "id": provider.model,
+                "name": provider.model,
+            }]),
+        ),
+    ];
+    for (key, value) in values {
+        let input = json_to_cst_input(&value);
+        if let Some(property) = definition.get(key) {
+            property.set_value(input);
+        } else {
+            definition.append(key, input);
+        }
+    }
+    if let Some(api_key) = provider
+        .api_key
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        let input = CstInputValue::String(api_key.to_string());
+        if let Some(property) = definition.get("apiKey") {
+            property.set_value(input);
+        } else {
+            definition.append("apiKey", input);
+        }
+    }
+
+    let mut output = root.to_string();
+    if !output.ends_with('\n') {
+        output.push('\n');
+    }
+    Ok(output)
+}
+
+fn pi_provider_backup(
+    settings_path: &Path,
+    models_path: &Path,
+    provider_id: &str,
+) -> Result<Option<String>> {
+    if !settings_path.is_file() && !models_path.is_file() {
+        return Ok(None);
+    }
+    let safe_time = now_rfc3339()
+        .replace(':', "-")
+        .replace('+', "_")
+        .replace(' ', "_");
+    let directory = app_home()?
+        .join("backups")
+        .join("providers")
+        .join(ToolId::Pi.as_str())
+        .join(format!("{safe_time}-{provider_id}"));
+    ensure_directory(&directory)?;
+    for path in [settings_path, models_path] {
+        if path.is_file() {
+            let destination = directory.join(
+                path.file_name()
+                    .map(ToOwned::to_owned)
+                    .unwrap_or_else(|| "config.json".into()),
+            );
+            fs::copy(path, &destination)
+                .map_err(|error| crate::file_io::io_err(&destination, error))?;
+        }
+    }
+    Ok(Some(directory.display().to_string()))
+}
+
+fn activate_pi_provider_at(
+    provider: &SavedProvider,
+    pi_dir: &Path,
+) -> Result<ToolProviderActionResult> {
+    if provider.base_url.trim().is_empty() || provider.model.trim().is_empty() {
+        return Err(CodexxError::Config(
+            "Pi Provider 需要 base URL 与模型 ID".to_string(),
+        ));
+    }
+    ensure_directory(pi_dir)?;
+    let settings_path = pi_dir.join("settings.json");
+    let models_path = pi_dir.join("models.json");
+    let snapshots = [
+        capture_optional_file(settings_path.clone())?,
+        capture_optional_file(models_path.clone())?,
+    ];
+    let backup_path = pi_provider_backup(&settings_path, &models_path, &provider.id)?;
+
+    let result = (|| {
+        let models_text = read_to_string_if_exists(&models_path)?;
+        write_text(
+            &models_path,
+            &update_pi_models_jsonc(&models_text, provider)?,
+        )?;
+
+        let mut settings = json_object_from_file(&settings_path)?;
+        settings.insert(
+            "defaultProvider".to_string(),
+            Value::String(provider.id.clone()),
+        );
+        settings.insert(
+            "defaultModel".to_string(),
+            Value::String(provider.model.clone()),
+        );
+        write_json(&settings_path, &Value::Object(settings))
+    })();
+
+    if let Err(error) = result {
+        return match restore_optional_files(&snapshots) {
+            Ok(()) => Err(error),
+            Err(rollback_error) => Err(CodexxError::Config(format!("{error}；{rollback_error}"))),
+        };
+    }
+    Ok(ToolProviderActionResult {
+        ok: true,
+        message: format!(
+            "已切换 Pi 到 {} / {}，可在 Pi 中执行 /model 立即查看",
+            provider.provider_name, provider.model
+        ),
+        app_type: provider.app_type.clone(),
+        provider_id: provider.id.clone(),
+        backup_path,
+    })
+}
+
+fn activate_pi_provider(provider: &SavedProvider) -> Result<ToolProviderActionResult> {
+    activate_pi_provider_at(provider, &ToolId::Pi.home_dir(None)?)
+}
+
 fn activate_codex_provider(
     provider: &SavedProvider,
     config_dir: Option<String>,
@@ -330,6 +581,7 @@ pub(crate) fn activate_saved_provider_inner(
         ToolId::Codex => activate_codex_provider(&provider, config_dir),
         ToolId::Claude => activate_claude_provider(&provider),
         ToolId::Grok => activate_grok_provider(&provider),
+        ToolId::Pi => activate_pi_provider(&provider),
         ToolId::Zcode => unreachable!("ZCode is handled before the local provider lookup"),
         ToolId::Kilo => unreachable!("Kilo is rejected before provider lookup"),
     }
@@ -346,6 +598,7 @@ pub(crate) fn provider_template_text(provider: &SavedProvider) -> Result<String>
             ToolId::Claude => redacted_json_text(template),
             ToolId::Codex | ToolId::Grok => redacted_toml_text(template),
             ToolId::Zcode | ToolId::Kilo => String::new(),
+            ToolId::Pi => redacted_json_text(template),
         });
     }
     match tool {
@@ -382,6 +635,34 @@ pub(crate) fn provider_template_text(provider: &SavedProvider) -> Result<String>
                 name = provider.provider_name,
                 wire_api = provider.wire_api,
             ))
+        }
+        ToolId::Pi => {
+            let mut definition = Map::new();
+            definition.insert(
+                "baseUrl".to_string(),
+                Value::String(provider.base_url.clone()),
+            );
+            definition.insert(
+                "api".to_string(),
+                Value::String(pi_api_type(&provider.wire_api).to_string()),
+            );
+            if provider.api_key.is_some() {
+                definition.insert(
+                    "apiKey".to_string(),
+                    Value::String(crate::tools::REDACTED_VALUE.to_string()),
+                );
+            }
+            definition.insert(
+                "models".to_string(),
+                Value::Array(vec![serde_json::json!({
+                    "id": provider.model,
+                    "name": provider.model,
+                })]),
+            );
+            serde_json::to_string_pretty(&serde_json::json!({
+                "providers": { provider.id.clone(): definition },
+            }))
+            .map_err(|error| CodexxError::Config(error.to_string()))
         }
         ToolId::Zcode | ToolId::Kilo => Ok(String::new()),
     }
@@ -456,5 +737,90 @@ context_window = 131072
             Some(131072)
         );
         assert_eq!(live.get("theme").and_then(Item::as_str), Some("dark"));
+    }
+
+    #[test]
+    fn pi_provider_write_preserves_unrelated_settings_and_models() {
+        let root = std::env::temp_dir().join(format!(
+            "devconduit-pi-provider-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        ));
+        fs::create_dir_all(&root).expect("create Pi provider fixture");
+        fs::write(
+            root.join("settings.json"),
+            r#"{"theme":"dark","defaultProvider":"old","defaultModel":"old-model"}"#,
+        )
+        .expect("write Pi settings fixture");
+        fs::write(
+            root.join("models.json"),
+            r#"{
+  // Keep this provider and comment.
+  "providers": {
+    "existing": {"baseUrl":"http://localhost","api":"openai-completions","apiKey":"local","models":[{"id":"existing"}]},
+    "devconduit-test": {
+      "baseUrl":"https://old.example/v1",
+      "api":"openai-completions",
+      "apiKey":"keep-existing",
+      "customField":{"keep":true},
+      "models":[{"id":"old-model"}],
+    },
+  },
+}"#,
+        )
+        .expect("write Pi models fixture");
+        let provider = SavedProvider {
+            app_type: "pi".to_string(),
+            id: "devconduit-test".to_string(),
+            native: false,
+            available: true,
+            status_message: None,
+            models: Vec::new(),
+            provider_name: "Test".to_string(),
+            base_url: "https://example.com/v1".to_string(),
+            model: "test-model".to_string(),
+            api_key: None,
+            toml_config: None,
+            wire_api: "responses".to_string(),
+            requires_openai_auth: false,
+        };
+
+        activate_pi_provider_at(&provider, &root).expect("activate Pi provider");
+        let settings: Value = serde_json::from_str(
+            &fs::read_to_string(root.join("settings.json")).expect("read Pi settings"),
+        )
+        .expect("parse Pi settings");
+        assert_eq!(settings.get("theme"), Some(&json!("dark")));
+        assert_eq!(
+            settings.get("defaultProvider"),
+            Some(&json!("devconduit-test"))
+        );
+        assert_eq!(settings.get("defaultModel"), Some(&json!("test-model")));
+
+        let models_text = fs::read_to_string(root.join("models.json")).expect("read Pi models");
+        assert!(models_text.contains("// Keep this provider and comment."));
+        let models: Value = CstRootNode::parse(&models_text, &Default::default())
+            .expect("parse Pi models JSONC")
+            .to_serde_value()
+            .expect("convert Pi models JSONC");
+        assert!(models.pointer("/providers/existing").is_some());
+        assert_eq!(
+            models.pointer("/providers/devconduit-test/api"),
+            Some(&json!("openai-responses"))
+        );
+        assert_eq!(
+            models.pointer("/providers/devconduit-test/models/0/id"),
+            Some(&json!("test-model"))
+        );
+        assert_eq!(
+            models.pointer("/providers/devconduit-test/apiKey"),
+            Some(&json!("keep-existing"))
+        );
+        assert_eq!(
+            models.pointer("/providers/devconduit-test/customField/keep"),
+            Some(&json!(true))
+        );
+
+        fs::remove_dir_all(root).expect("remove Pi provider fixture");
     }
 }

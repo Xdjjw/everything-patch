@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { ChangeEvent, RefObject } from "react";
 import {
   AlertCircle,
@@ -100,6 +100,10 @@ function getCopy(lang: Lang, toolName: string) {
         importing: "正在导入",
         confirmImport: "导入",
         warnings: "需要留意",
+        piAdapterTitle: "安装 Pi MCP adapter",
+        piAdapterDescription: (name: string) => `启用“${name}”需要先通过 Pi 安装固定版本 pi-mcp-adapter@2.21.0。`,
+        piAdapterDetails: "确认后才会联网安装；写入前备份 settings.json，后续 MCP 配置或数据库写入失败时会恢复原状态。",
+        piAdapterConfirm: "确认安装并启用",
       }
     : {
         eyebrow: "SKILLS / MCP",
@@ -130,6 +134,10 @@ function getCopy(lang: Lang, toolName: string) {
         importing: "Importing",
         confirmImport: "Import",
         warnings: "Review these items",
+        piAdapterTitle: "Install Pi MCP adapter",
+        piAdapterDescription: (name: string) => `Enabling “${name}” first installs pinned pi-mcp-adapter@2.21.0 through Pi.`,
+        piAdapterDetails: "Nothing is installed until you confirm. settings.json is backed up first and restored if the later MCP configuration or database write fails.",
+        piAdapterConfirm: "Install and enable",
       };
 }
 
@@ -309,7 +317,14 @@ export function SkillsMcpPage({
   const importBusy = actionBusy === "importExistingSkillsMcp";
   const mcpInstallBusy = actionBusy.startsWith("installMcpIntegration:");
   const [mcpCatalogOpen, setMcpCatalogOpen] = useState(false);
+  const [pendingPiMcp, setPendingPiMcp] = useState<ManagedMcpServer | null>(null);
   const activeItems = activeTab === "mcp" ? state?.mcpServers ?? [] : state?.skills ?? [];
+  const piAdapterBusy = Boolean(
+    pendingPiMcp && actionBusy === `mcp:${pendingPiMcp.id}`,
+  );
+  useEffect(() => {
+    setPendingPiMcp(null);
+  }, [activeTool]);
   const handleZipChange = (event: ChangeEvent<HTMLInputElement>) => {
     void onInstallZip(event.currentTarget.files?.[0]);
   };
@@ -455,7 +470,17 @@ export function SkillsMcpPage({
                       busy={actionBusy === `mcp:${server.id}`}
                       disabled={anyBusy}
                       copy={copy}
-                      onToggle={onToggleMcp}
+                      onToggle={(id, enabled) => {
+                        if (
+                          activeTool === "pi"
+                          && enabled
+                          && state.mcpAdapterInstalled === false
+                        ) {
+                          setPendingPiMcp(server);
+                          return;
+                        }
+                        void onToggleMcp(id, enabled);
+                      }}
                     />
                   ))
                 ) : state.skills.length === 0 ? (
@@ -513,6 +538,42 @@ export function SkillsMcpPage({
         )}
       >
         <ImportPreviewContent preview={importPreview} copy={copy} />
+      </ModalShell>
+
+      <ModalShell
+        open={Boolean(pendingPiMcp)}
+        onClose={() => {
+          if (!piAdapterBusy) setPendingPiMcp(null);
+        }}
+        title={copy.piAdapterTitle}
+        description={pendingPiMcp ? copy.piAdapterDescription(pendingPiMcp.name || pendingPiMcp.id) : undefined}
+        size="sm"
+        closeLabel={copy.cancel}
+        closeOnBackdrop={!piAdapterBusy}
+        closeOnEscape={!piAdapterBusy}
+        showCloseButton={!piAdapterBusy}
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setPendingPiMcp(null)} disabled={piAdapterBusy} data-initial-focus>
+              {copy.cancel}
+            </Button>
+            <Button
+              icon={piAdapterBusy ? <Loader2 className="cx-skills-spin" /> : <PlugZap />}
+              onClick={async () => {
+                if (!pendingPiMcp) return;
+                await onToggleMcp(pendingPiMcp.id, true);
+                setPendingPiMcp(null);
+              }}
+              disabled={piAdapterBusy}
+            >
+              {copy.piAdapterConfirm}
+            </Button>
+          </>
+        )}
+      >
+        <div className="cx-skills-import-warnings">
+          <p><AlertCircle size={15} aria-hidden="true" />{copy.piAdapterDetails}</p>
+        </div>
       </ModalShell>
 
       <McpInstallCatalog

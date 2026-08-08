@@ -141,3 +141,17 @@ pub(crate) const KILO_BUILTIN_BADGE: &str = "默认";
 pub(crate) const KILO_BUILTIN_FILENAME: &str = "kilo-keysmith.md";
 pub(crate) const KILO_BUILTIN_CONTENT: &str =
     include_str!("../../../../examples/codex-keysmith.md");
+
+pub(crate) const PI_AGENTS_FILENAME: &str = "AGENTS.md";
+pub(crate) const PI_MANIFEST_FILENAME: &str = ".devconduit-pi-manifest.json";
+pub(crate) const PI_ORIGINAL_AGENTS_FILENAME: &str = ".devconduit-pi-original-agents.md";
+pub(crate) const PI_PROMPT_BEGIN: &str = "<!-- DEVCONDUIT:PI:BEGIN -->";
+pub(crate) const PI_PROMPT_END: &str = "<!-- DEVCONDUIT:PI:END -->";
+pub(crate) const PI_PROMPT_TEMPLATE_PREFIX: &str = "<!-- DEVCONDUIT:PI:TEMPLATE:";
+pub(crate) const PI_PROMPT_MODE_PREFIX: &str = "<!-- DEVCONDUIT:PI:MODE:";
+pub(crate) const PI_BUILTIN_ID: &str = "pi-keysmith";
+pub(crate) const PI_BUILTIN_TITLE: &str = "Pi Keysmith 默认 Prompt";
+pub(crate) const PI_BUILTIN_SUBTITLE: &str = "适配 Pi 全局 AGENTS.md，离线内置";
+pub(crate) const PI_BUILTIN_BADGE: &str = "默认";
+pub(crate) const PI_BUILTIN_FILENAME: &str = "pi-keysmith.md";
+pub(crate) const PI_BUILTIN_CONTENT: &str = include_str!("../../../../examples/pi-keysmith.md");

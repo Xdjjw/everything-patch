@@ -36,6 +36,7 @@ fn validate_engine(engine: &str) -> Result<&str> {
         "zcode" => Ok("zcode"),
         "grok" => Ok("grok"),
         "kilo" => Ok("kilo"),
+        "pi" => Ok("pi"),
         _ => Err(CodexxError::Config(format!("未知的运行时引擎: {engine}"))),
     }
 }
@@ -229,6 +230,35 @@ fn preview_kilo(
     ))
 }
 
+fn preview_pi(
+    operation: &str,
+) -> Result<(String, String, Vec<RuntimePreviewTarget>, Option<String>)> {
+    let file_operation = if operation == "install" {
+        "update"
+    } else {
+        "restore/remove"
+    };
+    Ok((
+        "Native global AGENTS.md deployment".to_string(),
+        "Pi uses its official ~/.pi/agent/AGENTS.md path. DevConduit keeps the first original file in a fixed local snapshot for uninstall and recovery."
+            .to_string(),
+        vec![
+            target("Pi AGENTS.md", crate::pi::pi_agents_path()?, file_operation),
+            target(
+                "Original AGENTS.md snapshot",
+                crate::pi::pi_original_agents_path()?,
+                "preserve/restore",
+            ),
+            target(
+                "Deployment manifest",
+                crate::pi::pi_manifest_path()?,
+                file_operation,
+            ),
+        ],
+        Some("Restart Pi or run /reload after changing global instructions.".to_string()),
+    ))
+}
+
 pub(crate) fn preview_prompt_runtime(
     engine: &str,
     operation: &str,
@@ -242,6 +272,7 @@ pub(crate) fn preview_prompt_runtime(
         "zcode" => preview_zcode(operation)?,
         "grok" => preview_grok(operation)?,
         "kilo" => preview_kilo(operation)?,
+        "pi" => preview_pi(operation)?,
         _ => unreachable!(),
     };
     let action_title = if operation == "install" {

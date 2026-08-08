@@ -24,6 +24,7 @@ mod file_io;
 mod grok;
 mod kilo;
 mod paths;
+mod pi;
 mod platform;
 mod prompt_backups;
 mod prompts;
@@ -57,8 +58,8 @@ use paths::app_home;
 use paths::home_dir;
 use prompt_backups::{
     create_claude_prompt_backup, create_claude_runtime_backup, create_codex_prompt_backup,
-    create_grok_prompt_backup, create_kilo_prompt_backup, create_zcode_prompt_backup,
-    list_prompt_backups as prompt_backup_entries,
+    create_grok_prompt_backup, create_kilo_prompt_backup, create_pi_prompt_backup,
+    create_zcode_prompt_backup, list_prompt_backups as prompt_backup_entries,
     restore_prompt_backup as restore_prompt_backup_snapshot, PromptBackupEntry,
 };
 use prompts::{
@@ -70,7 +71,7 @@ use prompts::{
     refresh_builtin_prompts_with_active, remember_current_instruction_prompt,
     resolve_instruction_path, save_prompt_inner, uninstall_managed_agents_block,
     uninstall_managed_claude_block, BuiltinPromptStatus, PromptInjectionMode, SavedPrompt,
-    ENGINE_CLAUDE, ENGINE_CODEX, ENGINE_GROK, ENGINE_KILO, ENGINE_ZCODE,
+    ENGINE_CLAUDE, ENGINE_CODEX, ENGINE_GROK, ENGINE_KILO, ENGINE_PI, ENGINE_ZCODE,
 };
 #[cfg(test)]
 use prompts::{
@@ -135,10 +136,10 @@ use skins::{
 #[cfg(test)]
 use state::active_saved_provider_id_from_config;
 use state::{
-    auth_has_material, build_claude_state, build_grok_state, build_kilo_state, build_state,
-    build_zcode_state, ActionResult, ClaudeActionResult, ClaudeState, CodexState, GrokActionResult,
-    GrokState, KiloActionResult, KiloState, ZcodeActionResult, ZcodeDoctor, ZcodeState,
-    ZcodeVerify,
+    auth_has_material, build_claude_state, build_grok_state, build_kilo_state, build_pi_state,
+    build_state, build_zcode_state, ActionResult, ClaudeActionResult, ClaudeState, CodexState,
+    GrokActionResult, GrokState, KiloActionResult, KiloState, PiActionResult, PiState,
+    ZcodeActionResult, ZcodeDoctor, ZcodeState, ZcodeVerify,
 };
 use toml_edit::{value, DocumentMut};
 pub(crate) use toml_utils::string_value;
@@ -2329,6 +2330,189 @@ async fn uninstall_kilo_instruction() -> Result<KiloActionResult> {
         .map_err(|error| CodexxError::Config(format!("卸载 Kilo 指令失败: {error}")))?
 }
 
+// ─── Pi 指令管理命令 ──────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_pi_state() -> Result<PiState> {
+    tauri::async_runtime::spawn_blocking(build_pi_state)
+        .await
+        .map_err(|error| CodexxError::Config(format!("Pi 状态查询失败: {error}")))?
+}
+
+#[tauri::command]
+async fn list_pi_prompts() -> Result<Vec<SavedPrompt>> {
+    tauri::async_runtime::spawn_blocking(move || list_saved_prompts_inner(ENGINE_PI))
+        .await
+        .map_err(|error| CodexxError::Config(format!("Pi 提示词列表失败: {error}")))?
+}
+
+#[tauri::command]
+async fn get_pi_builtin_prompt_status() -> Result<Vec<BuiltinPromptStatus>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = build_pi_state()?;
+        let active_key = state.instruction_template_key.as_deref();
+        Ok(vec![BuiltinPromptStatus {
+            id: PI_BUILTIN_ID.to_string(),
+            filename: PI_BUILTIN_FILENAME.to_string(),
+            title: PI_BUILTIN_TITLE.to_string(),
+            subtitle: PI_BUILTIN_SUBTITLE.to_string(),
+            badge: PI_BUILTIN_BADGE.to_string(),
+            source_url: String::new(),
+            cached: false,
+            updated: false,
+            content_source: "打包内置".to_string(),
+            sync_issue: None,
+            checked_at: None,
+            message: if active_key == Some("builtin:pi-keysmith") {
+                "已启用".to_string()
+            } else {
+                "未启用".to_string()
+            },
+        }])
+    })
+    .await
+    .map_err(|error| CodexxError::Config(format!("Pi 内置模板状态失败: {error}")))?
+}
+
+fn save_pi_prompt_command_inner(prompt: SavedPrompt) -> Result<SavedPrompt> {
+    let filename = normalize_prompt_filename(&prompt.filename, PI_BUILTIN_FILENAME);
+    save_prompt_inner(
+        SavedPrompt {
+            id: prompt.id,
+            title: prompt.title,
+            filename,
+            content: prompt.content,
+        },
+        ENGINE_PI,
+    )
+}
+
+#[tauri::command]
+async fn save_pi_prompt(prompt: SavedPrompt) -> Result<SavedPrompt> {
+    tauri::async_runtime::spawn_blocking(move || save_pi_prompt_command_inner(prompt))
+        .await
+        .map_err(|error| CodexxError::Config(format!("保存 Pi 提示词失败: {error}")))?
+}
+
+#[tauri::command]
+async fn delete_pi_prompt(id: String) -> Result<()> {
+    tauri::async_runtime::spawn_blocking(move || delete_prompt_inner(id.trim(), ENGINE_PI))
+        .await
+        .map_err(|error| CodexxError::Config(format!("删除 Pi 提示词失败: {error}")))?
+}
+
+fn install_pi_instruction_inner(
+    template_id: &str,
+    injection_mode: Option<String>,
+) -> Result<PiActionResult> {
+    let resolved_id = if template_id.trim().is_empty() {
+        PI_BUILTIN_ID
+    } else {
+        template_id.trim()
+    };
+    let (_filename, _relative, content, content_source) = pi::pi_builtin_content(resolved_id)?;
+    let mode = PromptInjectionMode::parse(injection_mode.as_deref())?;
+    let backup_id = create_pi_prompt_backup("install-pi-instruct")?;
+    pi::install_pi(
+        &content,
+        mode,
+        &format!("builtin:{resolved_id}"),
+        PI_BUILTIN_TITLE,
+    )?;
+    let state = build_pi_state()?;
+    Ok(PiActionResult {
+        ok: true,
+        message: format!(
+            "已用{}模式安装 Pi AGENTS.md（来源：{content_source}）",
+            if mode == PromptInjectionMode::Append {
+                "保留"
+            } else {
+                "替换"
+            }
+        ),
+        backup_id,
+        state,
+    })
+}
+
+#[tauri::command]
+async fn install_pi_instruction(
+    template_id: Option<String>,
+    injection_mode: Option<String>,
+) -> Result<PiActionResult> {
+    tauri::async_runtime::spawn_blocking(move || {
+        install_pi_instruction_inner(
+            template_id.as_deref().unwrap_or(PI_BUILTIN_ID),
+            injection_mode,
+        )
+    })
+    .await
+    .map_err(|error| CodexxError::Config(format!("安装 Pi 指令失败: {error}")))?
+}
+
+fn install_pi_saved_prompt_inner(
+    id: String,
+    injection_mode: Option<String>,
+) -> Result<PiActionResult> {
+    let prompt = get_saved_prompt_inner(id.trim(), ENGINE_PI)?;
+    let mode = PromptInjectionMode::parse(injection_mode.as_deref())?;
+    let backup_id = create_pi_prompt_backup("install-pi-custom-prompt")?;
+    pi::install_pi(
+        &prompt.content,
+        mode,
+        &format!("saved:{}", prompt.id),
+        &prompt.title,
+    )?;
+    let state = build_pi_state()?;
+    Ok(PiActionResult {
+        ok: true,
+        message: format!(
+            "已用{}模式安装 Pi AGENTS.md：{}",
+            if mode == PromptInjectionMode::Append {
+                "保留"
+            } else {
+                "替换"
+            },
+            prompt.title
+        ),
+        backup_id,
+        state,
+    })
+}
+
+#[tauri::command]
+async fn install_pi_saved_prompt(
+    id: String,
+    injection_mode: Option<String>,
+) -> Result<PiActionResult> {
+    tauri::async_runtime::spawn_blocking(move || install_pi_saved_prompt_inner(id, injection_mode))
+        .await
+        .map_err(|error| CodexxError::Config(format!("安装 Pi 自定义提示词失败: {error}")))?
+}
+
+fn uninstall_pi_instruction_inner() -> Result<PiActionResult> {
+    let backup_id = create_pi_prompt_backup("uninstall-pi-instruct")?;
+    let removed = pi::uninstall_pi()?;
+    let state = build_pi_state()?;
+    Ok(PiActionResult {
+        ok: true,
+        message: if removed {
+            "已卸载 Pi 受管入口并恢复原始 AGENTS.md".to_string()
+        } else {
+            "当前没有安装 Pi 受管入口".to_string()
+        },
+        backup_id,
+        state,
+    })
+}
+
+#[tauri::command]
+async fn uninstall_pi_instruction() -> Result<PiActionResult> {
+    tauri::async_runtime::spawn_blocking(uninstall_pi_instruction_inner)
+        .await
+        .map_err(|error| CodexxError::Config(format!("卸载 Pi 指令失败: {error}")))?
+}
+
 #[tauri::command]
 fn open_url(url: String) -> std::result::Result<(), String> {
     let trimmed = url.trim().to_string();
@@ -2472,6 +2656,14 @@ pub fn run() {
             install_kilo_instruction,
             install_kilo_saved_prompt,
             uninstall_kilo_instruction,
+            get_pi_state,
+            list_pi_prompts,
+            get_pi_builtin_prompt_status,
+            save_pi_prompt,
+            delete_pi_prompt,
+            install_pi_instruction,
+            install_pi_saved_prompt,
+            uninstall_pi_instruction,
             open_url,
         ])
         .run(tauri::generate_context!())

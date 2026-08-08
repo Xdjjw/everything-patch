@@ -1,6 +1,7 @@
 use crate::constants::{
     GROK_AGENTS_FILENAME, GROK_CONFIG_FILENAME, GROK_MANIFEST_FILENAME, KILO_AGENTS_FILENAME,
-    KILO_MANIFEST_FILENAME, KILO_ORIGINAL_AGENTS_FILENAME,
+    KILO_MANIFEST_FILENAME, KILO_ORIGINAL_AGENTS_FILENAME, PI_AGENTS_FILENAME,
+    PI_MANIFEST_FILENAME, PI_ORIGINAL_AGENTS_FILENAME,
 };
 use crate::error::{CodexxError, Result};
 use crate::file_io::{
@@ -24,6 +25,7 @@ const ENGINE_CLAUDE: &str = "claude";
 const ENGINE_ZCODE: &str = "zcode";
 const ENGINE_GROK: &str = "grok";
 const ENGINE_KILO: &str = "kilo";
+const ENGINE_PI: &str = "pi";
 
 const KEY_CONFIG: &str = "config";
 const KEY_AGENTS: &str = "agents";
@@ -79,6 +81,7 @@ fn validate_engine(engine: &str) -> Result<&str> {
         ENGINE_ZCODE => Ok(ENGINE_ZCODE),
         ENGINE_GROK => Ok(ENGINE_GROK),
         ENGINE_KILO => Ok(ENGINE_KILO),
+        ENGINE_PI => Ok(ENGINE_PI),
         other => Err(CodexxError::Config(format!("未知的提示词引擎: {other}"))),
     }
 }
@@ -349,6 +352,32 @@ pub(crate) fn create_kilo_prompt_backup(action: &str) -> Result<Option<String>> 
     })
 }
 
+pub(crate) fn create_pi_prompt_backup(action: &str) -> Result<Option<String>> {
+    let mode = crate::pi::current_install_metadata()?.0;
+    create_snapshot(ENGINE_PI, action, None, mode, |dir| {
+        Ok(vec![
+            capture_file(
+                dir,
+                KEY_AGENTS,
+                &crate::pi::pi_agents_path()?,
+                Some(PI_AGENTS_FILENAME.to_string()),
+            )?,
+            capture_file(
+                dir,
+                KEY_MANIFEST,
+                &crate::pi::pi_manifest_path()?,
+                Some(PI_MANIFEST_FILENAME.to_string()),
+            )?,
+            capture_file(
+                dir,
+                KEY_ORIGINAL_AGENTS,
+                &crate::pi::pi_original_agents_path()?,
+                Some(PI_ORIGINAL_AGENTS_FILENAME.to_string()),
+            )?,
+        ])
+    })
+}
+
 fn read_meta(dir: &Path) -> Result<PromptBackupMeta> {
     let path = dir.join("meta.json");
     let text = fs::read_to_string(&path).map_err(|e| io_err(&path, e))?;
@@ -547,6 +576,17 @@ fn restore_kilo_snapshot(dir: &Path, meta: &PromptBackupMeta) -> Result<()> {
     )
 }
 
+fn restore_pi_snapshot(dir: &Path, meta: &PromptBackupMeta) -> Result<()> {
+    restore_file(dir, meta, KEY_AGENTS, &crate::pi::pi_agents_path()?)?;
+    restore_file(dir, meta, KEY_MANIFEST, &crate::pi::pi_manifest_path()?)?;
+    restore_file(
+        dir,
+        meta,
+        KEY_ORIGINAL_AGENTS,
+        &crate::pi::pi_original_agents_path()?,
+    )
+}
+
 pub(crate) fn restore_prompt_backup(
     engine: &str,
     codex_dir: Option<&Path>,
@@ -565,6 +605,7 @@ pub(crate) fn restore_prompt_backup(
         ENGINE_ZCODE => create_zcode_prompt_backup("before-restore")?,
         ENGINE_GROK => create_grok_prompt_backup("before-restore")?,
         ENGINE_KILO => create_kilo_prompt_backup("before-restore")?,
+        ENGINE_PI => create_pi_prompt_backup("before-restore")?,
         _ => unreachable!(),
     };
     match engine {
@@ -579,6 +620,7 @@ pub(crate) fn restore_prompt_backup(
         ENGINE_ZCODE => restore_zcode_snapshot(&dir, &meta)?,
         ENGINE_GROK => restore_grok_snapshot(&dir, &meta)?,
         ENGINE_KILO => restore_kilo_snapshot(&dir, &meta)?,
+        ENGINE_PI => restore_pi_snapshot(&dir, &meta)?,
         _ => unreachable!(),
     }
     Ok(restore_marker)

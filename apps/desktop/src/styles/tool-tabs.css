@@ -62,6 +62,8 @@
 @media (max-width: 640px) {
   .cx-tool-tabs {
     width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .cx-tool-tab {

@@ -641,6 +641,10 @@
   white-space: nowrap;
 }
 
+.cx-session-row-copy p.cx-session-row-summary {
+  font-family: inherit;
+}
+
 .cx-session-state {
   flex: 0 0 auto;
   padding: 2px 5px;

@@ -262,15 +262,17 @@ function ListPage({
           <p>{copy.subtitle}</p>
         </div>
         <div className="cx-providers-header-actions">
-          <button
-            type="button"
-            className="cx-providers-button cx-providers-button--secondary"
-            onClick={onImportCcSwitch}
-            disabled={loading || Boolean(actionBusy)}
-          >
-            {actionBusy === "importCcSwitch" ? <Loader2 size={15} className="cx-providers-spin" aria-hidden="true" /> : <RefreshCw size={15} aria-hidden="true" />}
-            {copy.importLabel}
-          </button>
+          {tool !== "pi" && (
+            <button
+              type="button"
+              className="cx-providers-button cx-providers-button--secondary"
+              onClick={onImportCcSwitch}
+              disabled={loading || Boolean(actionBusy)}
+            >
+              {actionBusy === "importCcSwitch" ? <Loader2 size={15} className="cx-providers-spin" aria-hidden="true" /> : <RefreshCw size={15} aria-hidden="true" />}
+              {copy.importLabel}
+            </button>
+          )}
           {tool !== "zcode" && (
             <button type="button" className="cx-providers-button cx-providers-button--dark" onClick={onAddProvider} disabled={loading}>
               <Plus size={15} aria-hidden="true" />
@@ -449,6 +451,7 @@ function OfficialForm({
 }
 
 function ProviderForm({
+  tool,
   copy,
   providerForm,
   loading,
@@ -471,8 +474,16 @@ function ProviderForm({
   onProviderTomlDraftChange,
   onResetProviderToml,
   onSaveProvider,
-}: Pick<ProvidersPageProps, "copy" | "providerForm" | "loading" | "editingProviderId" | "providerAuthPreview" | "providerTomlDraft" | "providerTomlRef" | "apiKeyVisible" | "availableModels" | "fetchingModels" | "onCancelMode" | "onApiKeyChange" | "onBaseUrlChange" | "onProviderNameChange" | "onProviderModelChange" | "onFetchModels" | "onWireApiChange" | "onRequiresAuthChange" | "onToggleApiKeyVisibility" | "onProviderTomlDraftChange" | "onResetProviderToml" | "onSaveProvider">) {
+}: Pick<ProvidersPageProps, "tool" | "copy" | "providerForm" | "loading" | "editingProviderId" | "providerAuthPreview" | "providerTomlDraft" | "providerTomlRef" | "apiKeyVisible" | "availableModels" | "fetchingModels" | "onCancelMode" | "onApiKeyChange" | "onBaseUrlChange" | "onProviderNameChange" | "onProviderModelChange" | "onFetchModels" | "onWireApiChange" | "onRequiresAuthChange" | "onToggleApiKeyVisibility" | "onProviderTomlDraftChange" | "onResetProviderToml" | "onSaveProvider">) {
   const modelListId = useId();
+  const wireApiOptions = tool === "pi"
+    ? ["responses", "chat", "anthropic", "google"]
+    : tool === "claude" || tool === "zcode"
+      ? ["anthropic", "responses", "chat"]
+      : ["responses", "chat"];
+  if (providerForm.wireApi && !wireApiOptions.includes(providerForm.wireApi)) {
+    wireApiOptions.push(providerForm.wireApi);
+  }
   const canFetchModels = Boolean(
     providerForm.baseUrl.trim()
     && (providerForm.apiKey.trim() || providerForm.hasApiKey),
@@ -551,30 +562,42 @@ function ProviderForm({
           </Field>
           <Field label={copy.wireApiLabel}>
             <select value={providerForm.wireApi} onChange={(event) => onWireApiChange(event.target.value)}>
-              <option value="responses">responses</option>
-              <option value="chat">chat</option>
+              {wireApiOptions.map((wireApi) => <option value={wireApi} key={wireApi}>{wireApi}</option>)}
             </select>
           </Field>
-          <Checkbox
-            className="cx-providers-checkbox cx-providers-checkbox--full"
-            checked={providerForm.requiresOpenaiAuth}
-            onCheckedChange={onRequiresAuthChange}
-            label={copy.requiresAuthLabel}
-          />
+          {tool !== "pi" && (
+            <Checkbox
+              className="cx-providers-checkbox cx-providers-checkbox--full"
+              checked={providerForm.requiresOpenaiAuth}
+              onCheckedChange={onRequiresAuthChange}
+              label={copy.requiresAuthLabel}
+            />
+          )}
         </div>
       </section>
 
-      <section className="cx-providers-form-section">
-        <div className="cx-providers-section-heading"><div><h3>{copy.authPreviewTitle}</h3><p>{copy.authPreviewDescription}</p></div></div>
-        <div className="cx-providers-preview">{providerAuthPreview}</div>
-      </section>
+      {tool !== "pi" && (
+        <section className="cx-providers-form-section">
+          <div className="cx-providers-section-heading"><div><h3>{copy.authPreviewTitle}</h3><p>{copy.authPreviewDescription}</p></div></div>
+          <div className="cx-providers-preview">{providerAuthPreview}</div>
+        </section>
+      )}
 
       <section className="cx-providers-form-section">
         <div className="cx-providers-section-heading cx-providers-section-heading--with-action">
           <div><h3>{copy.tomlTitle}</h3><p>{copy.tomlDescription}</p></div>
-          <button type="button" className="cx-providers-button cx-providers-button--secondary cx-providers-button--small" onClick={onResetProviderToml}><RefreshCw size={14} aria-hidden="true" />{copy.resetTomlLabel}</button>
+          {tool !== "pi" && (
+            <button type="button" className="cx-providers-button cx-providers-button--secondary cx-providers-button--small" onClick={onResetProviderToml}><RefreshCw size={14} aria-hidden="true" />{copy.resetTomlLabel}</button>
+          )}
         </div>
-        <textarea ref={providerTomlRef} className="cx-providers-code-editor cx-providers-toml-editor" value={providerTomlDraft} onChange={(event) => onProviderTomlDraftChange(event.target.value)} spellCheck={false} />
+        <textarea
+          ref={providerTomlRef}
+          className="cx-providers-code-editor cx-providers-toml-editor"
+          value={providerTomlDraft}
+          onChange={(event) => onProviderTomlDraftChange(event.target.value)}
+          readOnly={tool === "pi"}
+          spellCheck={false}
+        />
       </section>
 
       <div className="cx-providers-form-actions cx-providers-form-actions--save">

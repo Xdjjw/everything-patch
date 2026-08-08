@@ -8,7 +8,7 @@
 
   <h1>DevConduit</h1>
 
-  <p><strong>A local configuration and workflow console for Codex, Claude Code, Grok Build, ZCode, and Kilo Code</strong></p>
+  <p><strong>A local configuration and workflow console for Codex, Claude Code, Grok Build, ZCode, Kilo Code, and Pi</strong></p>
 
   <p>
     <a href="https://github.com/Xdjjw/everything-patch/actions/workflows/main.yml"><img src="https://github.com/Xdjjw/everything-patch/actions/workflows/main.yml/badge.svg" alt="Build Package" /></a>
@@ -35,34 +35,37 @@ The project was formerly named Codex-X and Everything Patch. Remaining `codexx`,
 | Grok Build | `AGENTS.md`, TOML configuration, and providers | Supported | Burp MCP stdio proxy configuration |
 | ZCode | System role, JSON configuration, and providers | Supported | Burp MCP SSE connection |
 | [Kilo Code](https://kilo.ai/) | Global `AGENTS.md` and JSONC configuration | Supported | Native JSONC MCP, global Skills, and `/reload` workflow |
+| [Pi](https://pi.dev/) | `settings.json`, `models.json`, global `AGENTS.md`, and providers | Supported through a pinned adapter | Read-only JSONL sessions, global Skills, and `/reload` workflow |
 
-Features are shown according to what is installed locally. Session synchronization, inspection, and deletion are Codex-only. Skin Center is also for Codex only.
+Features are shown according to what is installed locally. Claude Code, Grok Build, ZCode, and Pi sessions are read-only; session synchronization and deletion are Codex-only. Skin Center is also for Codex only.
 
 ## Main Capabilities
 
 ### Instructions and Prompts
 
 - Manage bundled and custom Markdown instructions with categories, import, editing, enablement, and disablement.
-- Bundle the default Codex, Claude Code, and ZCode templates from their corresponding Keysmith projects for offline use. Kilo also includes an offline default adapted to its global `AGENTS.md`. Enabling any template still requires preview and confirmation; application startup never writes tool configuration automatically.
+- Bundle the default Codex, Claude Code, and ZCode templates from their corresponding Keysmith projects for offline use. Kilo includes an offline default for its global `AGENTS.md`; Pi bundles an independent [pi-keysmith.md](examples/pi-keysmith.md), copied in full from Codex Keysmith with the product identity changed to Pi. Enabling any template still requires preview and confirmation; application startup never writes tool configuration automatically.
 - Choose whether to preserve existing instructions or replace them, without overwriting content that DevConduit does not manage.
-- Create a backup before a managed write so changes can be reviewed or restored. Kilo preserves a fixed snapshot of the original `AGENTS.md` on first install and restores it exactly on uninstall.
+- Create a backup before a managed write so changes can be reviewed or restored. Kilo and Pi preserve a fixed snapshot of the original `AGENTS.md` on first install and restore it exactly on uninstall.
 
 ### Providers and Configuration
 
 - View, edit, test, and switch providers from one place.
 - Manage Codex `config.toml` and `auth.json`, including importing existing providers from cc-switch.
-- Read each tool's TOML, JSON, or JSONC configuration, redact sensitive values in previews, and preserve Kilo JSONC comments.
+- Pi providers are written to the official `models.json.providers` object, with the default provider and model updated in `settings.json`. Existing comments, trailing commas, unrelated fields, and saved keys in `models.json` are preserved. Leave the API key empty to manage authentication through Pi's `/login` flow.
+- Read each tool's TOML, JSON, or JSONC configuration, redact sensitive values in previews, and preserve Kilo JSONC comments. Pi `auth.json` is never included in configuration previews.
 
-### Codex Session Management
+### Session Management
 
 - Search local sessions by project path, title, and ID.
-- Inspect session relationships to the active provider and model, then synchronize configuration where appropriate.
-- Select individual sessions or entire projects for deletion. Deletion is irreversible and requires confirmation.
+- Pi reads native JSONL sessions from `~/.pi/agent/sessions` and shows their names, summaries, project paths, and timestamps without modifying session files.
+- Codex can inspect session relationships to the active provider and model and synchronize them when needed. Precise session deletion is also Codex-only and requires confirmation.
 
 ### Skills and MCP
 
 - View and import existing Skills and MCP configuration, install ZIP Skills, and enable or disable entries individually.
 - Review managed configuration and action results in one place. Failed configuration writes are shown in the dialog and the previous configuration is restored.
+- Pi has no native MCP configuration API. The first confirmed Pi MCP enablement backs up `settings.json`, installs pinned `pi-mcp-adapter@2.21.0` through Pi, and writes servers to `~/.pi/agent/mcp.json` while preserving JSONC comments and other servers.
 - Use the automatic MCP catalog for common reverse-engineering and security tooling, with a manual-file fallback as described below.
 
 ### Codex Skin Center
@@ -87,7 +90,8 @@ Integration rules:
 - Automatic acquisition verifies a pinned SHA-256 before use. A mismatched cache is downloaded again, and a failed verification never writes tool configuration. Sources and licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - **IDA Pro MCP** runs `uv sync --locked` during initial acquisition, then uses `uv run --offline --no-sync` so runtime startup cannot synchronize dependencies.
 - **Cheat Engine and x64dbg** local modes are Windows-only. DevConduit searches common install locations or accepts a portable root, creates a host-file backup, and offers a restore action for the latest install without overwriting plugins changed afterward. On macOS, it connects to a Windows bridge that you operate; a local Mac application cannot write files on that remote host.
-- **Burp Suite MCP** supports direct SSE for Claude Code, ZCode, and Kilo Code. Codex and Grok Build use the official `mcp-proxy-all.jar` emitted by the Burp extension as a stdio proxy to avoid transport incompatibilities.
+- **Burp Suite MCP** supports direct SSE for Claude Code, ZCode, Kilo Code, and Pi. Codex and Grok Build use the official `mcp-proxy-all.jar` emitted by the Burp extension as a stdio proxy to avoid transport incompatibilities.
+- **Pi MCP adapter** is not bundled in the installer. It is installed through Pi only after Pi is selected and the MCP action is confirmed. The version is pinned to `2.21.0`; Pi/npm performs package and dependency integrity handling. DevConduit records the published SHA-512 value but does not reimplement npm dependency-tree verification. Disabling or removing DevConduit-managed servers does not silently remove the adapter because it may also serve Pi MCP entries you added yourself.
 - Two first-time actions remain under the third-party application's control and cannot be reliably performed through an external API: activating IDA idalib and enabling the official extension in Burp's Extensions screen. Everything else, including download, verification, dependency preparation, target configuration, and Windows CE/x64dbg file installation, is automatic after confirmation. A failed write restores both the previous tool configuration and the host files installed by that action.
 
 Connect only to MCP servers and remote bridges that you trust. For HTTP bridges, prefer a trusted network or `127.0.0.1`.
@@ -137,6 +141,17 @@ Default Codex paths:
 ```text
 ~/.codex/config.toml
 ~/.codex/auth.json
+```
+
+Default Pi paths:
+
+```text
+~/.pi/agent/settings.json
+~/.pi/agent/models.json
+~/.pi/agent/AGENTS.md
+~/.pi/agent/skills/
+~/.pi/agent/sessions/
+~/.pi/agent/mcp.json  # after enabling the MCP adapter
 ```
 
 DevConduit continues to use the existing local data directory so an in-place upgrade retains existing configuration:

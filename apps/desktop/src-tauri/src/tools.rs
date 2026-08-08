@@ -4,7 +4,8 @@ use crate::paths::home_dir;
 use crate::platform;
 use crate::resolve_codex_dir;
 use crate::state::{
-    build_claude_state, build_grok_state, build_kilo_state, build_state, build_zcode_state,
+    build_claude_state, build_grok_state, build_kilo_state, build_pi_state, build_state,
+    build_zcode_state,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -26,15 +27,18 @@ pub(crate) enum ToolId {
     Zcode,
     #[serde(alias = "kilo-code", alias = "kilocode")]
     Kilo,
+    #[serde(alias = "pi-agent", alias = "piagent")]
+    Pi,
 }
 
 impl ToolId {
-    pub(crate) const ALL: [ToolId; 5] = [
+    pub(crate) const ALL: [ToolId; 6] = [
         ToolId::Codex,
         ToolId::Claude,
         ToolId::Grok,
         ToolId::Zcode,
         ToolId::Kilo,
+        ToolId::Pi,
     ];
 
     pub(crate) fn as_str(self) -> &'static str {
@@ -44,6 +48,7 @@ impl ToolId {
             ToolId::Grok => "grok",
             ToolId::Zcode => "zcode",
             ToolId::Kilo => "kilo",
+            ToolId::Pi => "pi",
         }
     }
 
@@ -54,6 +59,7 @@ impl ToolId {
             ToolId::Grok => "Grok Build",
             ToolId::Zcode => "ZCode",
             ToolId::Kilo => "Kilo Code",
+            ToolId::Pi => "Pi",
         }
     }
 
@@ -64,6 +70,7 @@ impl ToolId {
             ToolId::Grok => "grokbuild",
             ToolId::Zcode => "zcode",
             ToolId::Kilo => "kilo",
+            ToolId::Pi => "pi",
         }
     }
 
@@ -74,6 +81,7 @@ impl ToolId {
             "grok" | "grok-build" | "grokbuild" => Ok(ToolId::Grok),
             "zcode" | "z-code" => Ok(ToolId::Zcode),
             "kilo" | "kilo-code" | "kilocode" => Ok(ToolId::Kilo),
+            "pi" | "pi-agent" | "piagent" => Ok(ToolId::Pi),
             other => Err(CodexxError::Config(format!("不支持的工具: {other}"))),
         }
     }
@@ -85,6 +93,7 @@ impl ToolId {
             ToolId::Grok => Ok(home_dir()?.join(".grok")),
             ToolId::Zcode => Ok(home_dir()?.join(".zcode")),
             ToolId::Kilo => Ok(home_dir()?.join(".config").join("kilo")),
+            ToolId::Pi => Ok(home_dir()?.join(".pi").join("agent")),
         }
     }
 
@@ -95,12 +104,15 @@ impl ToolId {
             ToolId::Claude => root.join("settings.json"),
             ToolId::Zcode => root.join("cli").join("config.json"),
             ToolId::Kilo => root.join("kilo.jsonc"),
+            ToolId::Pi => root.join("settings.json"),
         })
     }
 
     pub(crate) fn skills_dir(self, codex_override: Option<String>) -> Result<PathBuf> {
-        if self == ToolId::Kilo {
-            return Ok(home_dir()?.join(".kilo").join("skills"));
+        match self {
+            ToolId::Kilo => return Ok(home_dir()?.join(".kilo").join("skills")),
+            ToolId::Pi => return Ok(home_dir()?.join(".pi").join("agent").join("skills")),
+            _ => {}
         }
         Ok(self.home_dir(codex_override)?.join("skills"))
     }
@@ -474,6 +486,26 @@ fn kilo_model_provider(path: &Path) -> (Option<String>, Option<String>) {
     (model, provider)
 }
 
+fn pi_model_provider(path: &Path) -> (Option<String>, Option<String>) {
+    let text = read_to_string_if_exists(path).unwrap_or_default();
+    let Ok(value) = serde_json::from_str::<JsonValue>(&text) else {
+        return (None, None);
+    };
+    let model = value
+        .get("defaultModel")
+        .and_then(JsonValue::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string);
+    let provider = value
+        .get("defaultProvider")
+        .and_then(JsonValue::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string);
+    (model, provider)
+}
+
 fn command_version(candidates: &[PathBuf]) -> Option<String> {
     let mut seen = HashSet::new();
     for candidate in candidates {
@@ -563,6 +595,7 @@ fn tool_version(tool: ToolId) -> Option<String> {
         ToolId::Kilo => command_version(&generic_command_candidates(&[
             "kilo", "kilo.exe", "kilo.cmd",
         ])),
+        ToolId::Pi => command_version(&generic_command_candidates(&["pi", "pi.exe", "pi.cmd"])),
     }
 }
 
@@ -575,6 +608,11 @@ fn config_file(
 ) -> Result<ToolConfigFile> {
     let exists = path.is_file();
     let text = read_to_string_if_exists(&path)?;
+    let text = if format.eq_ignore_ascii_case("jsonc") {
+        redacted_jsonc_text(&text)
+    } else {
+        redacted_config_text(&path, &text)
+    };
     Ok(ToolConfigFile {
         id: id.to_string(),
         label: label.to_string(),
@@ -582,7 +620,7 @@ fn config_file(
         format: format.to_string(),
         exists,
         native,
-        text: redacted_config_text(&path, &text),
+        text,
     })
 }
 
@@ -1025,6 +1063,40 @@ pub(crate) fn get_tool_config_inner(
                     .to_string(),
             )
         }
+        ToolId::Pi => {
+            files.push(config_file(
+                "settings",
+                "settings.json",
+                tool_home.join("settings.json"),
+                "json",
+                true,
+            )?);
+            files.push(config_file(
+                "models",
+                "models.json",
+                tool_home.join("models.json"),
+                "jsonc",
+                true,
+            )?);
+            files.push(config_file(
+                "instructions",
+                "AGENTS.md",
+                tool_home.join("AGENTS.md"),
+                "markdown",
+                true,
+            )?);
+            files.push(config_file(
+                "mcp",
+                "mcp.json",
+                tool_home.join("mcp.json"),
+                "jsonc",
+                true,
+            )?);
+            Some(
+                "Pi 的全局配置、指令、Skills、Extensions 与 MCP adapter 配置位于 ~/.pi/agent；auth.json 不进入预览。"
+                    .to_string(),
+            )
+        }
     };
     let primary_file_id = files
         .first()
@@ -1125,6 +1197,22 @@ fn status_for_tool(tool: ToolId, codex_override: Option<String>) -> Result<ToolS
                 ),
             )
         }
+        ToolId::Pi => {
+            let state = build_pi_state()?;
+            let instruction = PathBuf::from(&state.agents_path);
+            (
+                Some(root.join("auth.json")),
+                instruction.clone(),
+                instruction.clone(),
+                None,
+                state.instruction_enabled,
+                instruction.is_file(),
+                Some(
+                    "Pi 使用 ~/.pi/agent/AGENTS.md 作为全局指令，修改后可在 Pi 中执行 /reload。"
+                        .to_string(),
+                ),
+            )
+        }
     };
     let (model, provider, provider_id) = match tool {
         ToolId::Codex => {
@@ -1151,6 +1239,10 @@ fn status_for_tool(tool: ToolId, codex_override: Option<String>) -> Result<ToolS
             let (model, provider) = kilo_model_provider(&config);
             (model, provider, None)
         }
+        ToolId::Pi => {
+            let (model, provider) = pi_model_provider(&config);
+            (model, provider.clone(), provider)
+        }
     };
     let version = tool_version(tool);
     let installed = root.is_dir()
@@ -1168,6 +1260,7 @@ fn status_for_tool(tool: ToolId, codex_override: Option<String>) -> Result<ToolS
             ToolId::Codex | ToolId::Grok => "toml",
             ToolId::Claude | ToolId::Zcode => "json",
             ToolId::Kilo => "jsonc",
+            ToolId::Pi => "json",
         }
         .to_string(),
         config_exists: config.is_file(),
@@ -1232,6 +1325,15 @@ fn fallback_status(
             let instruction = root.join("AGENTS.md");
             (None, instruction.clone(), instruction, None)
         }
+        ToolId::Pi => {
+            let instruction = root.join("AGENTS.md");
+            (
+                Some(root.join("auth.json")),
+                instruction.clone(),
+                instruction,
+                None,
+            )
+        }
     };
     let version = tool_version(tool);
     let installed = root.is_dir()
@@ -1250,6 +1352,7 @@ fn fallback_status(
             ToolId::Codex | ToolId::Grok => "toml",
             ToolId::Claude | ToolId::Zcode => "json",
             ToolId::Kilo => "jsonc",
+            ToolId::Pi => "json",
         }
         .to_string(),
         config_exists: config.is_file(),
@@ -1292,6 +1395,7 @@ mod tests {
         assert_eq!(ToolId::parse("grokbuild").unwrap(), ToolId::Grok);
         assert_eq!(ToolId::parse("z-code").unwrap(), ToolId::Zcode);
         assert_eq!(ToolId::parse("kilo-code").unwrap(), ToolId::Kilo);
+        assert_eq!(ToolId::parse("pi-agent").unwrap(), ToolId::Pi);
     }
 
     #[test]
@@ -1320,6 +1424,16 @@ mod tests {
             value.pointer("/env/model").and_then(JsonValue::as_str),
             Some("claude")
         );
+    }
+
+    #[test]
+    fn jsonc_redaction_accepts_comments_and_trailing_commas() {
+        let redacted = redacted_jsonc_text(
+            "{\n  // keep parsing\n  \"apiKey\": \"secret\",\n  \"model\": \"gpt\",\n}\n",
+        );
+        assert!(redacted.contains("\"apiKey\": \"[REDACTED]\""));
+        assert!(redacted.contains("\"model\": \"gpt\""));
+        assert!(!redacted.contains("\"secret\""));
     }
 
     #[test]

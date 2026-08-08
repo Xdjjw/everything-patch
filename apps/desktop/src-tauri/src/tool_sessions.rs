@@ -499,6 +499,135 @@ fn kilo_sessions() -> Result<ToolSessionList> {
     })
 }
 
+fn pi_session(path: &Path) -> Option<ToolSession> {
+    let file = fs::File::open(path).ok()?;
+    let reader = BufReader::new(file);
+    let mut id = None;
+    let mut cwd = None;
+    let mut created_at_ms = None;
+    let mut updated_at_ms = None;
+    let mut first_user = None;
+    let mut summary = None;
+    let mut custom_title = None;
+
+    for line in reader.lines().map_while(std::result::Result::ok) {
+        let Ok(value) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        let entry_type = value.get("type").and_then(Value::as_str);
+        if entry_type == Some("session") {
+            id = value
+                .get("id")
+                .and_then(Value::as_str)
+                .map(ToString::to_string)
+                .or(id);
+            cwd = value
+                .get("cwd")
+                .and_then(Value::as_str)
+                .map(ToString::to_string)
+                .or(cwd);
+        }
+        if entry_type == Some("session_info") {
+            custom_title = value
+                .get("name")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .map(ToString::to_string)
+                .or(custom_title);
+        }
+        if let Some(timestamp) = value.get("timestamp").and_then(timestamp_ms) {
+            created_at_ms.get_or_insert(timestamp);
+            updated_at_ms = Some(timestamp);
+        }
+        if entry_type == Some("message") {
+            let Some(message) = value.get("message") else {
+                continue;
+            };
+            let role = message.get("role").and_then(Value::as_str);
+            let content = message.get("content").map(extract_text).unwrap_or_default();
+            let content = content.trim();
+            if content.is_empty() {
+                continue;
+            }
+            if first_user.is_none() && role == Some("user") {
+                first_user = Some(content.to_string());
+            }
+            if matches!(role, Some("user" | "assistant")) {
+                summary = Some(content.to_string());
+            }
+        } else if matches!(entry_type, Some("compaction" | "branch_summary")) {
+            if let Some(content) = value
+                .get("summary")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|content| !content.is_empty())
+            {
+                summary = Some(content.to_string());
+            }
+        }
+    }
+
+    let id = id.or_else(|| {
+        path.file_stem()
+            .and_then(|stem| stem.to_str())
+            .and_then(|stem| stem.rsplit_once('_').map(|(_, id)| id).or(Some(stem)))
+            .map(ToString::to_string)
+    })?;
+    let title = custom_title
+        .or(first_user)
+        .map(|title| truncate(&title, 72))
+        .or_else(|| {
+            cwd.as_deref().and_then(|cwd| {
+                Path::new(cwd)
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .map(ToString::to_string)
+            })
+        })
+        .unwrap_or_else(|| id.clone());
+    Some(ToolSession {
+        id: id.clone(),
+        title,
+        summary: summary.map(|summary| truncate(&summary, 160)),
+        cwd,
+        source_path: Some(path.display().to_string()),
+        created_at_ms,
+        updated_at_ms,
+        archived: false,
+        resume_command: Some(format!("pi --session {id}")),
+    })
+}
+
+fn pi_sessions() -> Result<ToolSessionList> {
+    let root = home_dir()?.join(".pi").join("agent").join("sessions");
+    let mut files = Vec::new();
+    collect_named_files(
+        &root,
+        |path| {
+            path.extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("jsonl"))
+        },
+        &mut files,
+    );
+    let mut sessions = files
+        .iter()
+        .filter_map(|path| pi_session(path))
+        .collect::<Vec<_>>();
+    sort_sessions(&mut sessions);
+    Ok(ToolSessionList {
+        tool: ToolId::Pi,
+        root: root.display().to_string(),
+        read_only: true,
+        sessions,
+        warnings: (files.len() >= MAX_SESSIONS)
+            .then(|| format!("会话数量超过 {MAX_SESSIONS}，当前仅展示前 {MAX_SESSIONS} 个文件"))
+            .into_iter()
+            .collect(),
+    })
+}
+
 pub(crate) fn get_tool_sessions_inner(
     tool: ToolId,
     codex_override: Option<String>,
@@ -509,6 +638,7 @@ pub(crate) fn get_tool_sessions_inner(
         ToolId::Grok => grok_sessions(),
         ToolId::Zcode => zcode_sessions(),
         ToolId::Kilo => kilo_sessions(),
+        ToolId::Pi => pi_sessions(),
     }
 }
 
@@ -539,5 +669,33 @@ mod tests {
             {"type": "text", "text": "world"}
         ]);
         assert_eq!(extract_text(&value), "hello\nworld");
+    }
+
+    #[test]
+    fn pi_session_reads_header_name_and_latest_summary() {
+        let path = std::env::temp_dir().join(format!(
+            "devconduit-pi-session-{}-{}.jsonl",
+            std::process::id(),
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+        ));
+        let content = concat!(
+            "{\"type\":\"session\",\"version\":3,\"id\":\"pi-session-id\",\"timestamp\":\"2026-08-07T10:00:00Z\",\"cwd\":\"/tmp/project\"}\n",
+            "{\"type\":\"message\",\"id\":\"a1\",\"parentId\":null,\"timestamp\":\"2026-08-07T10:01:00Z\",\"message\":{\"role\":\"user\",\"content\":\"Initial request\"}}\n",
+            "{\"type\":\"session_info\",\"id\":\"a2\",\"parentId\":\"a1\",\"timestamp\":\"2026-08-07T10:02:00Z\",\"name\":\"Named Pi session\"}\n",
+            "{\"type\":\"message\",\"id\":\"a3\",\"parentId\":\"a2\",\"timestamp\":\"2026-08-07T10:03:00Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Latest answer\"}]}}\n"
+        );
+        fs::write(&path, content).expect("write Pi session fixture");
+
+        let session = pi_session(&path).expect("parse Pi session");
+        assert_eq!(session.id, "pi-session-id");
+        assert_eq!(session.title, "Named Pi session");
+        assert_eq!(session.cwd.as_deref(), Some("/tmp/project"));
+        assert_eq!(session.summary.as_deref(), Some("Latest answer"));
+        assert_eq!(
+            session.resume_command.as_deref(),
+            Some("pi --session pi-session-id")
+        );
+
+        fs::remove_file(path).expect("remove Pi session fixture");
     }
 }

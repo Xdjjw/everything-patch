@@ -62,6 +62,7 @@ pub(crate) struct SkillsMcpState {
     pub(crate) codex_dir: String,
     pub(crate) codex_skills_dir: String,
     pub(crate) disabled_skills_dir: String,
+    pub(crate) mcp_adapter_installed: Option<bool>,
     pub(crate) skills: Vec<ManagedSkill>,
     pub(crate) mcp_servers: Vec<ManagedMcpServer>,
     pub(crate) warnings: Vec<String>,

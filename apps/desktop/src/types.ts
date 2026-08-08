@@ -4,8 +4,8 @@ export type Lang = "zh" | "en";
 export type ProviderMode = "list" | "form" | "official";
 export type InstructionMode = "list" | "form";
 export type PromptInjectionMode = "append" | "replace";
-export type PromptEngine = "codex" | "claude" | "zcode" | "grok" | "kilo";
-export type ToolId = "codex" | "claude" | "grok" | "zcode" | "kilo";
+export type PromptEngine = "codex" | "claude" | "zcode" | "grok" | "kilo" | "pi";
+export type ToolId = "codex" | "claude" | "grok" | "zcode" | "kilo" | "pi";
 export type CodexInstructionStatus = "active" | "external" | "inactive" | "none";
 
 export type ToolCapabilitySet = {
@@ -313,6 +313,26 @@ export type KiloActionResult = {
   state: KiloState;
 };
 
+export type PiState = {
+  piDir: string;
+  piDirExists: boolean;
+  agentsPath: string;
+  agentsMdExists: boolean;
+  manifestExists: boolean;
+  originalSnapshotExists: boolean;
+  instructionEnabled: boolean;
+  instructionInjectionMode?: PromptInjectionMode;
+  instructionTemplateKey?: string;
+  activeInstructionTitle?: string;
+};
+
+export type PiActionResult = {
+  ok: boolean;
+  message: string;
+  backupId?: string;
+  state: PiState;
+};
+
 export type ImportResult = {
   imported: number;
   added: number;
@@ -424,6 +444,7 @@ export type SkillsMcpState = {
   codexDir: string;
   codexSkillsDir: string;
   disabledSkillsDir: string;
+  mcpAdapterInstalled?: boolean | null;
   skills: ManagedSkill[];
   mcpServers: ManagedMcpServer[];
   warnings: string[];

@@ -34,6 +34,7 @@ import type {
   CodexInstructionStatus,
   GrokState,
   KiloState,
+  PiState,
   InstructionMode,
   InstructionTemplate,
   Lang,
@@ -89,6 +90,7 @@ export type PromptsPageProps = {
   zcodeRuntime?: ZcodeState | null;
   grokRuntime?: GrokState | null;
   kiloRuntime?: KiloState | null;
+  piRuntime?: PiState | null;
   promptBackups: PromptBackupEntry[];
   promptBackupsOpen: boolean;
   promptBackupsLoading: boolean;
@@ -181,6 +183,21 @@ export type PromptsPageProps = {
   onDeleteKiloPrompt: (id: string) => void | Promise<void>;
   onImportKiloPrompt: (file?: File | null) => void | Promise<void>;
   onSaveKiloPrompt: MaybeAsyncAction;
+  // ─── Pi parallel props ─────────────────────────────────────────────────
+  piInstructionEnabled: boolean;
+  piActiveInstructionTitle: string;
+  piInstructionTemplates: InstructionTemplate[];
+  piBuiltinPromptStatuses: BuiltinPromptStatus[];
+  piActiveBuiltinTemplateId?: string | null;
+  piSavedPrompts: SavedPrompt[];
+  piManagedSavedPromptId?: string | null;
+  onEnablePiBuiltinPrompt: (id: string) => void | Promise<void>;
+  onDisablePiInstruction: MaybeAsyncAction;
+  onEnablePiSavedPrompt: (id: string) => void | Promise<void>;
+  onEditPiPrompt: (prompt: SavedPrompt) => void;
+  onDeletePiPrompt: (id: string) => void | Promise<void>;
+  onImportPiPrompt: (file?: File | null) => void | Promise<void>;
+  onSavePiPrompt: MaybeAsyncAction;
 };
 
 function getCopy(lang: Lang) {
@@ -229,6 +246,7 @@ function getCopy(lang: Lang) {
         engineZcode: "ZCode",
         engineGrok: "Grok Build",
         engineKilo: "Kilo Code",
+        enginePi: "Pi",
         engineSwitchLabel: "指令引擎",
         claudeMode: "写入 ~/.claude/CLAUDE.md import 区块",
         claudeModeDetail: "当前模板写入 ~/.claude/keysmith/ 并在 CLAUDE.md 注入受管 import 区块。",
@@ -242,6 +260,9 @@ function getCopy(lang: Lang) {
         kiloMode: "写入 ~/.config/kilo/AGENTS.md",
         kiloModeDetail: "通过 Kilo 官方全局指令文件加载；首次写入前保留原文件快照。",
         kiloActiveMemory: "AGENTS.md",
+        piMode: "写入 ~/.pi/agent/AGENTS.md",
+        piModeDetail: "通过 Pi 官方全局指令文件加载；首次写入前保留原文件快照。",
+        piActiveMemory: "AGENTS.md",
         backups: "备份与还原",
         backupsDescription: "每次启用、停用和还原前都会自动创建当前工具的完整提示词快照。",
         backupsEmpty: "当前工具还没有提示词备份。",
@@ -315,6 +336,7 @@ function getCopy(lang: Lang) {
         engineZcode: "ZCode",
         engineGrok: "Grok Build",
         engineKilo: "Kilo Code",
+        enginePi: "Pi",
         engineSwitchLabel: "Instruction engine",
         claudeMode: "Write import block to ~/.claude/CLAUDE.md",
         claudeModeDetail: "The current template is written to ~/.claude/keysmith/ and a managed import block is injected into CLAUDE.md.",
@@ -328,6 +350,9 @@ function getCopy(lang: Lang) {
         kiloMode: "Write ~/.config/kilo/AGENTS.md",
         kiloModeDetail: "Uses Kilo's official global instruction file and preserves the original file before the first write.",
         kiloActiveMemory: "AGENTS.md",
+        piMode: "Write ~/.pi/agent/AGENTS.md",
+        piModeDetail: "Uses Pi's official global instruction file and preserves the original file before the first write.",
+        piActiveMemory: "AGENTS.md",
         backups: "Backups & restore",
         backupsDescription: "A complete prompt snapshot for the current tool is created before every enable, disable, and restore.",
         backupsEmpty: "No prompt backups for this tool yet.",
@@ -433,6 +458,21 @@ function getEngineModeCopy(
           title: "用当前模板替换 Kilo AGENTS.md",
         };
     }
+    if (engine === "pi") {
+      return isAppend
+        ? {
+          label: "追加到 AGENTS.md",
+          detail: "只在 Pi 全局 AGENTS.md 中增加受管区块，原有规则继续生效。",
+          help: "保留 Pi 的全局 AGENTS.md，只追加 DevConduit 管理的提示词区块。",
+          title: "保留 Pi AGENTS.md，并追加当前提示词",
+        }
+        : {
+          label: "替换 AGENTS.md",
+          detail: "当前模板成为完整的 Pi 全局 AGENTS.md，原文件已保存为可恢复快照。",
+          help: "用当前模板替换 Pi 全局 AGENTS.md；首次替换前会完整保留原文件。",
+          title: "用当前模板替换 Pi AGENTS.md",
+        };
+    }
     return isAppend
       ? {
         label: "追加到 AGENTS.md",
@@ -508,6 +548,21 @@ function getEngineModeCopy(
         title: "Replace Kilo AGENTS.md with the current template",
       };
   }
+  if (engine === "pi") {
+    return isAppend
+      ? {
+        label: "Append to AGENTS.md",
+        detail: "Only a managed block is added to Pi's global AGENTS.md, preserving existing rules.",
+        help: "Keeps Pi's global AGENTS.md and appends a DevConduit-managed prompt block.",
+        title: "Keep Pi AGENTS.md and append the current prompt",
+      }
+      : {
+        label: "Replace AGENTS.md",
+        detail: "The current template becomes Pi's complete global AGENTS.md after preserving the original file.",
+        help: "Replaces Pi's global AGENTS.md after keeping an exact restorable snapshot.",
+        title: "Replace Pi AGENTS.md with the current template",
+      };
+  }
   return isAppend
     ? {
       label: "Append to AGENTS.md",
@@ -552,6 +607,7 @@ function getRuntimeCopy(lang: Lang) {
       nativeZcode: "运行时 launcher 入口",
       nativeGrok: "全局规则入口",
       nativeKilo: "Kilo 全局指令入口",
+      nativePi: "Pi 全局指令入口",
       cliRuntime: "Claude CLI runtime",
       cliRuntimeDetail: "在新终端中追加当前 DevConduit 指令",
       cliRuntimeUnavailable: "当前平台只支持 macOS zsh 或 Windows PowerShell。",
@@ -583,6 +639,7 @@ function getRuntimeCopy(lang: Lang) {
       nativeZcode: "Runtime launcher entry",
       nativeGrok: "Global rules entry",
       nativeKilo: "Kilo global instruction entry",
+      nativePi: "Pi global instruction entry",
       cliRuntime: "Claude CLI runtime",
       cliRuntimeDetail: "Append the current DevConduit instruction in new terminals",
       cliRuntimeUnavailable: "Only macOS zsh and Windows PowerShell are supported on this platform.",
@@ -707,6 +764,7 @@ type RuntimeDeploymentPanelProps = {
   zcodeRuntime?: ZcodeState | null;
   grokRuntime?: GrokState | null;
   kiloRuntime?: KiloState | null;
+  piRuntime?: PiState | null;
   loading: boolean;
   previewLoading: boolean;
   onPreview: () => void;
@@ -723,6 +781,7 @@ function RuntimeDeploymentPanel({
   zcodeRuntime,
   grokRuntime,
   kiloRuntime,
+  piRuntime,
   loading,
   previewLoading,
   onPreview,
@@ -747,12 +806,19 @@ function RuntimeDeploymentPanel({
           active: instructionEnabled,
           attention: Boolean(grokRuntime?.grokDirExists && !grokRuntime.configTomlExists),
           }
-          : {
-            title: copy.nativeKilo,
-            path: kiloRuntime?.agentsPath,
-            active: instructionEnabled,
-            attention: Boolean(kiloRuntime?.manifestExists && !kiloRuntime.agentsMdExists),
-          };
+          : engine === "kilo"
+            ? {
+              title: copy.nativeKilo,
+              path: kiloRuntime?.agentsPath,
+              active: instructionEnabled,
+              attention: Boolean(kiloRuntime?.manifestExists && !kiloRuntime.agentsMdExists),
+            }
+            : {
+              title: copy.nativePi,
+              path: piRuntime?.agentsPath,
+              active: instructionEnabled,
+              attention: Boolean(piRuntime?.manifestExists && !piRuntime.agentsMdExists),
+            };
   const nativeTone = native.attention ? "warning" : native.active ? "success" : "neutral";
   const nativeLabel = native.attention ? copy.attention : native.active ? copy.active : copy.inactive;
   const runtimeStatus = claudeRuntime?.status;
@@ -1124,6 +1190,7 @@ export function PromptsPage({
   zcodeRuntime,
   grokRuntime,
   kiloRuntime,
+  piRuntime,
   promptBackups,
   promptBackupsOpen,
   promptBackupsLoading,
@@ -1212,6 +1279,20 @@ export function PromptsPage({
   onDeleteKiloPrompt,
   onImportKiloPrompt,
   onSaveKiloPrompt,
+  piInstructionEnabled,
+  piActiveInstructionTitle,
+  piInstructionTemplates,
+  piBuiltinPromptStatuses,
+  piActiveBuiltinTemplateId,
+  piSavedPrompts,
+  piManagedSavedPromptId,
+  onEnablePiBuiltinPrompt,
+  onDisablePiInstruction,
+  onEnablePiSavedPrompt,
+  onEditPiPrompt,
+  onDeletePiPrompt,
+  onImportPiPrompt,
+  onSavePiPrompt,
 }: PromptsPageProps) {
   const copy = getCopy(lang);
   const helpId = useId();
@@ -1219,6 +1300,7 @@ export function PromptsPage({
   const isZcode = promptEngine === "zcode";
   const isGrok = promptEngine === "grok";
   const isKilo = promptEngine === "kilo";
+  const isPi = promptEngine === "pi";
   const isCodex = promptEngine === "codex";
   const appendModeCopy = getEngineModeCopy(lang, promptEngine, "append");
   const replaceModeCopy = getEngineModeCopy(lang, promptEngine, "replace");
@@ -1237,10 +1319,12 @@ export function PromptsPage({
   const [runtimePreviewError, setRuntimePreviewError] = useState("");
   const promptCategories = usePromptCategories(lang);
   // All engines share the same list interactions while keeping native backend semantics.
-  const activeTemplates = isKilo ? kiloInstructionTemplates : isGrok ? grokInstructionTemplates : isZcode ? zcodeInstructionTemplates : isClaude ? claudeInstructionTemplates : instructionTemplates;
-  const activeBuiltinStatuses = isKilo ? kiloBuiltinPromptStatuses : isGrok ? grokBuiltinPromptStatuses : isZcode ? zcodeBuiltinPromptStatuses : isClaude ? claudeBuiltinPromptStatuses : builtinPromptStatuses;
-  const activeBuiltinId = isKilo
-    ? kiloActiveBuiltinTemplateId
+  const activeTemplates = isPi ? piInstructionTemplates : isKilo ? kiloInstructionTemplates : isGrok ? grokInstructionTemplates : isZcode ? zcodeInstructionTemplates : isClaude ? claudeInstructionTemplates : instructionTemplates;
+  const activeBuiltinStatuses = isPi ? piBuiltinPromptStatuses : isKilo ? kiloBuiltinPromptStatuses : isGrok ? grokBuiltinPromptStatuses : isZcode ? zcodeBuiltinPromptStatuses : isClaude ? claudeBuiltinPromptStatuses : builtinPromptStatuses;
+  const activeBuiltinId = isPi
+    ? piActiveBuiltinTemplateId
+    : isKilo
+      ? kiloActiveBuiltinTemplateId
     : isGrok
       ? grokActiveBuiltinTemplateId
     : isZcode
@@ -1248,10 +1332,10 @@ export function PromptsPage({
       : isClaude
         ? claudeActiveBuiltinTemplateId
         : activeBuiltinTemplateId;
-  const activeSavedPrompts = isKilo ? kiloSavedPrompts : isGrok ? grokSavedPrompts : isZcode ? zcodeSavedPrompts : isClaude ? claudeSavedPrompts : savedPrompts;
-  const activeManagedSavedPromptId = isKilo ? kiloManagedSavedPromptId : isGrok ? grokManagedSavedPromptId : isZcode ? zcodeManagedSavedPromptId : isClaude ? claudeManagedSavedPromptId : managedSavedPromptId;
-  const activeInstructionEnabled = isKilo ? kiloInstructionEnabled : isGrok ? grokInstructionEnabled : isZcode ? zcodeInstructionEnabled : isClaude ? claudeInstructionEnabled : instructionEnabled;
-  const activeInstructionTitleResolved = isKilo ? kiloActiveInstructionTitle : isGrok ? grokActiveInstructionTitle : isZcode ? zcodeActiveInstructionTitle : isClaude ? claudeActiveInstructionTitle : activeInstructionTitle;
+  const activeSavedPrompts = isPi ? piSavedPrompts : isKilo ? kiloSavedPrompts : isGrok ? grokSavedPrompts : isZcode ? zcodeSavedPrompts : isClaude ? claudeSavedPrompts : savedPrompts;
+  const activeManagedSavedPromptId = isPi ? piManagedSavedPromptId : isKilo ? kiloManagedSavedPromptId : isGrok ? grokManagedSavedPromptId : isZcode ? zcodeManagedSavedPromptId : isClaude ? claudeManagedSavedPromptId : managedSavedPromptId;
+  const activeInstructionEnabled = isPi ? piInstructionEnabled : isKilo ? kiloInstructionEnabled : isGrok ? grokInstructionEnabled : isZcode ? zcodeInstructionEnabled : isClaude ? claudeInstructionEnabled : instructionEnabled;
+  const activeInstructionTitleResolved = isPi ? piActiveInstructionTitle : isKilo ? kiloActiveInstructionTitle : isGrok ? grokActiveInstructionTitle : isZcode ? zcodeActiveInstructionTitle : isClaude ? claudeActiveInstructionTitle : activeInstructionTitle;
   const codexInstructionInactive = isCodex && codexInstructionStatus === "inactive";
   const modePending = Boolean(activeInstructionEnabled && activeInjectionMode && activeInjectionMode !== promptInjectionMode);
   const categoryItems = useMemo<PromptCategoryItem[]>(() => [
@@ -1268,7 +1352,7 @@ export function PromptsPage({
     promptCategories.categoryForPrompt(key) === promptCategories.activeCategoryId;
   const visiblePromptCount = categoryItems.filter((item) => promptIsVisible(item.key)).length;
   const deleteSavedPrompt = async (prompt: SavedPrompt) => {
-    const handler = isKilo ? onDeleteKiloPrompt : isGrok ? onDeleteGrokPrompt : isZcode ? onDeleteZcodePrompt : isClaude ? onDeleteClaudePrompt : onDeletePrompt;
+    const handler = isPi ? onDeletePiPrompt : isKilo ? onDeleteKiloPrompt : isGrok ? onDeleteGrokPrompt : isZcode ? onDeleteZcodePrompt : isClaude ? onDeleteClaudePrompt : onDeletePrompt;
     await handler(prompt.id);
     promptCategories.forgetPrompt(savedPromptCategoryKey(promptEngine, prompt));
   };
@@ -1284,7 +1368,7 @@ export function PromptsPage({
             loading={loading}
             onInstructionModeChange={onInstructionModeChange}
             onPromptFormFieldChange={onPromptFormFieldChange}
-            onSavePrompt={isKilo ? onSaveKiloPrompt : isGrok ? onSaveGrokPrompt : isZcode ? onSaveZcodePrompt : isClaude ? onSaveClaudePrompt : onSavePrompt}
+            onSavePrompt={isPi ? onSavePiPrompt : isKilo ? onSaveKiloPrompt : isGrok ? onSaveGrokPrompt : isZcode ? onSaveZcodePrompt : isClaude ? onSaveClaudePrompt : onSavePrompt}
           />
         </section>
       </PageTransition>
@@ -1292,15 +1376,15 @@ export function PromptsPage({
   }
 
   const handlePromptFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const handler = isKilo ? onImportKiloPrompt : isGrok ? onImportGrokPrompt : isZcode ? onImportZcodePrompt : isClaude ? onImportClaudePrompt : onImportPrompt;
+    const handler = isPi ? onImportPiPrompt : isKilo ? onImportKiloPrompt : isGrok ? onImportGrokPrompt : isZcode ? onImportZcodePrompt : isClaude ? onImportClaudePrompt : onImportPrompt;
     void handler(event.currentTarget.files?.[0]);
   };
 
   // 当前引擎下启用/禁用内置模板与自定义提示词的回调。
-  const enableBuiltinHandler = isKilo ? onEnableKiloBuiltinPrompt : isGrok ? onEnableGrokBuiltinPrompt : isZcode ? onEnableZcodeBuiltinPrompt : isClaude ? onEnableClaudeBuiltinPrompt : onEnableBuiltinPrompt;
-  const disableHandler = isKilo ? onDisableKiloInstruction : isGrok ? onDisableGrokInstruction : isZcode ? onDisableZcodeInstruction : isClaude ? onDisableClaudeInstruction : onDisableInstruction;
-  const enableSavedHandler = isKilo ? onEnableKiloSavedPrompt : isGrok ? onEnableGrokSavedPrompt : isZcode ? onEnableZcodeSavedPrompt : isClaude ? onEnableClaudeSavedPrompt : onEnableSavedPrompt;
-  const editHandler = isKilo ? onEditKiloPrompt : isGrok ? onEditGrokPrompt : isZcode ? onEditZcodePrompt : isClaude ? onEditClaudePrompt : onEditPrompt;
+  const enableBuiltinHandler = isPi ? onEnablePiBuiltinPrompt : isKilo ? onEnableKiloBuiltinPrompt : isGrok ? onEnableGrokBuiltinPrompt : isZcode ? onEnableZcodeBuiltinPrompt : isClaude ? onEnableClaudeBuiltinPrompt : onEnableBuiltinPrompt;
+  const disableHandler = isPi ? onDisablePiInstruction : isKilo ? onDisableKiloInstruction : isGrok ? onDisableGrokInstruction : isZcode ? onDisableZcodeInstruction : isClaude ? onDisableClaudeInstruction : onDisableInstruction;
+  const enableSavedHandler = isPi ? onEnablePiSavedPrompt : isKilo ? onEnableKiloSavedPrompt : isGrok ? onEnableGrokSavedPrompt : isZcode ? onEnableZcodeSavedPrompt : isClaude ? onEnableClaudeSavedPrompt : onEnableSavedPrompt;
+  const editHandler = isPi ? onEditPiPrompt : isKilo ? onEditKiloPrompt : isGrok ? onEditGrokPrompt : isZcode ? onEditZcodePrompt : isClaude ? onEditClaudePrompt : onEditPrompt;
   const requestRuntimePreview = async (operation: "install" | "uninstall", apply?: MaybeAsyncAction) => {
     setRuntimePreviewLoading(true);
     setRuntimePreviewError("");
@@ -1434,6 +1518,15 @@ export function PromptsPage({
             >
               {copy.engineKilo}
             </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={promptEngine === "pi"}
+              className={cx("cx-prompts-engine-button", promptEngine === "pi" && "cx-prompts-engine-button--active")}
+              onClick={() => onPromptEngineChange("pi")}
+            >
+              {copy.enginePi}
+            </button>
           </div>
           <input
             ref={promptImportRef}
@@ -1556,6 +1649,7 @@ export function PromptsPage({
         zcodeRuntime={zcodeRuntime}
         grokRuntime={grokRuntime}
         kiloRuntime={kiloRuntime}
+        piRuntime={piRuntime}
         loading={loading}
         previewLoading={runtimePreviewLoading}
         onPreview={() => void requestRuntimePreview(activeInstructionEnabled ? "uninstall" : "install")}

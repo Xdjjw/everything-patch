@@ -27,8 +27,10 @@ jobs:
           STAR_HISTORY_ENDPOINT: ${{ vars.STAR_HISTORY_ENDPOINT }}
         run: |
           set -euo pipefail
-          test -n "${INGEST_TOKEN}"
-          test -n "${STAR_HISTORY_ENDPOINT}"
+          if [ -z "${INGEST_TOKEN}" ] || [ -z "${STAR_HISTORY_ENDPOINT}" ]; then
+            echo "::warning::STAR_HISTORY_INGEST_TOKEN or STAR_HISTORY_ENDPOINT is not configured; skipping refresh."
+            exit 0
+          fi
           metadata_file="${RUNNER_TEMP}/star-history-metadata.json"
           payload_file="${RUNNER_TEMP}/star-history-payload.json"
 
